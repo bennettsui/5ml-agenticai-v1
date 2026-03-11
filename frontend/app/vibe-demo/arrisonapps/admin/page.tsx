@@ -1,13 +1,13 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import {
   Package, BarChart3, Users, LogOut, Search, Plus,
   AlertTriangle, CheckCircle, Clock, TrendingUp, DollarSign, Globe,
   X, ChevronDown, Activity, ShieldCheck, AlignLeft,
   Calendar, Mail, Phone, RefreshCw, Download, Boxes,
   Eye, Star, Tag, Flame, Edit2, ChevronRight, Layers,
-  ArrowUpDown, MoreHorizontal, FileText, Settings,
+  ArrowUpDown, MoreHorizontal, FileText, Settings, ImagePlus, Trash2, Upload,
 } from 'lucide-react';
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
@@ -53,6 +53,15 @@ interface ProductRow {
   is_active: boolean;
   is_limited_edition: boolean;
   tags: string[];
+}
+
+interface ProductImage {
+  id: string;
+  url: string;
+  is_primary: boolean;
+  alt_text: string;
+  filename: string;
+  size_bytes: number;
 }
 
 interface MovementForm {
@@ -268,10 +277,18 @@ function OverviewPanel({ leads, stock }: { leads: Lead[]; stock: StockRow[] }) {
 }
 
 // ─── Products Panel ──────────────────────────────────────────────────────────────
-function ProductsPanel({ products }: { products: ProductRow[] }) {
+function ProductsPanel({ products, token }: { products: ProductRow[]; token: string }) {
   const [q, setQ] = useState('');
   const [brandFilter, setBrandFilter] = useState('');
   const [strengthFilter, setStrengthFilter] = useState('');
+  const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [images, setImages] = useState<Record<string, ProductImage[]>>({});
+  const [loadingImages, setLoadingImages] = useState<string | null>(null);
+  const [uploading, setUploading] = useState<string | null>(null);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+  const [deletingImageId, setDeletingImageId] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [uploadingForId, setUploadingForId] = useState<string | null>(null);
 
   const brands = [...new Set(products.map(p => p.brand_name))].sort();
 
@@ -281,6 +298,78 @@ function ProductsPanel({ products }: { products: ProductRow[] }) {
     if (q && !`${p.sku} ${p.brand_name} ${p.series} ${p.vitola}`.toLowerCase().includes(q.toLowerCase())) return false;
     return true;
   });
+
+  const loadImages = async (productId: string) => {
+    if (images[productId]) return; // already loaded
+    setLoadingImages(productId);
+    try {
+      const res = await fetch(`/api/arrisonapps/v1/products/${productId}`);
+      if (!res.ok) throw new Error('Failed to load');
+      const data = await res.json();
+      setImages(prev => ({ ...prev, [productId]: data.images || [] }));
+    } catch {
+      setImages(prev => ({ ...prev, [productId]: [] }));
+    } finally {
+      setLoadingImages(null);
+    }
+  };
+
+  const toggleExpand = (productId: string) => {
+    if (expandedId === productId) {
+      setExpandedId(null);
+    } else {
+      setExpandedId(productId);
+      loadImages(productId);
+    }
+    setUploadError(null);
+  };
+
+  const handleUpload = async (productId: string, file: File) => {
+    setUploading(productId);
+    setUploadError(null);
+    try {
+      const formData = new FormData();
+      formData.append('image', file);
+      formData.append('alt_text', file.name.replace(/\.[^.]+$/, ''));
+      const res = await fetch(`/api/arrisonapps/v1/admin/products/${productId}/images`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+        body: formData,
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || `Upload failed (${res.status})`);
+      }
+      const data = await res.json();
+      const newImage: ProductImage = {
+        id: data.id,
+        url: data.url,
+        is_primary: images[productId]?.length === 0,
+        alt_text: file.name.replace(/\.[^.]+$/, ''),
+        filename: file.name,
+        size_bytes: file.size,
+      };
+      setImages(prev => ({ ...prev, [productId]: [...(prev[productId] || []), newImage] }));
+    } catch (err: unknown) {
+      setUploadError(err instanceof Error ? err.message : 'Upload failed');
+    } finally {
+      setUploading(null);
+      setUploadingForId(null);
+    }
+  };
+
+  const handleDelete = async (productId: string, imageId: string) => {
+    if (!confirm('Delete this image?')) return;
+    setDeletingImageId(imageId);
+    try {
+      await fetch(`/api/arrisonapps/v1/admin/products/${productId}/images/${imageId}`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      setImages(prev => ({ ...prev, [productId]: prev[productId].filter(i => i.id !== imageId) }));
+    } catch { /* ignore */ }
+    finally { setDeletingImageId(null); }
+  };
 
   return (
     <div className="space-y-4">
@@ -318,61 +407,159 @@ function ProductsPanel({ products }: { products: ProductRow[] }) {
         </div>
       </div>
 
+      {/* Hidden file input */}
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="image/*"
+        className="hidden"
+        onChange={e => {
+          const file = e.target.files?.[0];
+          if (file && uploadingForId) handleUpload(uploadingForId, file);
+          e.target.value = '';
+        }}
+      />
+
       {/* Table */}
       <div className="rounded-lg border overflow-hidden" style={{ borderColor: C.borderSub }}>
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b" style={{ borderColor: C.borderSub, background: 'rgba(255,255,255,0.02)' }}>
-              {['SKU','Brand','Series / Vitola','Pack','Strength','Tags','Status'].map(h => (
+              {['','SKU','Brand','Series / Vitola','Pack','Strength','Tags','Status'].map(h => (
                 <th key={h} className="px-4 py-3 text-left text-xs tracking-wider uppercase" style={{ color: C.muted, fontFamily: 'sans-serif' }}>{h}</th>
               ))}
             </tr>
           </thead>
-          <tbody className="divide-y" style={{ borderColor: C.borderSub }}>
-            {filtered.map(p => (
-              <tr key={p.id} className="transition-colors"
-                style={{ borderColor: C.borderSub }}
-                onMouseEnter={e => (e.currentTarget.style.background = C.cardHov)}
-                onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
-              >
-                <td className="px-4 py-3">
-                  <span className="text-xs font-mono" style={{ color: C.gold }}>{p.sku}</span>
-                </td>
-                <td className="px-4 py-3" style={{ color: C.text, fontFamily: 'sans-serif' }}>{p.brand_name}</td>
-                <td className="px-4 py-3">
-                  <div style={{ color: C.text, fontFamily: 'sans-serif' }}>{p.series}</div>
-                  <div className="text-xs mt-0.5" style={{ color: C.muted }}>{p.vitola}</div>
-                </td>
-                <td className="px-4 py-3 text-xs" style={{ color: C.muted, fontFamily: 'sans-serif' }}>{p.packaging_qty}</td>
-                <td className="px-4 py-3">
-                  <span className="text-xs capitalize" style={{ color: strengthColor(p.strength), fontFamily: 'sans-serif' }}>{p.strength}</span>
-                </td>
-                <td className="px-4 py-3">
-                  <div className="flex flex-wrap gap-1">
-                    {p.tags.map(t => (
-                      <span key={t} className="text-xs px-1.5 py-0.5 rounded"
-                        style={{ background: 'rgba(212,175,55,0.1)', color: C.gold, fontFamily: 'sans-serif', border: `1px solid rgba(212,175,55,0.2)` }}>
-                        {t}
+          <tbody>
+            {filtered.map(p => {
+              const isExpanded = expandedId === p.id;
+              const productImages = images[p.id] || [];
+              return (
+                <>
+                  <tr key={p.id} className="transition-colors border-b"
+                    style={{ borderColor: C.borderSub, background: isExpanded ? 'rgba(212,175,55,0.04)' : 'transparent' }}
+                    onMouseEnter={e => { if (!isExpanded) e.currentTarget.style.background = C.cardHov; }}
+                    onMouseLeave={e => { if (!isExpanded) e.currentTarget.style.background = 'transparent'; }}
+                  >
+                    <td className="px-3 py-3 w-8">
+                      <button
+                        onClick={() => toggleExpand(p.id)}
+                        className="w-6 h-6 rounded flex items-center justify-center transition-all"
+                        style={{ color: isExpanded ? C.gold : C.dim, background: isExpanded ? 'rgba(212,175,55,0.1)' : 'transparent' }}
+                        onMouseDown={e => e.stopPropagation()}
+                      >
+                        <ChevronRight className="w-3.5 h-3.5 transition-transform" style={{ transform: isExpanded ? 'rotate(90deg)' : 'none' }} />
+                      </button>
+                    </td>
+                    <td className="px-4 py-3">
+                      <span className="text-xs font-mono" style={{ color: C.gold }}>{p.sku}</span>
+                    </td>
+                    <td className="px-4 py-3" style={{ color: C.text, fontFamily: 'sans-serif' }}>{p.brand_name}</td>
+                    <td className="px-4 py-3">
+                      <div style={{ color: C.text, fontFamily: 'sans-serif' }}>{p.series}</div>
+                      <div className="text-xs mt-0.5" style={{ color: C.muted }}>{p.vitola}</div>
+                    </td>
+                    <td className="px-4 py-3 text-xs" style={{ color: C.muted, fontFamily: 'sans-serif' }}>{p.packaging_qty}</td>
+                    <td className="px-4 py-3">
+                      <span className="text-xs capitalize" style={{ color: strengthColor(p.strength), fontFamily: 'sans-serif' }}>{p.strength}</span>
+                    </td>
+                    <td className="px-4 py-3">
+                      <div className="flex flex-wrap gap-1">
+                        {p.tags.map(t => (
+                          <span key={t} className="text-xs px-1.5 py-0.5 rounded"
+                            style={{ background: 'rgba(212,175,55,0.1)', color: C.gold, fontFamily: 'sans-serif', border: `1px solid rgba(212,175,55,0.2)` }}>
+                            {t}
+                          </span>
+                        ))}
+                        {p.is_limited_edition && !p.tags.includes('LE') && (
+                          <span className="text-xs px-1.5 py-0.5 rounded"
+                            style={{ background: 'rgba(212,175,55,0.1)', color: C.gold, fontFamily: 'sans-serif', border: `1px solid rgba(212,175,55,0.2)` }}>LE</span>
+                        )}
+                      </div>
+                    </td>
+                    <td className="px-4 py-3">
+                      <span className="text-xs px-2 py-0.5 rounded"
+                        style={{
+                          background: p.is_active ? 'rgba(74,222,128,0.1)' : 'rgba(248,113,113,0.1)',
+                          color: p.is_active ? '#4ade80' : '#f87171',
+                          fontFamily: 'sans-serif',
+                        }}>
+                        {p.is_active ? 'Active' : 'Inactive'}
                       </span>
-                    ))}
-                    {p.is_limited_edition && !p.tags.includes('LE') && (
-                      <span className="text-xs px-1.5 py-0.5 rounded"
-                        style={{ background: 'rgba(212,175,55,0.1)', color: C.gold, fontFamily: 'sans-serif', border: `1px solid rgba(212,175,55,0.2)` }}>LE</span>
-                    )}
-                  </div>
-                </td>
-                <td className="px-4 py-3">
-                  <span className={`text-xs px-2 py-0.5 rounded`}
-                    style={{
-                      background: p.is_active ? 'rgba(74,222,128,0.1)' : 'rgba(248,113,113,0.1)',
-                      color: p.is_active ? '#4ade80' : '#f87171',
-                      fontFamily: 'sans-serif',
-                    }}>
-                    {p.is_active ? 'Active' : 'Inactive'}
-                  </span>
-                </td>
-              </tr>
-            ))}
+                    </td>
+                  </tr>
+                  {isExpanded && (
+                    <tr key={`${p.id}-images`}>
+                      <td colSpan={8} className="px-6 py-4 border-b" style={{ borderColor: C.borderSub, background: 'rgba(212,175,55,0.02)' }}>
+                        <div className="flex items-center justify-between mb-3">
+                          <span className="text-xs tracking-widest uppercase" style={{ color: C.muted, fontFamily: 'sans-serif' }}>
+                            Product Images
+                            {productImages.length > 0 && <span className="ml-2 px-1.5 py-0.5 rounded text-xs" style={{ background: 'rgba(212,175,55,0.1)', color: C.gold }}>{productImages.length}</span>}
+                          </span>
+                          <button
+                            onClick={() => { setUploadingForId(p.id); fileInputRef.current?.click(); }}
+                            disabled={uploading === p.id}
+                            className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded transition-all"
+                            onMouseDown={e => e.stopPropagation()}
+                            style={{ background: 'rgba(212,175,55,0.1)', color: C.gold, border: `1px solid rgba(212,175,55,0.2)`, opacity: uploading === p.id ? 0.5 : 1, fontFamily: 'sans-serif' }}
+                          >
+                            {uploading === p.id ? (
+                              <><RefreshCw className="w-3 h-3 animate-spin" />Uploading…</>
+                            ) : (
+                              <><ImagePlus className="w-3.5 h-3.5" />Upload Image</>
+                            )}
+                          </button>
+                        </div>
+
+                        {uploadError && (
+                          <div className="mb-3 text-xs px-3 py-2 rounded flex items-center gap-2" style={{ background: 'rgba(248,113,113,0.08)', color: '#f87171', border: '1px solid rgba(248,113,113,0.2)', fontFamily: 'sans-serif' }}>
+                            <AlertTriangle className="w-3.5 h-3.5 flex-shrink-0" />
+                            {uploadError}
+                          </div>
+                        )}
+
+                        {loadingImages === p.id ? (
+                          <div className="flex items-center gap-2 py-4 text-xs" style={{ color: C.muted, fontFamily: 'sans-serif' }}>
+                            <RefreshCw className="w-3.5 h-3.5 animate-spin" />Loading images…
+                          </div>
+                        ) : productImages.length === 0 ? (
+                          <div className="py-6 flex flex-col items-center gap-2 rounded-lg border border-dashed" style={{ borderColor: C.borderSub }}>
+                            <ImagePlus className="w-8 h-8" style={{ color: C.dim }} />
+                            <p className="text-xs" style={{ color: C.muted, fontFamily: 'sans-serif' }}>No images yet — click Upload Image to add the first one</p>
+                          </div>
+                        ) : (
+                          <div className="flex flex-wrap gap-3">
+                            {productImages.map(img => (
+                              <div key={img.id} className="relative group rounded-lg overflow-hidden border" style={{ width: 120, height: 120, borderColor: img.is_primary ? C.border : C.borderSub, flexShrink: 0 }}>
+                                <img
+                                  src={img.url}
+                                  alt={img.alt_text || p.sku}
+                                  className="w-full h-full object-cover"
+                                />
+                                {img.is_primary && (
+                                  <div className="absolute top-1 left-1 text-[9px] px-1.5 py-0.5 rounded" style={{ background: 'rgba(212,175,55,0.85)', color: '#0a0807', fontFamily: 'sans-serif', fontWeight: 600 }}>
+                                    PRIMARY
+                                  </div>
+                                )}
+                                <button
+                                  onClick={() => handleDelete(p.id, img.id)}
+                                  disabled={deletingImageId === img.id}
+                                  onMouseDown={e => e.stopPropagation()}
+                                  className="absolute top-1 right-1 w-6 h-6 rounded flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                                  style={{ background: 'rgba(248,113,113,0.85)', color: '#fff' }}
+                                >
+                                  {deletingImageId === img.id ? <RefreshCw className="w-3 h-3 animate-spin" /> : <Trash2 className="w-3 h-3" />}
+                                </button>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </td>
+                    </tr>
+                  )}
+                </>
+              );
+            })}
           </tbody>
         </table>
         {filtered.length === 0 && (
@@ -998,7 +1185,7 @@ export default function ArrisonappsAdmin() {
             <Eye className="w-3.5 h-3.5" />
             View Catalogue
           </a>
-          <a href="/dashboard?tab=arrisonapps" target="_blank" rel="noopener noreferrer"
+          <a href="/dashboard" target="_blank" rel="noopener noreferrer"
             className="w-full flex items-center gap-3 px-3 py-2 rounded text-xs transition-all"
             style={{ color: C.dim, fontFamily: 'sans-serif' }}
             onMouseEnter={e => (e.currentTarget.style.color = C.muted)}
@@ -1060,7 +1247,7 @@ export default function ArrisonappsAdmin() {
         {/* Panel */}
         <div className="p-8">
           {activeTab === 'overview'  && <OverviewPanel  leads={leads} stock={stock} />}
-          {activeTab === 'products'  && <ProductsPanel  products={products} />}
+          {activeTab === 'products'  && <ProductsPanel  products={products} token={token!} />}
           {activeTab === 'inventory' && <InventoryPanel stock={stock} />}
           {activeTab === 'leads'     && <LeadsPanel     leads={leads} />}
           {activeTab === 'reports'   && <ReportsPanel   leads={leads} stock={stock} />}
