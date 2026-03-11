@@ -586,7 +586,7 @@ function ValidateInner() {
       <div className="flex gap-5" style={{ minHeight: '78vh' }}>
 
         {/* LEFT: PDF + overlays */}
-        <div className="flex-1 min-w-0 flex flex-col gap-3">
+        <div className="flex-1 min-w-0 flex flex-col gap-3" style={{ maxWidth: '50%' }}>
           {/* Controls */}
           <div className="flex items-center gap-2 flex-wrap">
             <div className="flex items-center gap-1 bg-slate-800/60 border border-slate-700/50 rounded-xl px-2 py-1.5">
@@ -706,7 +706,7 @@ function ValidateInner() {
         </div>
 
         {/* RIGHT: tabs */}
-        <div className="w-96 shrink-0 flex flex-col bg-slate-900/30 border border-slate-700/50 rounded-2xl overflow-hidden" style={{ maxHeight: '84vh' }}>
+        <div className="flex-1 min-w-0 flex flex-col bg-slate-900/30 border border-slate-700/50 rounded-2xl overflow-hidden" style={{ maxHeight: '84vh' }}>
           {/* Tab bar */}
           <div className="flex border-b border-slate-700/50 shrink-0">
             {([

@@ -678,10 +678,12 @@ async function _runOcrPipeline(paperId, pdfBuffer, gradeBand) {
 
     let rawBlocks = [];
     if (await ocrService.isAvailable()) {
-      addLog('Phase 1: Counting questions with Gemini 2.0 Flash…');
       setProgress('reading', 'Phase 1: Gemini counting questions…', { questions_found: 0, questions_analysed: 0 });
-      rawBlocks = await ocrService.extractFromPdf(pdfBuffer);
-      addLog(`Phase 1+2 complete: ${rawBlocks.length} question${rawBlocks.length !== 1 ? 's' : ''} extracted from PDF`);
+      rawBlocks = await ocrService.extractFromPdf(pdfBuffer, (msg, level) => {
+        addLog(msg, level || 'info');
+        // Keep live detail in sync with latest log message
+        setProgress('reading', msg, { questions_found: 0, questions_analysed: 0 });
+      });
     } else {
       addLog('GEMINI_API_KEY not set — OCR skipped. Set env var to enable.', 'warn');
       await db.updatePaperStatus(paperId, 'NEEDS_REVIEW');
