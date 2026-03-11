@@ -19,6 +19,7 @@ import {
   BookOpen, DollarSign, ArrowRight, Users, Brain, MessageSquare,
   ChevronRight, Map, Zap, Send, Loader2, Sparkles, History,
   Plus, Trash2, Clock, Monitor, TrendingUp, Shield, Printer, Mic,
+  FlameKindling, ExternalLink, Key, Globe, Settings, Copy, CheckCircle2,
 } from 'lucide-react';
 import Link from 'next/link';
 import {
@@ -31,7 +32,7 @@ import {
   type ChatSession, type ChatType, type ChatMessage as StoredMessage,
 } from '@/lib/chat-history';
 
-type Tab = 'control' | 'overview' | 'architecture' | 'analytics' | 'scheduling' | 'knowledge' | 'costs' | 'workflows' | 'chat' | 'security' | 'adaptive' | 'transcription';
+type Tab = 'control' | 'overview' | 'architecture' | 'analytics' | 'scheduling' | 'knowledge' | 'costs' | 'workflows' | 'chat' | 'security' | 'adaptive' | 'transcription' | 'arrisonapps';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -369,6 +370,292 @@ const TYPE_LABELS: Record<ChatType, { label: string; color: string }> = {
 };
 
 // ---------------------------------------------------------------------------
+// Arrisonapps Panel
+// ---------------------------------------------------------------------------
+
+const AGENT_TOOLS = [
+  { name: 'search_products', method: 'GET', path: '/agent/products/search', desc: 'Search the cigar catalogue by brand, strength, or keyword within a region.', params: 'q, region, brand, strength, limit' },
+  { name: 'get_stock', method: 'GET', path: '/agent/stock', desc: 'Check live inventory for a specific SKU, optionally filtered by region and location.', params: 'sku (required), region, location' },
+  { name: 'get_lead', method: 'GET', path: '/agent/leads/:id', desc: 'Fetch full lead detail including customer info, items, and recent activity.', params: 'id (path)' },
+  { name: 'search_leads', method: 'GET', path: '/agent/leads', desc: 'List CRM leads with filters for status, region, assigned sales person, and date range.', params: 'status, region, assigned_to, from, to, q' },
+  { name: 'update_lead_status', method: 'PATCH', path: '/agent/leads/:id/status', desc: 'Move a lead through the CRM pipeline (new → won/lost).', params: 'id (path), status (body)' },
+  { name: 'add_lead_note', method: 'POST', path: '/agent/leads/:id/notes', desc: 'Append an internal note to a lead activity timeline.', params: 'id (path), content (body)' },
+  { name: 'get_lead_summary_for_email', method: 'GET', path: '/agent/leads/:id/summary', desc: 'Returns LLM-ready context for drafting customer emails: items, pricing, language preference, tone hints.', params: 'id (path)' },
+  { name: 'report_leads', method: 'GET', path: '/agent/reports/leads', desc: 'Aggregated lead counts and total value grouped by status and region.', params: 'from, to, region' },
+  { name: 'report_inventory', method: 'GET', path: '/agent/reports/inventory', desc: 'Stock summary grouped by region and brand with low-stock flags.', params: 'region, brand' },
+];
+
+function ArrisonappsPanel() {
+  const [settings, setSettings] = useState({
+    cigar_system_base_url: '',
+    cigar_system_api_key: '',
+    cigar_system_region_default: 'HK',
+  });
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
+  const [showKey, setShowKey] = useState(false);
+  const [copiedTool, setCopiedTool] = useState<string | null>(null);
+
+  // Load persisted settings from localStorage (mirrors backend integration_settings table)
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem('arrisonapps_settings');
+      if (stored) setSettings(JSON.parse(stored));
+    } catch { /* ignore */ }
+  }, []);
+
+  const handleSave = async (e: FormEvent) => {
+    e.preventDefault();
+    setSaving(true);
+    try {
+      // Persist to localStorage as client-side cache; backend reads from integration_settings table
+      localStorage.setItem('arrisonapps_settings', JSON.stringify(settings));
+      // Attempt to sync to backend if URL is set
+      if (settings.cigar_system_base_url) {
+        await fetch('/api/arrisonapps/v1/admin/settings', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${settings.cigar_system_api_key}` },
+          body: JSON.stringify([
+            { namespace: '5ml-agent', key: 'cigar_system_base_url',     value: settings.cigar_system_base_url },
+            { namespace: '5ml-agent', key: 'cigar_system_api_key',      value: settings.cigar_system_api_key },
+            { namespace: '5ml-agent', key: 'cigar_system_region_default', value: settings.cigar_system_region_default },
+          ]),
+        }).catch(() => { /* backend may not be reachable yet */ });
+      }
+      setSaved(true);
+      setTimeout(() => setSaved(false), 3000);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const copyTool = (name: string) => {
+    navigator.clipboard.writeText(name);
+    setCopiedTool(name);
+    setTimeout(() => setCopiedTool(null), 1500);
+  };
+
+  const methodBadge = (m: string) =>
+    m === 'GET'   ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' :
+    m === 'POST'  ? 'bg-blue-500/10 text-blue-400 border-blue-500/20' :
+                    'bg-amber-500/10 text-amber-400 border-amber-500/20';
+
+  return (
+    <div className="space-y-6">
+
+      {/* ── Header ──────────────────────────────────────────────────────────── */}
+      <div className="flex items-start justify-between">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ background: 'rgba(212,175,55,0.12)', border: '1px solid rgba(212,175,55,0.25)' }}>
+            <FlameKindling className="w-5 h-5" style={{ color: '#D4AF37' }} />
+          </div>
+          <div>
+            <h2 className="text-lg font-bold text-white">Arrisonapps Fine Cigars</h2>
+            <p className="text-xs text-slate-400 mt-0.5">Multi-region product catalogue · CRM · Inventory · 5ML Agentic integration</p>
+          </div>
+        </div>
+        <Link
+          href="/vibe-demo/arrisonapps"
+          target="_blank"
+          className="flex items-center gap-1.5 text-xs px-3 py-2 rounded-lg transition-colors border"
+          style={{ color: '#D4AF37', borderColor: 'rgba(212,175,55,0.25)', background: 'rgba(212,175,55,0.06)' }}
+        >
+          <ExternalLink className="w-3.5 h-3.5" />
+          Open Catalogue
+        </Link>
+      </div>
+
+      {/* ── Status Cards ────────────────────────────────────────────────────── */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        {[
+          { label: 'SKUs', value: '49', sub: 'across 16 brands', color: 'text-amber-400', accent: 'border-t-amber-500/60' },
+          { label: 'Regions', value: '3', sub: 'HK · SG · EU', color: 'text-blue-400', accent: 'border-t-blue-500/60' },
+          { label: 'Agent Tools', value: AGENT_TOOLS.length.toString(), sub: 'callable by LLM', color: 'text-purple-400', accent: 'border-t-purple-500/60' },
+          { label: 'API Base', value: settings.cigar_system_base_url ? '✓ Set' : '— not set', sub: 'integration_settings', color: settings.cigar_system_base_url ? 'text-emerald-400' : 'text-slate-500', accent: settings.cigar_system_base_url ? 'border-t-emerald-500/60' : 'border-t-slate-600/60' },
+        ].map(kpi => (
+          <div key={kpi.label} className={`bg-slate-800/60 rounded-xl border border-slate-700/50 border-t-2 ${kpi.accent} p-4`}>
+            <div className={`text-xl font-bold ${kpi.color}`}>{kpi.value}</div>
+            <div className="text-xs font-medium text-white mt-0.5">{kpi.label}</div>
+            <div className="text-[10px] text-slate-500 mt-0.5">{kpi.sub}</div>
+          </div>
+        ))}
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+
+        {/* ── Integration Settings ──────────────────────────────────────────── */}
+        <div className="bg-slate-800/60 rounded-2xl border border-slate-700/50 overflow-hidden">
+          <div className="px-5 py-4 border-b border-slate-700/50 flex items-center gap-2">
+            <Settings className="w-4 h-4 text-slate-400" />
+            <h3 className="text-sm font-bold text-white">Integration Settings</h3>
+            <span className="ml-auto text-[10px] text-slate-500">Stored in <code className="text-slate-400">integration_settings</code> table</span>
+          </div>
+          <form onSubmit={handleSave} className="p-5 space-y-4">
+            {/* Base URL */}
+            <div>
+              <label className="block text-xs font-medium text-slate-400 mb-1.5">
+                <Globe className="w-3.5 h-3.5 inline mr-1" />
+                cigar_system_base_url <span className="text-slate-600">(required)</span>
+              </label>
+              <input
+                type="url"
+                value={settings.cigar_system_base_url}
+                onChange={e => setSettings(s => ({ ...s, cigar_system_base_url: e.target.value }))}
+                placeholder="https://arrisonapps.fly.dev"
+                className="w-full px-3 py-2 bg-slate-900/60 border border-slate-700/50 rounded-lg text-sm text-white placeholder-slate-600 focus:outline-none focus:border-amber-500/50 transition-colors font-mono"
+              />
+              <p className="text-[10px] text-slate-600 mt-1">Base URL of the Arrisonapps API. Used by all 5ML agent tool calls.</p>
+            </div>
+
+            {/* API Key */}
+            <div>
+              <label className="block text-xs font-medium text-slate-400 mb-1.5">
+                <Key className="w-3.5 h-3.5 inline mr-1" />
+                cigar_system_api_key <span className="text-slate-600">(secret · X-Agent-Key header)</span>
+              </label>
+              <div className="relative">
+                <input
+                  type={showKey ? 'text' : 'password'}
+                  value={settings.cigar_system_api_key}
+                  onChange={e => setSettings(s => ({ ...s, cigar_system_api_key: e.target.value }))}
+                  placeholder="sk-arrisonapps-…"
+                  className="w-full px-3 py-2 pr-20 bg-slate-900/60 border border-slate-700/50 rounded-lg text-sm text-white placeholder-slate-600 focus:outline-none focus:border-amber-500/50 transition-colors font-mono"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowKey(v => !v)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] text-slate-500 hover:text-slate-300 transition-colors"
+                >
+                  {showKey ? 'HIDE' : 'SHOW'}
+                </button>
+              </div>
+              <p className="text-[10px] text-slate-600 mt-1">Sent as <code className="text-slate-500">X-Agent-Key</code> header on all agent API calls. Set in Fly secrets as <code className="text-slate-500">ARRISONAPPS_AGENT_KEY</code>.</p>
+            </div>
+
+            {/* Default Region */}
+            <div>
+              <label className="block text-xs font-medium text-slate-400 mb-1.5">
+                <Globe className="w-3.5 h-3.5 inline mr-1" />
+                cigar_system_region_default
+              </label>
+              <select
+                value={settings.cigar_system_region_default}
+                onChange={e => setSettings(s => ({ ...s, cigar_system_region_default: e.target.value }))}
+                className="w-full px-3 py-2 bg-slate-900/60 border border-slate-700/50 rounded-lg text-sm text-white focus:outline-none focus:border-amber-500/50 transition-colors"
+              >
+                {['HK', 'SG', 'EU'].map(r => <option key={r} value={r}>{r}</option>)}
+              </select>
+              <p className="text-[10px] text-slate-600 mt-1">Default region used when agent tools omit the <code className="text-slate-500">region</code> parameter.</p>
+            </div>
+
+            <button
+              type="submit"
+              disabled={saving}
+              className="w-full py-2.5 text-sm font-medium rounded-lg flex items-center justify-center gap-2 transition-all"
+              style={{ background: saved ? 'rgba(74,222,128,0.15)' : 'rgba(212,175,55,0.15)', color: saved ? '#4ade80' : '#D4AF37', border: `1px solid ${saved ? 'rgba(74,222,128,0.3)' : 'rgba(212,175,55,0.3)'}` }}
+            >
+              {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : saved ? <CheckCircle2 className="w-4 h-4" /> : <Settings className="w-4 h-4" />}
+              {saving ? 'Saving…' : saved ? 'Settings Saved' : 'Save Settings'}
+            </button>
+          </form>
+        </div>
+
+        {/* ── Quick Links & Build Status ────────────────────────────────────── */}
+        <div className="space-y-4">
+          {/* Links */}
+          <div className="bg-slate-800/60 rounded-2xl border border-slate-700/50 overflow-hidden">
+            <div className="px-5 py-3 border-b border-slate-700/50">
+              <h3 className="text-sm font-bold text-white">Quick Links</h3>
+            </div>
+            <div className="divide-y divide-slate-700/30">
+              {[
+                { label: 'Catalogue (Vibe Demo)', href: '/vibe-demo/arrisonapps', sub: 'Prestige product website — HK/SG/EU', icon: ExternalLink },
+                { label: 'API Health', href: '/api/arrisonapps/v1/health', sub: 'GET /api/arrisonapps/v1/health', icon: Wifi },
+                { label: 'DB Migration SQL', href: '#', sub: 'use-cases/arrisonapps/db/migrations/001_initial_schema.sql', icon: Layers },
+              ].map(({ label, href, sub, icon: Icon }) => (
+                <Link
+                  key={label}
+                  href={href}
+                  target={href.startsWith('/api') || href.startsWith('http') ? '_blank' : undefined}
+                  className="flex items-center gap-3 px-5 py-3 hover:bg-white/[0.02] transition-colors group"
+                >
+                  <Icon className="w-4 h-4 text-slate-500 group-hover:text-amber-400 transition-colors flex-shrink-0" />
+                  <div className="flex-1 min-w-0">
+                    <div className="text-sm text-white group-hover:text-amber-300 transition-colors">{label}</div>
+                    <div className="text-[10px] text-slate-500 truncate font-mono">{sub}</div>
+                  </div>
+                  <ArrowRight className="w-3.5 h-3.5 text-slate-600 group-hover:text-amber-400 group-hover:translate-x-0.5 transition-all" />
+                </Link>
+              ))}
+            </div>
+          </div>
+
+          {/* Feature checklist */}
+          <div className="bg-slate-800/60 rounded-2xl border border-slate-700/50 p-5">
+            <h3 className="text-sm font-bold text-white mb-3">Build Status</h3>
+            <div className="space-y-2">
+              {[
+                { label: 'DB Schema (20 tables + view)', done: true },
+                { label: 'Public API — regions, products, auth, enquiry', done: true },
+                { label: 'Admin API — CRUD, stock movements, CRM leads', done: true },
+                { label: 'Agent API — 9 LLM-callable tools', done: true },
+                { label: 'Frontend catalogue — 49 SKUs, 16 brands', done: true },
+                { label: 'Multi-region pricing (HK/SG/EU)', done: true },
+                { label: 'Image upload (BYTEA + CDN fallback)', done: true },
+                { label: 'PDF export for reports', done: false },
+                { label: 'Email notifications (SMTP)', done: false },
+                { label: 'Admin dashboard UI', done: false },
+              ].map(({ label, done }) => (
+                <div key={label} className="flex items-center gap-2.5 text-xs">
+                  <span className={`w-4 h-4 rounded-full flex items-center justify-center flex-shrink-0 ${done ? 'bg-emerald-500/20 text-emerald-400' : 'bg-slate-700/50 text-slate-600'}`}>
+                    {done ? '✓' : '○'}
+                  </span>
+                  <span className={done ? 'text-slate-300' : 'text-slate-500'}>{label}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* ── Agent Tool Reference ─────────────────────────────────────────────── */}
+      <div className="bg-slate-800/60 rounded-2xl border border-slate-700/50 overflow-hidden">
+        <div className="px-5 py-4 border-b border-slate-700/50 flex items-center gap-2">
+          <Zap className="w-4 h-4 text-purple-400" />
+          <h3 className="text-sm font-bold text-white">5ML Agent Tool Reference</h3>
+          <span className="ml-auto text-[10px] text-slate-500">Auth: <code className="text-slate-400">X-Agent-Key</code> header · Base: <code className="text-slate-400">{settings.cigar_system_base_url || '<cigar_system_base_url>'}/api/arrisonapps/v1</code></span>
+        </div>
+        <div className="divide-y divide-slate-700/30">
+          {AGENT_TOOLS.map(tool => (
+            <div key={tool.name} className="px-5 py-3.5 flex items-start gap-4 hover:bg-white/[0.02] transition-colors group">
+              <div className="flex items-center gap-2 flex-shrink-0 w-56">
+                <span className={`text-[10px] px-1.5 py-0.5 rounded border font-mono font-bold ${methodBadge(tool.method)}`}>{tool.method}</span>
+                <button
+                  onClick={() => copyTool(tool.name)}
+                  className="flex items-center gap-1 text-xs font-mono text-slate-300 hover:text-white transition-colors"
+                  title="Copy tool name"
+                >
+                  {tool.name}
+                  {copiedTool === tool.name
+                    ? <CheckCircle2 className="w-3 h-3 text-emerald-400" />
+                    : <Copy className="w-3 h-3 text-slate-600 group-hover:text-slate-400 transition-colors" />}
+                </button>
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="text-[11px] font-mono text-slate-500 mb-0.5">{tool.path}</div>
+                <div className="text-xs text-slate-400">{tool.desc}</div>
+                <div className="text-[10px] text-slate-600 mt-0.5 font-mono">params: {tool.params}</div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Dashboard Page
 // ---------------------------------------------------------------------------
 
@@ -376,7 +663,7 @@ export default function Dashboard() {
   const getInitialTab = (): Tab => {
     if (typeof window === 'undefined') return 'control';
     const p = new URLSearchParams(window.location.search).get('tab') as Tab | null;
-    const valid: Tab[] = ['control','overview','architecture','analytics','scheduling','knowledge','costs','workflows','chat','security','adaptive','transcription'];
+    const valid: Tab[] = ['control','overview','architecture','analytics','scheduling','knowledge','costs','workflows','chat','security','adaptive','transcription','arrisonapps'];
     return p && valid.includes(p) ? p : 'control';
   };
   const [activeTab, setActiveTab] = useState<Tab>(getInitialTab);
@@ -393,6 +680,7 @@ export default function Dashboard() {
     { id: 'analytics', label: 'Analytics & API', icon: Wifi },
     { id: 'adaptive', label: 'Adaptive Learning', icon: Brain },
     { id: 'transcription', label: '粵語逐字稿', icon: Mic },
+    { id: 'arrisonapps', label: 'Arrisonapps', icon: FlameKindling },
     { id: 'architecture', label: 'Architecture', icon: Layers },
   ];
 
@@ -662,6 +950,11 @@ export default function Dashboard() {
             <AgenticWorkflows />
           </div>
         )}
+
+        {/* ================================================================ */}
+        {/* ARRISONAPPS TAB                                                  */}
+        {/* ================================================================ */}
+        {activeTab === 'arrisonapps' && <ArrisonappsPanel />}
 
       </main>
     </div>
