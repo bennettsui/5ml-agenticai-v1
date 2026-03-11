@@ -747,17 +747,168 @@ router.get('/providers', (_req, res) => {
 // ─────────────────────────────────────────────────────────────────────────────
 // POST /api/cantonese-transcription/transcribe
 // Audio file → STT provider → { provider, transcript, segments, language,
-//                               confidence?, fallbackFrom? }
+//                               confidence?, fallbackFrom?, autoSegmented?, segmentCount? }
 //
 // Body params (multipart):
 //   audio    — audio file (required)
 //   language — BCP-47 language code (default: yue-Hant-HK)
 //   provider — 'whisper' | 'google-stt' | 'auto' (default: auto)
 //
+// Long audio is handled automatically:
+//   Files > 55s are split into overlapping 55s chunks (±3s overlap), each
+//   chunk is transcribed, and the results are merged. Callers don't need to
+//   do anything special — transcript and segments are returned as if the
+//   whole file was processed in one pass.
+//
 // Required env (at least one):
 //   WHISPER_SERVICE_URL   — Whisper HTTP service base URL
 //   GEMINI_API_KEY        — Google Gemini / Cloud API key
 // ─────────────────────────────────────────────────────────────────────────────
+
+// ── Auto-segmentation helpers ─────────────────────────────────────────────────
+const CHUNK_SECS   = 55;   // effective audio content per segment
+const OVERLAP_SECS = 3;    // overlap on each side so words at boundaries aren't clipped
+
+const MIME_TO_EXT = {
+  'audio/wav': 'wav', 'audio/mp3': 'mp3', 'audio/mpeg': 'mp3',
+  'audio/mp4': 'm4a', 'audio/m4a': 'm4a', 'audio/ogg': 'ogg',
+  'audio/webm': 'webm', 'audio/flac': 'flac',
+};
+
+// Probe audio duration from an already-written temp file path.
+// Returns duration in seconds, or null if ffprobe fails.
+function probeDurationFromPath(filePath) {
+  return new Promise((resolve) => {
+    // ffmpeg/ffprobe are only available once the convert section has imported
+    // fluent-ffmpeg, but require() is cached so this is safe to use anywhere.
+    const ff = require('fluent-ffmpeg');
+    ff.ffprobe(filePath, (err, meta) => resolve(err ? null : (meta.format?.duration ?? null)));
+  });
+}
+
+// Extract one chunk from inPath as PCM WAV → Buffer.
+function extractChunk(inPath, startSec, durationSec) {
+  return new Promise((resolve, reject) => {
+    const ff  = require('fluent-ffmpeg');
+    const os2 = require('os');
+    const p   = require('path');
+    const tmpPath = p.join(os2.tmpdir(), `ct-chunk-${Date.now()}-${Math.random().toString(36).slice(2)}.wav`);
+    ff(inPath)
+      .seekInput(startSec).duration(durationSec)
+      .noVideo().audioCodec('pcm_s16le').audioFrequency(16000).audioChannels(1)
+      .on('error', reject)
+      .on('end', () => {
+        const buf = require('fs').readFileSync(tmpPath);
+        require('fs').unlink(tmpPath, () => {});
+        resolve(buf);
+      })
+      .save(tmpPath);
+  });
+}
+
+// Merge per-chunk STT results into a single transcript + segments array.
+// Chunks are expected in order with their associated absStart / innerStart / innerEnd.
+function mergeChunkResults(chunkResults) {
+  let transcript = '';
+  const segments = [];
+
+  for (const { result, absStart, innerStart, innerEnd, chunkDur } of chunkResults) {
+    let chunkText = '';
+
+    if (result.segments?.length) {
+      // Use word-level timestamps to keep only the "safe window" of each chunk
+      for (const seg of result.segments) {
+        if (seg.start >= innerStart && seg.start < innerEnd) {
+          segments.push({
+            start: Math.round((absStart + seg.start) * 100) / 100,
+            end:   Math.round((absStart + Math.min(seg.end, innerEnd)) * 100) / 100,
+            text:  seg.text,
+          });
+          chunkText += (chunkText ? ' ' : '') + seg.text;
+        }
+      }
+    } else if (result.transcript) {
+      // No word timestamps — trim proportionally by word count
+      const words    = result.transcript.trim().split(/\s+/);
+      const startIdx = Math.round((innerStart / chunkDur) * words.length);
+      const endIdx   = Math.round((innerEnd   / chunkDur) * words.length);
+      chunkText = words.slice(startIdx, endIdx).join(' ');
+    }
+
+    if (chunkText) transcript += (transcript ? ' ' : '') + chunkText;
+  }
+
+  return { transcript, segments };
+}
+
+// Top-level helper: probes duration, auto-splits if needed, transcribes, merges.
+async function autoTranscribeBuffer({ fileBuffer, mimeType, language, filename, provider }) {
+  // Small files (< 1 MB) are almost always < 30s — skip probing overhead
+  if (fileBuffer.length < 1024 * 1024) {
+    return sttService.transcribeAudio({ fileBuffer, mimeType, language, filename, provider });
+  }
+
+  // Write to tmp so ffprobe can read it
+  const ext    = MIME_TO_EXT[mimeType] || 'wav';
+  const tmpPath = require('path').join(require('os').tmpdir(),
+    `ct-probe-${Date.now()}.${ext}`);
+  require('fs').writeFileSync(tmpPath, fileBuffer);
+
+  let duration;
+  try {
+    duration = await probeDurationFromPath(tmpPath);
+  } catch { /* ignore */ }
+
+  if (!duration || duration <= CHUNK_SECS + OVERLAP_SECS) {
+    // Short enough to transcribe in one shot
+    require('fs').unlink(tmpPath, () => {});
+    return sttService.transcribeAudio({ fileBuffer, mimeType, language, filename, provider });
+  }
+
+  console.log(`[ct-transcribe] Long audio detected: ${Math.round(duration)}s — auto-segmenting`);
+
+  const numChunks  = Math.ceil(duration / CHUNK_SECS);
+  const chunkResults = [];
+  let   usedProvider = null;
+
+  try {
+    for (let i = 0; i < numChunks; i++) {
+      const absStart   = Math.max(0, i * CHUNK_SECS - OVERLAP_SECS);
+      const absEnd     = Math.min(duration, (i + 1) * CHUNK_SECS + OVERLAP_SECS);
+      const chunkDur   = absEnd - absStart;
+      const innerStart = i === 0 ? 0 : OVERLAP_SECS;
+      const innerEnd   = i === numChunks - 1 ? chunkDur : chunkDur - OVERLAP_SECS;
+
+      const chunkBuf = await extractChunk(tmpPath, absStart, chunkDur);
+      const result   = await sttService.transcribeAudio({
+        fileBuffer: chunkBuf,
+        mimeType:   'audio/wav',
+        language,
+        filename:   `chunk${i + 1}.wav`,
+        provider,
+      });
+      if (result.fallbackFrom) {
+        console.warn(`[ct-transcribe] Chunk ${i + 1}: used ${result.provider} (fallback from ${result.fallbackFrom})`);
+      }
+      usedProvider = result.provider;
+      chunkResults.push({ result, absStart, innerStart, innerEnd, chunkDur });
+    }
+  } finally {
+    require('fs').unlink(tmpPath, () => {});
+  }
+
+  const { transcript, segments } = mergeChunkResults(chunkResults);
+  return {
+    provider:      usedProvider || 'google-stt',
+    language,
+    transcript,
+    segments,
+    autoSegmented: true,
+    segmentCount:  numChunks,
+  };
+}
+// ─────────────────────────────────────────────────────────────────────────────
+
 router.post('/transcribe', upload.single('audio'), async (req, res) => {
   if (!req.file) {
     return res.status(400).json({ ok: false, error_code: 'CT-011', error: db.ERROR_MESSAGES['CT-011'] });
@@ -769,10 +920,10 @@ router.post('/transcribe', upload.single('audio'), async (req, res) => {
 
   const mimeType = req.file.mimetype || 'audio/webm';
   const language = req.body.language || 'yue-Hant-HK';
-  const provider = req.body.provider || 'auto'; // 'whisper' | 'google-stt' | 'auto'
+  const provider = req.body.provider || 'auto';
 
   try {
-    const result = await sttService.transcribeAudio({
+    const result = await autoTranscribeBuffer({
       fileBuffer: req.file.buffer,
       mimeType,
       language,
@@ -783,15 +934,16 @@ router.post('/transcribe', upload.single('audio'), async (req, res) => {
     if (result.fallbackFrom) {
       console.warn(`[ct-transcribe] Used ${result.provider} (fallback from ${result.fallbackFrom})`);
     }
+    if (result.autoSegmented) {
+      console.log(`[ct-transcribe] Merged ${result.segmentCount} segments → ${result.transcript?.length ?? 0} chars`);
+    }
 
     return res.json({ ok: true, ...result });
   } catch (err) {
-    // Timeout from AbortSignal → give a clear message
     if (err.name === 'TimeoutError' || err.name === 'AbortError') {
-      console.error('[ct-transcribe] Google STT timed out (>55s)');
-      return res.status(504).json({ ok: false, error_code: 'CT-018', error: '轉錄超時：音訊檔案太長，請裁短至 60 秒以下後重試' });
+      console.error('[ct-transcribe] STT timed out');
+      return res.status(504).json({ ok: false, error_code: 'CT-018', error: '轉錄超時，請嘗試較短的音訊片段' });
     }
-    // Map known error codes from stt-service; default to CT-013
     const errorCode = err.code || 'CT-013';
     const errorMsg  = db.ERROR_MESSAGES[errorCode] || err.message;
     console.error(`[ct-transcribe] STT error (${errorCode}):`, err.message);
