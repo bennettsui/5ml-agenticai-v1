@@ -647,6 +647,217 @@ router.get('/reports/leads.pdf', async (req, res) => {
   });
 });
 
+// ─── DELETE PRODUCT (soft delete) ────────────────────────────────────────────
+router.delete('/products/:id', async (req, res) => {
+  try {
+    await db(req).query(
+      `UPDATE ${SCHEMA}.products SET is_active = FALSE, updated_at = NOW() WHERE id = $1`,
+      [req.params.id]
+    );
+    await _audit(req, 'product.deactivate', 'products', req.params.id, null, { is_active: false });
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ─── BRANDS ──────────────────────────────────────────────────────────────────
+router.get('/brands', async (req, res) => {
+  try {
+    const { rows } = await db(req).query(
+      `SELECT id, slug, name, origin FROM ${SCHEMA}.brands ORDER BY name`
+    );
+    res.json({ brands: rows });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ─── CUSTOMERS ────────────────────────────────────────────────────────────────
+router.get('/customers', async (req, res) => {
+  const { q, page = 1, limit = 50 } = req.query;
+  const conditions = [];
+  const params = [];
+  if (q) {
+    params.push(`%${q}%`);
+    conditions.push(`(c.full_name ILIKE $${params.length} OR c.email ILIKE $${params.length} OR c.phone ILIKE $${params.length})`);
+  }
+  const where = conditions.length ? 'WHERE ' + conditions.join(' AND ') : '';
+  const offset = (Number(page) - 1) * Number(limit);
+  params.push(Number(limit), offset);
+  try {
+    const { rows } = await db(req).query(
+      `SELECT c.id, c.full_name, c.email, c.phone, c.is_vip,
+              c.home_region_id, c.tags, c.preferred_language,
+              c.preferred_currency, c.created_at
+       FROM ${SCHEMA}.customers c
+       ${where}
+       ORDER BY c.created_at DESC
+       LIMIT $${params.length - 1} OFFSET $${params.length}`,
+      params
+    );
+    res.json({ customers: rows });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.post('/customers', express.json(), async (req, res) => {
+  const { full_name, email, phone, preferred_language, region_code, kyc_notes, is_vip, tags } = req.body;
+  if (!full_name || !email) return res.status(400).json({ error: 'full_name and email are required' });
+  try {
+    let region_id = null;
+    if (region_code) {
+      const { rows: [r] } = await db(req).query(
+        `SELECT id FROM ${SCHEMA}.regions WHERE code = $1`, [region_code.toUpperCase()]
+      );
+      region_id = r?.id || null;
+    }
+    const { rows: [c] } = await db(req).query(
+      `INSERT INTO ${SCHEMA}.customers
+         (full_name, email, phone, preferred_language, home_region_id, kyc_notes, is_vip, tags)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
+       RETURNING id, full_name, email`,
+      [full_name, email, phone || null, preferred_language || 'en',
+       region_id, kyc_notes || null, is_vip || false, tags || []]
+    );
+    await _audit(req, 'customer.create', 'customers', c.id, null, req.body);
+    res.status(201).json(c);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.put('/customers/:id', express.json(), async (req, res) => {
+  const fields = ['full_name','email','phone','preferred_language','home_region_id','kyc_notes','is_vip','tags','preferred_currency'];
+  const setClauses = [];
+  const params = [];
+  fields.forEach(f => {
+    if (req.body[f] !== undefined) {
+      params.push(req.body[f]);
+      setClauses.push(`${f} = $${params.length}`);
+    }
+  });
+  if (!setClauses.length) return res.status(400).json({ error: 'No fields to update' });
+  params.push(req.params.id);
+  try {
+    await db(req).query(
+      `UPDATE ${SCHEMA}.customers SET ${setClauses.join(', ')}, updated_at = NOW() WHERE id = $${params.length}`,
+      params
+    );
+    await _audit(req, 'customer.update', 'customers', req.params.id, null, req.body);
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ─── ENQUIRIES ────────────────────────────────────────────────────────────────
+router.get('/enquiries', async (req, res) => {
+  const { status, region, customer_id, from, to, page = 1, limit = 30 } = req.query;
+  const conditions = [];
+  const params = [];
+  if (status) { params.push(status); conditions.push(`e.status = $${params.length}`); }
+  if (region) { params.push(region.toUpperCase()); conditions.push(`r.code = $${params.length}`); }
+  if (customer_id) { params.push(customer_id); conditions.push(`e.customer_id = $${params.length}`); }
+  if (from) { params.push(from); conditions.push(`e.submitted_at >= $${params.length}`); }
+  if (to)   { params.push(to);   conditions.push(`e.submitted_at <= $${params.length + ' 23:59:59'}`); }
+  const where = conditions.length ? 'WHERE ' + conditions.join(' AND ') : '';
+  const offset = (Number(page) - 1) * Number(limit);
+  params.push(Number(limit), offset);
+  try {
+    const { rows } = await db(req).query(
+      `SELECT e.id, e.enquiry_no, e.status, e.notes, e.submitted_at,
+              c.full_name AS customer_name, c.email AS customer_email,
+              r.code AS region_code, e.currency_code,
+              (SELECT COUNT(*) FROM ${SCHEMA}.enquiry_items ei WHERE ei.enquiry_id = e.id)::INT AS item_count
+       FROM ${SCHEMA}.enquiries e
+       JOIN ${SCHEMA}.customers c ON c.id = e.customer_id
+       JOIN ${SCHEMA}.regions r   ON r.id = e.region_id
+       ${where}
+       ORDER BY e.submitted_at DESC
+       LIMIT $${params.length - 1} OFFSET $${params.length}`,
+      params
+    );
+    res.json({ enquiries: rows });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.get('/enquiries/:id', async (req, res) => {
+  try {
+    const { rows: [enquiry] } = await db(req).query(
+      `SELECT e.id, e.enquiry_no, e.status, e.notes, e.submitted_at,
+              c.full_name AS customer_name, c.email AS customer_email,
+              r.code AS region_code, e.currency_code
+       FROM ${SCHEMA}.enquiries e
+       JOIN ${SCHEMA}.customers c ON c.id = e.customer_id
+       JOIN ${SCHEMA}.regions r   ON r.id = e.region_id
+       WHERE e.id = $1`,
+      [req.params.id]
+    );
+    if (!enquiry) return res.status(404).json({ error: 'Enquiry not found' });
+    const { rows: items } = await db(req).query(
+      `SELECT ei.id, ei.quantity, ei.unit_price_hint,
+              p.sku, b.name AS brand_name, p.series
+       FROM ${SCHEMA}.enquiry_items ei
+       JOIN ${SCHEMA}.products p ON p.id = ei.product_id
+       JOIN ${SCHEMA}.brands b   ON b.id = p.brand_id
+       WHERE ei.enquiry_id = $1`,
+      [req.params.id]
+    );
+    enquiry.items = items;
+    res.json(enquiry);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ─── AI CHAT ──────────────────────────────────────────────────────────────────
+router.post('/chat', express.json(), async (req, res) => {
+  const { messages, context } = req.body;
+  if (!Array.isArray(messages) || messages.length === 0)
+    return res.status(400).json({ error: 'messages array required' });
+
+  const DEEPSEEK_API_KEY = process.env.DEEPSEEK_API_KEY;
+  if (!DEEPSEEK_API_KEY) return res.status(503).json({ error: 'AI service not configured' });
+
+  const systemPrompt = [
+    'You are an AI assistant for Arrisonapps Fine Cigars admin portal.',
+    'You help with product management, inventory, CRM leads, and business insights.',
+    'Be concise and professional.',
+    context ? `\nCurrent context: ${context}` : '',
+  ].filter(Boolean).join(' ');
+
+  try {
+    const response = await fetch('https://api.deepseek.com/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${DEEPSEEK_API_KEY}`,
+      },
+      body: JSON.stringify({
+        model: 'deepseek-reasoner',
+        messages: [
+          { role: 'system', content: systemPrompt },
+          ...messages,
+        ],
+        stream: false,
+      }),
+    });
+    if (!response.ok) {
+      const err = await response.json().catch(() => ({}));
+      return res.status(502).json({ error: err.error?.message || 'AI request failed' });
+    }
+    const data = await response.json();
+    const reply = data.choices?.[0]?.message?.content || '';
+    res.json({ reply });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ─── Audit helper ─────────────────────────────────────────────────────────────
 async function _audit(req, action, resource, resourceId, before, after) {
   try {
