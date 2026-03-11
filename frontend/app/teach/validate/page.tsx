@@ -245,6 +245,7 @@ function ValidateInner() {
   const [page, setPage]                 = useState(1);
   const [scale, setScale]               = useState(1.5);
   const [pdfError, setPdfError]         = useState('');
+  const [pdfLost, setPdfLost]           = useState(false);
   const [pdfLoading, setPdfLoading]     = useState(false);
 
   // Paper info
@@ -293,8 +294,15 @@ function ValidateInner() {
     const pdfUrl = `/api/adaptive-learning/teachers/papers/${id}/file`;
 
     async function load() {
-      setPdfLoading(true); setPdfError('');
+      setPdfLoading(true); setPdfError(''); setPdfLost(false);
       try {
+        // Pre-check: HEAD request so we can show a helpful message on 404
+        // instead of the generic pdf.js "Unexpected server response (404)" error.
+        const probe = await fetch(pdfUrl, { method: 'HEAD' });
+        if (probe.status === 404) {
+          if (!cancelled) { setPdfLost(true); setPdfLoading(false); }
+          return;
+        }
         const lib = await getPdfJs();
         const doc = await lib.getDocument({ url: pdfUrl, withCredentials: false }).promise;
         if (cancelled) return;
@@ -470,6 +478,26 @@ function ValidateInner() {
             {pdfLoading && (
               <div className="flex items-center justify-center h-64">
                 <Loader2 className="w-6 h-6 animate-spin text-purple-400" />
+              </div>
+            )}
+            {pdfLost && (
+              <div className="flex flex-col items-center justify-center h-64 gap-4 text-center px-6">
+                <div className="w-12 h-12 rounded-2xl bg-red-500/10 flex items-center justify-center">
+                  <AlertCircle className="w-6 h-6 text-red-400" />
+                </div>
+                <div>
+                  <p className="text-white font-semibold">PDF file not found</p>
+                  <p className="text-slate-400 text-sm mt-1 max-w-sm leading-relaxed">
+                    This paper&apos;s PDF was lost when the server restarted. Fly.io uses an ephemeral filesystem — uploaded files are wiped on every restart or deploy.
+                  </p>
+                  <p className="text-slate-500 text-xs mt-2">
+                    The OCR questions (if already extracted) are still in the database. Re-upload the same PDF to restore the viewer.
+                  </p>
+                </div>
+                <Link href="/teach/papers"
+                  className="mt-2 flex items-center gap-1.5 px-4 py-2 bg-purple-600 hover:bg-purple-500 text-white rounded-xl text-sm font-semibold transition-colors">
+                  ← Back to Papers to re-upload
+                </Link>
               </div>
             )}
             {pdfError && (
