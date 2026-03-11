@@ -331,6 +331,25 @@ function ProductsPanel({ products: initialProducts, token, isDemo, onProductsCha
   const [deletingImageId, setDeletingImageId] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [uploadingForId, setUploadingForId] = useState<string | null>(null);
+  const [dragOverId, setDragOverId] = useState<string | null>(null);
+
+  // Paste handler — works when a product row is expanded
+  useEffect(() => {
+    const onPaste = (e: ClipboardEvent) => {
+      if (!expandedId) return;
+      const items = Array.from(e.clipboardData?.items ?? []);
+      const imgItem = items.find(i => i.type.startsWith('image/'));
+      if (!imgItem) return;
+      const file = imgItem.getAsFile();
+      if (file) {
+        setUploadingForId(expandedId);
+        handleUpload(expandedId, file);
+      }
+    };
+    document.addEventListener('paste', onPaste);
+    return () => document.removeEventListener('paste', onPaste);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [expandedId]);
 
   // New Product modal
   const [showNewProduct, setShowNewProduct] = useState(false);
@@ -701,19 +720,22 @@ function ProductsPanel({ products: initialProducts, token, isDemo, onProductsCha
                             Product Images
                             {productImages.length > 0 && <span className="ml-2 px-1.5 py-0.5 rounded text-xs" style={{ background: 'rgba(212,175,55,0.1)', color: C.gold }}>{productImages.length}</span>}
                           </span>
-                          <button
-                            onClick={() => { setUploadingForId(p.id); fileInputRef.current?.click(); }}
-                            disabled={uploading === p.id}
-                            className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded transition-all"
-                            onMouseDown={e => e.stopPropagation()}
-                            style={{ background: 'rgba(212,175,55,0.1)', color: C.gold, border: `1px solid rgba(212,175,55,0.2)`, opacity: uploading === p.id ? 0.5 : 1, fontFamily: 'sans-serif' }}
-                          >
-                            {uploading === p.id ? (
-                              <><RefreshCw className="w-3 h-3 animate-spin" />Uploading…</>
-                            ) : (
-                              <><ImagePlus className="w-3.5 h-3.5" />Upload Image</>
-                            )}
-                          </button>
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs" style={{ color: C.dim, fontFamily: 'sans-serif' }}>drop · paste · or</span>
+                            <button
+                              onClick={() => { setUploadingForId(p.id); fileInputRef.current?.click(); }}
+                              disabled={uploading === p.id}
+                              className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded transition-all"
+                              onMouseDown={e => e.stopPropagation()}
+                              style={{ background: 'rgba(212,175,55,0.1)', color: C.gold, border: `1px solid rgba(212,175,55,0.2)`, opacity: uploading === p.id ? 0.5 : 1, fontFamily: 'sans-serif' }}
+                            >
+                              {uploading === p.id ? (
+                                <><RefreshCw className="w-3 h-3 animate-spin" />Uploading…</>
+                              ) : (
+                                <><ImagePlus className="w-3.5 h-3.5" />Browse</>
+                              )}
+                            </button>
+                          </div>
                         </div>
 
                         {uploadError && (
@@ -728,12 +750,45 @@ function ProductsPanel({ products: initialProducts, token, isDemo, onProductsCha
                             <RefreshCw className="w-3.5 h-3.5 animate-spin" />Loading images…
                           </div>
                         ) : productImages.length === 0 ? (
-                          <div className="py-6 flex flex-col items-center gap-2 rounded-lg border border-dashed" style={{ borderColor: C.borderSub }}>
-                            <ImagePlus className="w-8 h-8" style={{ color: C.dim }} />
-                            <p className="text-xs" style={{ color: C.muted, fontFamily: 'sans-serif' }}>No images yet — click Upload Image to add the first one</p>
+                          <div
+                            className="py-8 flex flex-col items-center gap-2 rounded-lg border border-dashed transition-all"
+                            style={{
+                              borderColor: dragOverId === p.id ? C.gold : C.borderSub,
+                              background: dragOverId === p.id ? 'rgba(212,175,55,0.05)' : 'transparent',
+                              cursor: 'copy',
+                            }}
+                            onDragOver={e => { e.preventDefault(); setDragOverId(p.id); }}
+                            onDragEnter={e => { e.preventDefault(); setDragOverId(p.id); }}
+                            onDragLeave={() => setDragOverId(null)}
+                            onDrop={e => {
+                              e.preventDefault();
+                              setDragOverId(null);
+                              const file = e.dataTransfer.files[0];
+                              if (file?.type.startsWith('image/')) { setUploadingForId(p.id); handleUpload(p.id, file); }
+                            }}
+                          >
+                            <Upload className="w-7 h-7" style={{ color: dragOverId === p.id ? C.gold : C.dim }} />
+                            <p className="text-xs" style={{ color: dragOverId === p.id ? C.gold : C.muted, fontFamily: 'sans-serif' }}>
+                              {dragOverId === p.id ? 'Drop to upload' : 'Drop image · paste screenshot · or click Upload Image'}
+                            </p>
                           </div>
                         ) : (
-                          <div className="flex flex-wrap gap-3">
+                          <div
+                            className="flex flex-wrap gap-3 rounded-lg border border-dashed transition-all p-1"
+                            style={{
+                              borderColor: dragOverId === p.id ? C.gold : 'transparent',
+                              background: dragOverId === p.id ? 'rgba(212,175,55,0.04)' : 'transparent',
+                            }}
+                            onDragOver={e => { e.preventDefault(); setDragOverId(p.id); }}
+                            onDragEnter={e => { e.preventDefault(); setDragOverId(p.id); }}
+                            onDragLeave={() => setDragOverId(null)}
+                            onDrop={e => {
+                              e.preventDefault();
+                              setDragOverId(null);
+                              const file = e.dataTransfer.files[0];
+                              if (file?.type.startsWith('image/')) { setUploadingForId(p.id); handleUpload(p.id, file); }
+                            }}
+                          >
                             {productImages.map(img => (
                               <div key={img.id} className="relative group rounded-lg overflow-hidden border" style={{ width: 120, height: 120, borderColor: img.is_primary ? C.border : C.borderSub, flexShrink: 0 }}>
                                 <img
