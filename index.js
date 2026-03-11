@@ -4067,6 +4067,20 @@ try {
   console.warn('⚠️ TEDxXinyi routes not loaded:', error.message);
 }
 
+// Arrisonapps Cigar System Routes
+try {
+  const arrisonappsRoutes = require('./use-cases/arrisonapps/api/routes');
+  app.use('/api/arrisonapps/v1', arrisonappsRoutes);
+  if (process.env.DATABASE_URL) {
+    arrisonappsRoutes.initDb(pool).catch(err =>
+      console.warn('⚠️ Arrisonapps DB init error:', err.message)
+    );
+  }
+  console.log('✅ Arrisonapps routes loaded: /api/arrisonapps/v1');
+} catch (error) {
+  console.warn('⚠️ Arrisonapps routes not loaded:', error.message);
+}
+
 // Ads Performance Dashboard Routes
 try {
   const adsPerformanceRoutes = require('./use-cases/5ml-ads-performance-internal/api/routes');

@@ -165,6 +165,15 @@ export default function VibeDemoPage() {
       color: 'from-blue-600 to-blue-800',
       tags: ['AI Platform', '3D Three.js', 'Hong Kong SME', 'Interactive Carnival'],
     },
+    {
+      id: 'arrisonapps',
+      title: 'Arrisonapps Fine Cigars',
+      titleZh: '頂級雪茄精品目錄',
+      description: 'Prestige cigar product catalogue for high-net-worth clients — multi-region (HK/SG/EU), enquiry cart, CRM pipeline, inventory management, and 5ML Agentic integration with DeepSeek AI',
+      href: '/vibe-demo/arrisonapps',
+      color: 'from-amber-900 to-stone-900',
+      tags: ['Luxury / HNW', 'Multi-Region', 'CRM + Inventory', '5ML Agentic'],
+    },
   ];
 
   return (
