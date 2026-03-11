@@ -6,7 +6,7 @@
 //
 // Providers:
 //   'whisper'    — Self-hosted Whisper HTTP service (WHISPER_SERVICE_URL)
-//   'google-stt' — Google Cloud Speech-to-Text V2/V1p1beta1
+//   'google-stt' — Google Cloud Speech-to-Text V1 (stable)
 //
 // Provider selection (in order of precedence):
 //   1. Explicit `provider` arg
@@ -92,7 +92,7 @@ async function transcribeWithGoogle({ fileBuffer, mimeType, language }) {
   const audioB64 = fileBuffer.toString('base64');
   const encoding = ENCODING_MAP[mimeType] || 'ENCODING_UNSPECIFIED';
 
-  const url  = `https://speech.googleapis.com/v1p1beta1/speech:recognize?key=${apiKey}`;
+  const url  = `https://speech.googleapis.com/v1/speech:recognize?key=${apiKey}`;
   const body = {
     config: {
       encoding,
