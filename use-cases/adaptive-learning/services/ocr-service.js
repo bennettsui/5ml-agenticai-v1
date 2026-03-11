@@ -72,10 +72,16 @@ function tryParseJson(text) {
 // ─── Phase 1: count questions ─────────────────────────────────────────────────
 
 async function countQuestions(pdfBase64) {
-  const prompt = `This is a Hong Kong Secondary School mathematics exam paper.
-Count the total number of questions and list their numbers.
-Output ONLY this JSON: {"total": <number>, "question_numbers": [<array of integers>]}
-Do not include sub-parts like (a)(b)(c) as separate questions — only top-level numbered questions.`;
+  const prompt = `This is a Hong Kong Secondary School mathematics paper. It may be a standard exam paper OR a compiled/sorted past-paper booklet containing questions from multiple exams.
+
+Count the total number of top-level numbered questions (e.g. "1.", "11.", "12." etc.) across all pages.
+Output ONLY this JSON: {"total": <number>, "question_numbers": [<array of integers in the order they appear>]}
+
+Rules:
+- List the ACTUAL question numbers as they appear in the document (they may not start at 1).
+- Do not include sub-parts like (a)(b)(c) as separate questions.
+- For compiled booklets, include every numbered question from every page.
+- If question numbers restart on a new section, still list them all.`;
 
   const text = await callGemini([
     { inline_data: { mime_type: 'application/pdf', data: pdfBase64 } },
@@ -95,7 +101,7 @@ Do not include sub-parts like (a)(b)(c) as separate questions — only top-level
 
 async function extractBatch(pdfBase64, questionNumbers) {
   const list = questionNumbers.join(', ');
-  const prompt = `Extract ONLY questions numbered ${list} from this Hong Kong Secondary School mathematics exam paper.
+  const prompt = `Extract ONLY questions numbered ${list} from this Hong Kong Secondary School mathematics paper (may be a standard exam or a compiled sorted past-paper booklet).
 
 For each question return a JSON object:
 {
@@ -134,26 +140,33 @@ Rules:
 
 // ─── Main extraction ──────────────────────────────────────────────────────────
 
-async function extractFromPdf(pdfBuffer) {
+async function extractFromPdf(pdfBuffer, onLog) {
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) throw new Error('GEMINI_API_KEY env var not set');
 
+  const log = onLog || ((msg, level) => console.log(`[OCR] [${level || 'info'}] ${msg}`));
   const base64 = pdfBuffer.toString('base64');
 
   // Phase 1: discover question numbers
+  log('Phase 1: asking Gemini to count questions in the PDF…');
   let questionNumbers = await countQuestions(base64);
 
   if (!questionNumbers || questionNumbers.length === 0) {
-    // Fallback: assume 20 questions numbered 1-20
-    console.warn('[OCR] Phase 1 failed — falling back to 1-20');
+    log('Phase 1 failed to parse a question list — falling back to questions 1–20', 'warn');
     questionNumbers = Array.from({ length: 20 }, (_, i) => i + 1);
+  } else {
+    log(`Phase 1 complete: found ${questionNumbers.length} questions [${questionNumbers.slice(0, 10).join(', ')}${questionNumbers.length > 10 ? '…' : ''}]`, 'info');
   }
 
   // Phase 2: extract in batches
   const allBlocks = [];
+  const totalBatches = Math.ceil(questionNumbers.length / BATCH_SIZE);
   for (let i = 0; i < questionNumbers.length; i += BATCH_SIZE) {
-    const batch   = questionNumbers.slice(i, i + BATCH_SIZE);
+    const batch     = questionNumbers.slice(i, i + BATCH_SIZE);
+    const batchNum  = Math.floor(i / BATCH_SIZE) + 1;
+    log(`Phase 2 batch ${batchNum}/${totalBatches}: extracting Q${batch[0]}–Q${batch[batch.length - 1]}…`);
     const results = await extractBatch(base64, batch);
+    log(`  → batch ${batchNum} returned ${results.length}/${batch.length} questions`);
     allBlocks.push(...results);
   }
 
@@ -161,19 +174,19 @@ async function extractFromPdf(pdfBuffer) {
   const blocks = allBlocks
     .filter(q => q.stem_en?.length > 2 || q.stem_zh?.length > 2)
     .map(q => ({
-      raw_text:        `Q${q.question_number}: ${q.stem_en || q.stem_zh || ''}`,
-      stem_en:         q.stem_en         || '',
-      stem_zh:         q.stem_zh         || '',
-      has_image:       !!q.has_image,
+      raw_text:          `Q${q.question_number}: ${q.stem_en || q.stem_zh || ''}`,
+      stem_en:           q.stem_en           || '',
+      stem_zh:           q.stem_zh           || '',
+      has_image:         !!q.has_image,
       image_description: q.image_description || '',
-      options:         Array.isArray(q.options) ? q.options : [],
-      suggested_type:  q.suggested_type  || 'MCQ',
-      difficulty_hint: q.difficulty_hint || 2,
-      page_number:     q.page_number     || null,
-      question_number: q.question_number || null,
+      options:           Array.isArray(q.options) ? q.options : [],
+      suggested_type:    q.suggested_type    || 'MCQ',
+      difficulty_hint:   q.difficulty_hint   || 2,
+      page_number:       q.page_number       || null,
+      question_number:   q.question_number   || null,
     }));
 
-  console.log(`[OCR] Total extracted: ${blocks.length} questions from ${questionNumbers.length} detected`);
+  log(`Total: ${blocks.length} questions extracted (${questionNumbers.length} detected, ${allBlocks.length - blocks.length} filtered as empty)`, blocks.length > 0 ? 'success' : 'warn');
   return blocks;
 }
 

@@ -527,7 +527,18 @@ router.get('/teachers/papers/:id/draft-questions', async (req, res) => {
     const paper  = await db.getPaper(req.params.id);
     if (!paper) return res.status(404).json({ success: false, error: 'Paper not found' });
     const drafts = await db.getDraftQuestions(req.params.id);
-    res.json({ success: true, paper_id: paper.id, status: paper.status, exam_name: paper.exam_name, paper_file_url: paper.file_url || null, draft_questions: drafts });
+    // Also include live in-memory progress (if pipeline is still running)
+    const liveProgress = _pipelineProgress.get(req.params.id) || null;
+    res.json({
+      success: true,
+      paper_id: paper.id,
+      status: paper.status,
+      exam_name: paper.exam_name,
+      paper_file_url: paper.file_url || null,
+      draft_questions: drafts,
+      pipeline_log: liveProgress?.log ?? paper.pipeline_log ?? null,
+      live_progress: liveProgress ? { stage: liveProgress.stage, detail: liveProgress.detail, questions_found: liveProgress.questions_found, questions_analysed: liveProgress.questions_analysed } : null,
+    });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
   }
@@ -647,35 +658,75 @@ router.get('/teachers/papers/:id/progress', (req, res) => {
 });
 
 async function _runOcrPipeline(paperId, pdfBuffer, gradeBand) {
-  _pipelineProgress.set(paperId, { stage: 'reading', detail: 'Sending PDF to Gemini…', questions_found: 0, questions_analysed: 0 });
+  // Structured log — persisted to DB at end so validate page can trace history
+  const log = [];
+  function addLog(message, level = 'info') {
+    const entry = { time: new Date().toISOString(), message, level };
+    log.push(entry);
+    console.log(`[OCR ${paperId.slice(0, 8)}] [${level}] ${message}`);
+  }
+
+  function setProgress(stage, detail, extra = {}) {
+    _pipelineProgress.set(paperId, { stage, detail, log, ...extra });
+  }
+
+  setProgress('reading', 'Starting OCR pipeline…', { questions_found: 0, questions_analysed: 0 });
+  addLog('Pipeline started');
+
   try {
     await db.updatePaperStatus(paperId, 'OCR_RUNNING');
 
     let rawBlocks = [];
     if (await ocrService.isAvailable()) {
-      rawBlocks = await ocrService.extractFromPdf(pdfBuffer);
+      setProgress('reading', 'Phase 1: Gemini counting questions…', { questions_found: 0, questions_analysed: 0 });
+      rawBlocks = await ocrService.extractFromPdf(pdfBuffer, (msg, level) => {
+        addLog(msg, level || 'info');
+        // Keep live detail in sync with latest log message
+        setProgress('reading', msg, { questions_found: 0, questions_analysed: 0 });
+      });
     } else {
-      console.warn(`Paper ${paperId}: GEMINI_API_KEY not set — skipping OCR`);
+      addLog('GEMINI_API_KEY not set — OCR skipped. Set env var to enable.', 'warn');
       await db.updatePaperStatus(paperId, 'NEEDS_REVIEW');
+      await db.updatePaperPipelineLog(paperId, log).catch(() => {});
+      setProgress('done', 'Skipped (no API key)', { questions_found: 0, questions_analysed: 0 });
+      setTimeout(() => _pipelineProgress.delete(paperId), 5 * 60 * 1000);
       return;
     }
 
     if (rawBlocks.length === 0) {
+      addLog('Gemini returned 0 questions — PDF may be image-only or unreadable. Set status to NEEDS_REVIEW.', 'warn');
       await db.updatePaperStatus(paperId, 'NEEDS_REVIEW');
+      await db.updatePaperPipelineLog(paperId, log).catch(() => {});
+      setProgress('done', '0 questions found — needs review', { questions_found: 0, questions_analysed: 0 });
+      setTimeout(() => _pipelineProgress.delete(paperId), 5 * 60 * 1000);
       return;
     }
 
-    _pipelineProgress.set(paperId, { stage: 'analysing', detail: `Gemini found ${rawBlocks.length} question${rawBlocks.length !== 1 ? 's' : ''}. Analysing with Claude…`, questions_found: rawBlocks.length, questions_analysed: 0 });
-    await db.updatePaperStatus(paperId, 'DRAFT_READY');
+    setProgress('analysing', `Gemini found ${rawBlocks.length} questions. Running QuestionAgent…`, { questions_found: rawBlocks.length, questions_analysed: 0 });
 
     // Get candidate LOs for this grade
     const los = await db.getLearningObjectives({ grade: gradeBand.split('-')[0] || 'S1' });
     const candidateObjectives = los.slice(0, 20).map(lo => ({ code: lo.code, name_en: lo.name_en, name_zh: lo.name_zh }));
+    addLog(`Loaded ${los.length} learning objectives for grade ${gradeBand}`);
+
+    const hasClaudeKey = !!process.env.ANTHROPIC_API_KEY;
+    if (!hasClaudeKey) addLog('ANTHROPIC_API_KEY not set — QuestionAgent enhancement skipped', 'warn');
 
     // Run QuestionAgent on each block
     for (let i = 0; i < rawBlocks.length; i++) {
       const block = rawBlocks[i];
-      _pipelineProgress.set(paperId, { stage: 'analysing', detail: `Analysing question ${i + 1} of ${rawBlocks.length}…`, questions_found: rawBlocks.length, questions_analysed: i });
+      const qLabel = `Q${block.question_number ?? i + 1}`;
+      setProgress('analysing', `Saving ${qLabel} (${i + 1}/${rawBlocks.length})…`, { questions_found: rawBlocks.length, questions_analysed: i });
+
+      // Build ocrMeta from the block's extracted fields
+      const ocrMeta = JSON.stringify({
+        text:              block.raw_text,
+        options:           block.options,
+        image_description: block.image_description,
+        page_number:       block.page_number,
+        question_number:   block.question_number,
+      });
+      const imageDesc = block.image_description || '';
 
       let draft = {
         paperId,
@@ -688,7 +739,7 @@ async function _runOcrPipeline(paperId, pdfBuffer, gradeBand) {
         candidateObjectives,
       };
 
-      if (process.env.ANTHROPIC_API_KEY && (block.stem_en || block.raw_text).length > 20) {
+      if (hasClaudeKey && (block.stem_en || block.raw_text || '').length > 20) {
         try {
           const result = await getAgent().question.authorQuestion({
             rawTextEn:        block.stem_en || block.raw_text,
@@ -703,19 +754,31 @@ async function _runOcrPipeline(paperId, pdfBuffer, gradeBand) {
           draft.candidateObjectives  = result.selected_objective_codes?.map(code =>
             candidateObjectives.find(lo => lo.code === code)
           ).filter(Boolean) || candidateObjectives;
+          addLog(`${qLabel}: Claude enhanced → ${result.question_type}, difficulty ${result.difficulty_estimate}`);
         } catch (err) {
-          console.warn(`QuestionAgent failed for block (non-fatal):`, err.message);
+          addLog(`${qLabel}: Claude enhancement failed (non-fatal) — ${err.message}`, 'warn');
         }
       }
 
       await db.createDraftQuestion(draft);
     }
+
+    // Status → DRAFT_READY only after all questions are actually saved
+    addLog(`Done: ${rawBlocks.length} questions saved to database`, 'success');
+    await db.updatePaperStatus(paperId, 'DRAFT_READY');
+    await db.updatePaperPipelineLog(paperId, log).catch(() => {});
+    setProgress('done', `${rawBlocks.length} questions saved`, { questions_found: rawBlocks.length, questions_analysed: rawBlocks.length });
+
   } catch (err) {
-    console.error(`[OCR] Pipeline failed for paper ${paperId}:`, err.message);
-    await db.updatePaperStatus(paperId, 'NEEDS_REVIEW').catch(() => {});
+    addLog(`Pipeline crashed: ${err.message}`, 'error');
+    console.error(`[OCR] Pipeline crashed for paper ${paperId}:`, err.message, err.stack);
+    await db.updatePaperStatus(paperId, 'OCR_ISSUE').catch(() => {});
+    await db.updatePaperPipelineLog(paperId, log).catch(() => {});
+    setProgress('error', `Failed: ${err.message}`, { questions_found: 0, questions_analysed: 0 });
   }
 
-  _pipelineProgress.delete(paperId);
+  // Keep progress in memory for 5 min so validate page can read it on first load
+  setTimeout(() => _pipelineProgress.delete(paperId), 5 * 60 * 1000);
 }
 
 // ─── Additional routes appended below ──────────────────────────────────────

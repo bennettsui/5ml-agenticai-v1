@@ -6,10 +6,23 @@ import Link from 'next/link';
 import {
   ChevronLeft, ChevronRight, Loader2, AlertCircle, CheckCircle,
   Edit2, Check, X, ZoomIn, ZoomOut, RefreshCw, FileText, Eye,
-  MessageSquare, Send, Bot, User, Wand2,
+  MessageSquare, Send, Bot, User, Wand2, Activity, ChevronDown, ChevronUp,
 } from 'lucide-react';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
+
+interface PipelineLogEntry {
+  time: string;
+  message: string;
+  level: 'info' | 'warn' | 'error' | 'success';
+}
+
+interface LiveProgress {
+  stage: string;
+  detail: string;
+  questions_found: number;
+  questions_analysed: number;
+}
 
 interface BBox { x: number; y: number; w: number; h: number }
 
@@ -106,6 +119,109 @@ async function getPdfJs(): Promise<any> {
     script.onerror = () => reject(new Error('Failed to load /pdfjs/pdf.min.js'));
     document.head.appendChild(script);
   });
+}
+
+// ─── Pipeline log panel ───────────────────────────────────────────────────────
+
+function PipelineLog({ log, liveProgress, status }: {
+  log: PipelineLogEntry[] | null;
+  liveProgress: LiveProgress | null;
+  status: string;
+}) {
+  const [expanded, setExpanded] = useState(true);
+  const bottomRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (expanded) bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [log, expanded]);
+
+  const isRunning = status === 'OCR_RUNNING';
+
+  const levelStyle = (level: string) => {
+    if (level === 'error')   return 'text-red-400';
+    if (level === 'warn')    return 'text-amber-400';
+    if (level === 'success') return 'text-emerald-400';
+    return 'text-slate-400';
+  };
+  const levelDot = (level: string) => {
+    if (level === 'error')   return 'bg-red-500';
+    if (level === 'warn')    return 'bg-amber-500';
+    if (level === 'success') return 'bg-emerald-500';
+    return 'bg-slate-600';
+  };
+
+  const statusBadge = () => {
+    if (status === 'OCR_RUNNING')  return <span className="text-[10px] px-1.5 py-0.5 rounded bg-blue-500/15 text-blue-400 flex items-center gap-1"><Loader2 className="w-2.5 h-2.5 animate-spin" />Running</span>;
+    if (status === 'DRAFT_READY')  return <span className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-500/15 text-emerald-400">Done</span>;
+    if (status === 'OCR_ISSUE')    return <span className="text-[10px] px-1.5 py-0.5 rounded bg-red-500/15 text-red-400">Failed</span>;
+    if (status === 'NEEDS_REVIEW') return <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-400">Needs review</span>;
+    return <span className="text-[10px] px-1.5 py-0.5 rounded bg-slate-700 text-slate-500">{status}</span>;
+  };
+
+  if (!log && !isRunning) return null;
+
+  return (
+    <div className="bg-slate-900/40 border border-slate-700/50 rounded-2xl overflow-hidden">
+      {/* Header */}
+      <button
+        onClick={() => setExpanded(e => !e)}
+        className="w-full flex items-center gap-2 px-4 py-3 hover:bg-white/[0.02] transition-colors"
+      >
+        <Activity className="w-3.5 h-3.5 text-slate-500 shrink-0" />
+        <span className="text-xs font-medium text-slate-400 flex-1 text-left">OCR Pipeline Log</span>
+        {statusBadge()}
+        {liveProgress && isRunning && (
+          <span className="text-[10px] text-slate-600 ml-1">
+            {liveProgress.questions_analysed}/{liveProgress.questions_found} q
+          </span>
+        )}
+        {expanded ? <ChevronUp className="w-3.5 h-3.5 text-slate-600" /> : <ChevronDown className="w-3.5 h-3.5 text-slate-600" />}
+      </button>
+
+      {expanded && (
+        <div className="border-t border-slate-700/50">
+          {/* Live progress bar */}
+          {isRunning && liveProgress && liveProgress.questions_found > 0 && (
+            <div className="px-4 py-2 border-b border-slate-700/30">
+              <div className="flex justify-between text-[10px] text-slate-500 mb-1">
+                <span>{liveProgress.detail}</span>
+                <span>{liveProgress.questions_analysed}/{liveProgress.questions_found}</span>
+              </div>
+              <div className="h-1 bg-slate-800 rounded-full overflow-hidden">
+                <div
+                  className="h-full bg-purple-500 rounded-full transition-all duration-500"
+                  style={{ width: `${liveProgress.questions_found ? (liveProgress.questions_analysed / liveProgress.questions_found) * 100 : 0}%` }}
+                />
+              </div>
+            </div>
+          )}
+          {isRunning && liveProgress && liveProgress.questions_found === 0 && (
+            <div className="px-4 py-2 border-b border-slate-700/30 flex items-center gap-2">
+              <Loader2 className="w-3 h-3 animate-spin text-purple-400 shrink-0" />
+              <span className="text-[10px] text-slate-500">{liveProgress.detail}</span>
+            </div>
+          )}
+
+          {/* Log entries */}
+          <div className="max-h-52 overflow-y-auto px-4 py-2 space-y-1 font-mono">
+            {(log ?? []).map((entry, i) => (
+              <div key={i} className="flex items-start gap-2 text-[10px] leading-relaxed">
+                <span className={`w-1.5 h-1.5 rounded-full mt-1 shrink-0 ${levelDot(entry.level)}`} />
+                <span className="text-slate-700 shrink-0 tabular-nums">
+                  {new Date(entry.time).toLocaleTimeString('en-HK', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+                </span>
+                <span className={levelStyle(entry.level)}>{entry.message}</span>
+              </div>
+            ))}
+            {isRunning && (!log || log.length === 0) && (
+              <div className="text-[10px] text-slate-600 py-1">Waiting for first log entry…</div>
+            )}
+            <div ref={bottomRef} />
+          </div>
+        </div>
+      )}
+    </div>
+  );
 }
 
 // ─── AI Assistant panel ───────────────────────────────────────────────────────
@@ -250,11 +366,16 @@ function ValidateInner() {
 
   // Paper info
   const [paperName, setPaperName]       = useState('');
+  const [paperStatus, setPaperStatus]   = useState('');
   const [reprocessing, setReprocessing] = useState(false);
 
   // Draft questions
   const [drafts, setDrafts]             = useState<DraftQuestion[]>([]);
   const [draftsLoading, setDraftsLoading] = useState(true);
+
+  // Pipeline log (persisted from DB + live in-memory)
+  const [pipelineLog, setPipelineLog]   = useState<PipelineLogEntry[] | null>(null);
+  const [liveProgress, setLiveProgress] = useState<LiveProgress | null>(null);
 
   // Visual analysis
   const [elements, setElements]         = useState<VisualElement[]>([]);
@@ -267,24 +388,42 @@ function ValidateInner() {
   // Right panel tab
   const [rightTab, setRightTab]         = useState<'ocr' | 'visual' | 'ai'>('ocr');
 
-  // ─── Load paper info + draft questions ────────────────────────────────────
+  // ─── Load paper info + draft questions (+ pipeline log) ──────────────────
+
+  const loadDraftQuestions = useCallback(async () => {
+    const r = await fetch(`/api/adaptive-learning/teachers/papers/${id}/draft-questions`);
+    const d = await r.json();
+    if (d.success) {
+      setPaperName(d.exam_name || d.paper_name || '');
+      setPaperStatus(d.status || '');
+      const questions = (d.draft_questions || []).map((q: DraftQuestion) => ({
+        ...q, _meta: parseMeta(q.raw_ocr_text),
+      }));
+      setDrafts(questions);
+      if (d.pipeline_log) setPipelineLog(d.pipeline_log);
+      if (d.live_progress) setLiveProgress(d.live_progress);
+      else setLiveProgress(null);
+    }
+    return d;
+  }, [id]);
 
   useEffect(() => {
     if (!id) return;
-    fetch(`/api/adaptive-learning/teachers/papers/${id}/draft-questions`)
-      .then(r => r.json())
-      .then(d => {
-        if (d.success) {
-          setPaperName(d.exam_name || d.paper_name || '');
-          const questions = (d.draft_questions || []).map((q: DraftQuestion) => ({
-            ...q, _meta: parseMeta(q.raw_ocr_text),
-          }));
-          setDrafts(questions);
-        }
+    loadDraftQuestions().catch(() => {}).finally(() => setDraftsLoading(false));
+  }, [id, loadDraftQuestions]);
+
+  // Poll every 3 s while OCR is running
+  useEffect(() => {
+    if (!id || (paperStatus !== 'OCR_RUNNING' && paperStatus !== 'UPLOADED')) return;
+    const timer = setInterval(async () => {
+      const d = await loadDraftQuestions().catch(() => null);
+      if (d?.status !== 'OCR_RUNNING' && d?.status !== 'UPLOADED') {
+        clearInterval(timer);
         setDraftsLoading(false);
-      })
-      .catch(() => setDraftsLoading(false));
-  }, [id]);
+      }
+    }, 3000);
+    return () => clearInterval(timer);
+  }, [id, paperStatus, loadDraftQuestions]);
 
   // ─── Load PDF (local pdf.js — no CDN dependency) ──────────────────────────
 
@@ -378,24 +517,16 @@ function ValidateInner() {
 
   const reprocessOcr = async () => {
     setReprocessing(true);
+    setPipelineLog(null);
+    setLiveProgress(null);
     try {
       const res  = await fetch(`/api/adaptive-learning/teachers/papers/${id}/reprocess`, { method: 'POST' });
       const data = await res.json();
       if (data.success) {
         setDrafts([]);
         setDraftsLoading(true);
-        // Poll until DRAFT_READY
-        const poll = setInterval(async () => {
-          const r = await fetch(`/api/adaptive-learning/teachers/papers/${id}/draft-questions`);
-          const d = await r.json();
-          if (d.success && (d.status === 'DRAFT_READY' || d.status === 'CONFIRMED' || d.status === 'NEEDS_REVIEW')) {
-            clearInterval(poll);
-            const questions = (d.draft_questions || []).map((q: DraftQuestion) => ({ ...q, _meta: parseMeta(q.raw_ocr_text) }));
-            setDrafts(questions);
-            setDraftsLoading(false);
-          }
-        }, 5000);
-        setTimeout(() => { clearInterval(poll); setDraftsLoading(false); }, 5 * 60 * 1000);
+        setPaperStatus('OCR_RUNNING');
+        // Polling is handled by the useEffect above that watches paperStatus
       }
     } catch {}
     finally { setReprocessing(false); }
@@ -433,11 +564,29 @@ function ValidateInner() {
         </div>
       </div>
 
+      {/* Pipeline log (shown when running or when log exists) */}
+      {(paperStatus === 'OCR_RUNNING' || pipelineLog) && (
+        <PipelineLog log={pipelineLog} liveProgress={liveProgress} status={paperStatus} />
+      )}
+
+      {/* OCR_ISSUE banner */}
+      {paperStatus === 'OCR_ISSUE' && (
+        <div className="flex items-start gap-3 px-4 py-3 bg-red-500/10 border border-red-500/20 rounded-2xl text-sm">
+          <AlertCircle className="w-4 h-4 text-red-400 shrink-0 mt-0.5" />
+          <div>
+            <p className="text-red-300 font-medium">OCR pipeline crashed</p>
+            <p className="text-red-400/70 text-xs mt-0.5">
+              The extraction failed — see the log above for details. Click <strong>Re-run OCR</strong> to retry, or check that GEMINI_API_KEY is set.
+            </p>
+          </div>
+        </div>
+      )}
+
       {/* Body: PDF | Right panel */}
       <div className="flex gap-5" style={{ minHeight: '78vh' }}>
 
         {/* LEFT: PDF + overlays */}
-        <div className="flex-1 min-w-0 flex flex-col gap-3">
+        <div className="flex-1 min-w-0 flex flex-col gap-3" style={{ maxWidth: '50%' }}>
           {/* Controls */}
           <div className="flex items-center gap-2 flex-wrap">
             <div className="flex items-center gap-1 bg-slate-800/60 border border-slate-700/50 rounded-xl px-2 py-1.5">
@@ -557,7 +706,7 @@ function ValidateInner() {
         </div>
 
         {/* RIGHT: tabs */}
-        <div className="w-96 shrink-0 flex flex-col bg-slate-900/30 border border-slate-700/50 rounded-2xl overflow-hidden" style={{ maxHeight: '84vh' }}>
+        <div className="flex-1 min-w-0 flex flex-col bg-slate-900/30 border border-slate-700/50 rounded-2xl overflow-hidden" style={{ maxHeight: '84vh' }}>
           {/* Tab bar */}
           <div className="flex border-b border-slate-700/50 shrink-0">
             {([
