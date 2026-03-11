@@ -1,7 +1,19 @@
 require('./instrument.js');
 
+// ─── Global crash guards (Node.js 20 terminates on unhandled rejections) ─────
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('⚠️  Unhandled Rejection at:', promise, 'reason:', reason);
+  // Log but do NOT exit — keeps the server alive and health check passing
+});
+process.on('uncaughtException', (err) => {
+  console.error('⚠️  Uncaught Exception:', err);
+  // Log but do NOT exit for non-fatal errors
+});
+// ─────────────────────────────────────────────────────────────────────────────
+
 const express = require('express');
 const Anthropic = require('@anthropic-ai/sdk');
+const nodemailer = require('nodemailer');
 const fs = require('fs');
 const { spawn } = require('child_process');
 const { specs, swaggerUi } = require('./swagger');
