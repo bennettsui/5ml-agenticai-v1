@@ -398,6 +398,18 @@ export const USE_CASES: UseCaseConfig[] = [
     features: ['Parallax Effects', 'Mouse Tracking', 'Click Animations'],
   },
   {
+    id: 'arrisonapps',
+    name: 'Arrisonapps Fine Cigars',
+    description: 'Multi-region prestige cigar product catalogue, enquiry CRM, and inventory system with 5ML Agentic integration',
+    solutionLine: 'TechNexus',
+    status: 'in_progress',
+    progress: 0.6,
+    priority: 'high',
+    path: '/vibe-demo/arrisonapps',
+    agentCount: 3,
+    features: ['Product Catalogue', 'Enquiry Cart', 'CRM Pipeline', 'Inventory', 'Agent Tools', 'Multi-Region HK/SG/EU'],
+  },
+  {
     id: 'ecom-channels',
     name: 'eCom Channels',
     description: 'Multi-channel eCommerce management: product listing optimization and channel performance',
