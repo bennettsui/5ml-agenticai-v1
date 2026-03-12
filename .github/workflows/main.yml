@@ -115,14 +115,17 @@ jobs:
               exit 1
             fi
 
+            # Optional fallback source for host/port/dbname when secret only stores username/password
+            EXISTING_DATABASE_URL=$(awk -F= '/^DATABASE_URL=/{sub(/^DATABASE_URL=/, ""); print; exit}' .env || true)
             DATABASE_URL=$(
-              SECRET_JSON="$SECRET_JSON" python3 - <<'PY'
+              SECRET_JSON="$SECRET_JSON" EXISTING_DATABASE_URL="$EXISTING_DATABASE_URL" python3 - <<'PY'
             import json
             import os
             import sys
             import urllib.parse
 
             s_raw = os.environ.get('SECRET_JSON', '').strip()
+            fallback_url = os.environ.get('EXISTING_DATABASE_URL', '').strip()
 
             def pick(d, keys, default=''):
                 if not isinstance(d, dict):
@@ -132,6 +135,21 @@ jobs:
                     if v not in (None, ''):
                         return str(v)
                 return default
+
+            def parse_url(url):
+                if not url:
+                    return {}
+                try:
+                    u = urllib.parse.urlparse(url)
+                    return {
+                        'username': urllib.parse.unquote(u.username or ''),
+                        'password': urllib.parse.unquote(u.password or ''),
+                        'host': u.hostname or '',
+                        'port': str(u.port or '5432'),
+                        'dbname': (u.path or '/').lstrip('/') or 'postgres',
+                    }
+                except Exception:
+                    return {}
 
             try:
                 s = json.loads(s_raw) if s_raw else {}
@@ -145,19 +163,23 @@ jobs:
                 print(direct)
                 sys.exit(0)
 
-            username = pick(s, ['username', 'user', 'master_username'])
-            password = pick(s, ['password', 'pass', 'master_password'])
-            host = pick(s, ['host', 'hostname', 'endpoint', 'address'])
-            port = pick(s, ['port'], '5432')
-            dbname = pick(s, ['dbname', 'database', 'dbName'], 'postgres')
+            fb = parse_url(fallback_url)
+            username = pick(s, ['username', 'user', 'master_username'], fb.get('username', ''))
+            password = pick(s, ['password', 'pass', 'master_password'], fb.get('password', ''))
+            host = pick(s, ['host', 'hostname', 'endpoint', 'address'], fb.get('host', ''))
+            port = pick(s, ['port'], fb.get('port', '5432'))
+            dbname = pick(s, ['dbname', 'database', 'dbName'], fb.get('dbname', 'postgres'))
 
             if not (username and password and host):
                 keys = ','.join(sorted(s.keys())) if isinstance(s, dict) else '<non-json-secret>'
-                sys.exit(f'Secret missing required fields from Secrets Manager. Need username/password/host. Available keys: {keys}')
+                sys.exit(
+                    f'Cannot build DATABASE_URL. Need username/password/host from secret or ENV_FILE DATABASE_URL fallback. '
+                    f'Available secret keys: {keys}'
+                )
 
             u = urllib.parse.quote(username, safe='')
             p = urllib.parse.quote(password, safe='')
-            print(f'postgresql://{u}:{p}@{host}:{port}/{dbname}?sslmode=require')
+            print(f'postgresql://{u}:{p}@{host}:{port}/{dbname}?sslmode=require&uselibpqcompat=true')
             PY
             ) || { echo "Failed to build DATABASE_URL from Secrets Manager"; exit 1; }
             if [ -z "$DATABASE_URL" ]; then
