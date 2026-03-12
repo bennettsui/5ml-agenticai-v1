@@ -1076,6 +1076,58 @@ router.post('/media/toggle-circles', express.json(), (req, res) => {
   res.json({ success: true, key, circlesGallery: !!inCircles });
 });
 
+// ---- API: public News Clippings photo listing (no auth required) ----
+router.get('/news-clippings', (req, res) => {
+  const meta = loadMetadata();
+  const photos = [];
+  for (const [key, data] of Object.entries(meta)) {
+    if (!data || typeof data !== 'object') continue;
+    if (!data.newsClipping && !key.startsWith('news-clippings/')) continue;
+    if (key.includes('--archived-')) continue;
+    const localExists = fs.existsSync(path.join(OUTPUT_DIR, key));
+    const src = data.publicUrl || (localExists ? `/tedx-xinyi/${key}` : null);
+    if (src) photos.push({ key, src, publicUrl: data.publicUrl || null, alt: data.alt || '' });
+  }
+  res.json({ photos });
+});
+
+// ---- API: toggle a media item in/out of the News Clippings gallery ----
+router.post('/media/toggle-news-clipping', express.json(), (req, res) => {
+  const { key, inGallery } = req.body;
+  if (!key) return res.status(400).json({ error: 'key required' });
+  const meta = loadMetadata();
+  if (!meta[key]) meta[key] = {};
+  meta[key].newsClipping = !!inGallery;
+  saveMetadata(meta);
+  res.json({ success: true, key, newsClipping: !!inGallery });
+});
+
+// ---- API: public Event Photos listing (no auth required) ----
+router.get('/event-photos', (req, res) => {
+  const meta = loadMetadata();
+  const photos = [];
+  for (const [key, data] of Object.entries(meta)) {
+    if (!data || typeof data !== 'object') continue;
+    if (!data.eventGallery && !key.startsWith('event-photos/')) continue;
+    if (key.includes('--archived-')) continue;
+    const localExists = fs.existsSync(path.join(OUTPUT_DIR, key));
+    const src = data.publicUrl || (localExists ? `/tedx-xinyi/${key}` : null);
+    if (src) photos.push({ key, src, publicUrl: data.publicUrl || null, alt: data.alt || '' });
+  }
+  res.json({ photos });
+});
+
+// ---- API: toggle a media item in/out of the Event Photos gallery ----
+router.post('/media/toggle-event-photo', express.json(), (req, res) => {
+  const { key, inGallery } = req.body;
+  if (!key) return res.status(400).json({ error: 'key required' });
+  const meta = loadMetadata();
+  if (!meta[key]) meta[key] = {};
+  meta[key].eventGallery = !!inGallery;
+  saveMetadata(meta);
+  res.json({ success: true, key, eventGallery: !!inGallery });
+});
+
 // ---- Expected speaker photo slots (salon page + homepage lineup) ----
 const SPEAKER_SLOTS = [
   // Salon page speakers
