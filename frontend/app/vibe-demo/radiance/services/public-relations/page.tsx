@@ -1,5 +1,6 @@
 'use client';
 
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { Header } from '../../components/Header';
 import { Footer } from '../../components/Footer';
@@ -7,13 +8,26 @@ import { Breadcrumb } from '../../components/Breadcrumb';
 import { useLanguage } from '../../hooks/useLanguage';
 import { useParallax } from '../../hooks/useParallax';
 
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || '';
+
+const GALLERY_PLACEHOLDERS = [
+  { url: 'https://images.unsplash.com/photo-1540575467063-178a50c2df87?auto=format&fit=crop&w=800&q=80', caption_en: 'Press Conference', caption_zh: '新聞發布會' },
+  { url: 'https://images.unsplash.com/photo-1505373877841-8d25f7d46678?auto=format&fit=crop&w=800&q=80', caption_en: 'Product Launch', caption_zh: '產品發布活動' },
+  { url: 'https://images.unsplash.com/photo-1511578314322-379afb476865?auto=format&fit=crop&w=800&q=80', caption_en: 'Media Luncheon', caption_zh: '媒體午宴' },
+  { url: 'https://images.unsplash.com/photo-1475721027785-f74eccf877e2?auto=format&fit=crop&w=800&q=80', caption_en: 'Media Preview', caption_zh: '媒體預覽' },
+  { url: 'https://images.unsplash.com/photo-1587825140708-dfaf72ae4b04?auto=format&fit=crop&w=800&q=80', caption_en: 'Brand Event', caption_zh: '品牌活動' },
+  { url: 'https://images.unsplash.com/photo-1591115765373-5207764f72e7?auto=format&fit=crop&w=800&q=80', caption_en: 'Executive Interview', caption_zh: '高管訪問' },
+];
+
 const en = {
   breadcrumb: ['Home', 'Services', 'Public Relations'],
   label: 'Public Relations',
   h1: 'Earn Credibility That Converts',
   intro: 'Positive, credible media exposure fortifies brand reputation and fuels commercial results. As Hong Kong\'s integrated PR agency, Radiance PR engineers strategic communication ecosystems—precision news angles, nurtured media ties, narrative mastery—that position your stories for peak impact in top outlets. We view PR as an ongoing trust accelerator, not just press releases.',
 
-  earnedH2: 'Why Earned Media Matter',
+  galleryH2: 'Event Gallery',
+
+  earnedH2: 'Why Earned Media Matters',
   earnedStat: '92% of global consumers trust earned media—like recommendations and vetted coverage—above all advertising',
   earnedSource: 'Nielsen Global Trust in Advertising Report, 2012',
 
@@ -74,6 +88,8 @@ const en = {
     },
   ],
 
+  clippingsH2: 'In the News',
+
   ctaH2: '92% trust edge awaits.',
   ctaSub: 'Partner with us.',
   ctaBtn1: 'Book a Free Consultation',
@@ -85,6 +101,8 @@ const zh = {
   label: '公共關係',
   h1: '建立帶動業績的公信力',
   intro: '正面、具公信力的媒體曝光能鞏固品牌聲譽，並推動商業成果。作為香港整合公關機構，Radiance PR 打造策略性傳播生態系統——精準新聞角度、深耕媒體關係、敘事掌控力——讓您的故事在頂尖媒體取得最大影響力。我們視公關為持續的信任加速器，而非單純的新聞稿。',
+
+  galleryH2: '活動相集',
 
   earnedH2: '為何自然媒體報道至關重要',
   earnedStat: '92% 的全球消費者對自然媒體的信任度——如口碑推薦及媒體報道——高於一切廣告形式',
@@ -147,6 +165,8 @@ const zh = {
     },
   ],
 
+  clippingsH2: '媒體報道精選',
+
   ctaH2: '92% 的信任優勢等待您把握。',
   ctaSub: '與我們攜手合作。',
   ctaBtn1: '預約免費諮詢',
@@ -157,6 +177,19 @@ export default function PublicRelationsServicePage() {
   const { lang } = useLanguage();
   const t = lang === 'zh' ? zh : en;
   const parallaxRef = useParallax(0.25);
+  const [gallery, setGallery] = useState<{ id?: number; url: string; caption_en: string; caption_zh: string }[]>([]);
+  const [clippings, setClippings] = useState<{ id?: number; url: string; outlet: string; headline: string }[]>([]);
+
+  useEffect(() => {
+    fetch(`${API_BASE}/api/radiance/pr-gallery`)
+      .then(r => r.json())
+      .then(d => { if (d.success && d.photos.length > 0) setGallery(d.photos); else setGallery(GALLERY_PLACEHOLDERS); })
+      .catch(() => setGallery(GALLERY_PLACEHOLDERS));
+    fetch(`${API_BASE}/api/radiance/news-clippings`)
+      .then(r => r.json())
+      .then(d => { if (d.success) setClippings(d.clippings); })
+      .catch(() => {});
+  }, []);
 
   return (
     <div className="min-h-screen bg-white dark:bg-slate-950 flex flex-col">
@@ -198,9 +231,36 @@ export default function PublicRelationsServicePage() {
           </div>
         </section>
 
-        {/* Nielsen Trust Stat — elegant pull quote */}
-        <section className="py-16 px-6 bg-slate-50 dark:bg-slate-900/50 border-y border-slate-200 dark:border-slate-800">
+        {/* Event Photo Gallery */}
+        <section className="py-20 px-6 bg-slate-50 dark:bg-slate-900/30 border-b border-slate-100 dark:border-slate-800">
           <div className="max-w-6xl mx-auto">
+            <h2 className="text-3xl font-bold text-slate-900 dark:text-white mb-10">{t.galleryH2}</h2>
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+              {gallery.map((photo, i) => (
+                <div key={photo.id ?? i} className="group relative overflow-hidden rounded-xl aspect-[4/3] bg-slate-200 dark:bg-slate-800">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={photo.url}
+                    alt={photo.caption_en || ''}
+                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                  />
+                  {(photo.caption_en || photo.caption_zh) && (
+                    <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-slate-950/80 to-transparent px-4 py-3 translate-y-full group-hover:translate-y-0 transition-transform duration-300">
+                      <p className="text-white text-sm font-medium">
+                        {lang === 'zh' ? (photo.caption_zh || photo.caption_en) : (photo.caption_en || photo.caption_zh)}
+                      </p>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        </section>
+
+        {/* Nielsen Trust Stat — elegant pull quote */}
+        <section className="py-16 px-6 bg-white dark:bg-slate-950 border-b border-slate-200 dark:border-slate-800">
+          <div className="max-w-6xl mx-auto">
+            <h2 className="text-3xl font-bold text-slate-900 dark:text-white mb-10">{t.earnedH2}</h2>
             <div className="flex flex-col md:flex-row items-start md:items-center gap-8">
               <div className="flex-shrink-0">
                 <div className="text-7xl md:text-8xl font-black text-purple-600 dark:text-purple-400 leading-none">92<span className="text-5xl">%</span></div>
@@ -216,10 +276,10 @@ export default function PublicRelationsServicePage() {
           </div>
         </section>
 
-        {/* Why Earned Media */}
+        {/* Why Strategic PR Delivers ROI */}
         <section className="py-20 px-6 border-t border-slate-100 dark:border-slate-800">
           <div className="max-w-6xl mx-auto">
-            <h2 className="text-3xl font-bold text-slate-900 dark:text-white mb-6">{t.earnedH2}</h2>
+            <h2 className="text-3xl font-bold text-slate-900 dark:text-white mb-6">{t.roiH2}</h2>
             <p className="text-lg text-slate-600 dark:text-slate-400 mb-10 leading-relaxed max-w-3xl font-light">
               {t.roiIntro}
             </p>
@@ -273,6 +333,35 @@ export default function PublicRelationsServicePage() {
             </div>
           </div>
         </section>
+
+        {/* News Clippings */}
+        {clippings.length > 0 && (
+          <section className="py-20 px-6 bg-slate-50 dark:bg-slate-900/30 border-y border-slate-100 dark:border-slate-800">
+            <div className="max-w-6xl mx-auto">
+              <h2 className="text-3xl font-bold text-slate-900 dark:text-white mb-10">{t.clippingsH2}</h2>
+              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+                {clippings.map((clip, i) => (
+                  <div key={clip.id ?? i} className="bg-white dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/50 rounded-xl overflow-hidden">
+                    <div className="aspect-[4/3] bg-slate-100 dark:bg-slate-900">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src={clip.url} alt={clip.headline || ''} className="w-full h-full object-cover" />
+                    </div>
+                    {(clip.outlet || clip.headline) && (
+                      <div className="p-3">
+                        {clip.outlet && (
+                          <p className="text-xs font-semibold text-purple-600 dark:text-purple-400 mb-1">{clip.outlet}</p>
+                        )}
+                        {clip.headline && (
+                          <p className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed line-clamp-2">{clip.headline}</p>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          </section>
+        )}
 
         {/* CTA */}
         <section className="py-20 px-6 bg-slate-900 dark:bg-slate-950">

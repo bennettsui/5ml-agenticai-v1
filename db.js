@@ -1127,6 +1127,26 @@ async function initDatabase() {
         user_agent TEXT,
         created_at TIMESTAMPTZ DEFAULT NOW()
       );
+
+      CREATE TABLE IF NOT EXISTS radiance_pr_gallery (
+        id SERIAL PRIMARY KEY,
+        url TEXT NOT NULL,
+        alt TEXT,
+        caption_en TEXT,
+        caption_zh TEXT,
+        sort_order INTEGER DEFAULT 0,
+        created_at TIMESTAMPTZ DEFAULT NOW()
+      );
+
+      CREATE TABLE IF NOT EXISTS radiance_news_clippings (
+        id SERIAL PRIMARY KEY,
+        url TEXT NOT NULL,
+        alt TEXT,
+        outlet TEXT,
+        headline TEXT,
+        sort_order INTEGER DEFAULT 0,
+        created_at TIMESTAMPTZ DEFAULT NOW()
+      );
     `);
 
     console.log('✅ Database schema initialized (including CRM tables)');
