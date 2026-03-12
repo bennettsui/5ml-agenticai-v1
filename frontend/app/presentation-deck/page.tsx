@@ -24,13 +24,14 @@ export default function PresentationDeckListPage() {
 
   useEffect(() => {
     fetch('/api/presentation-deck')
-      .then(r => r.json())
-      .then(data => {
+      .then(async r => {
+        const data = await r.json();
+        if (!r.ok) throw new Error(data.error || `HTTP ${r.status}`);
         setDecks(Array.isArray(data) ? data : data.decks ?? []);
         setLoading(false);
       })
-      .catch(() => {
-        setError('Failed to load decks');
+      .catch(e => {
+        setError(e instanceof Error ? e.message : 'Failed to load decks');
         setLoading(false);
       });
   }, []);
@@ -88,7 +89,9 @@ export default function PresentationDeckListPage() {
         )}
 
         {error && (
-          <div className="text-red-400 text-sm py-8">{error}</div>
+          <div className="text-sm text-red-400 bg-red-500/10 border border-red-500/20 rounded-xl p-4 mb-4">
+            API error: {error}
+          </div>
         )}
 
         {!loading && !error && decks.length === 0 && (
