@@ -53,14 +53,13 @@ jobs:
         uses: appleboy/ssh-action@v1.0.3
         env:
           ENV_FILE: ${{ secrets.ENV_FILE }}
-          DB_SECRET_ID: ${{ secrets.DB_SECRET_ID }}
           AWS_REGION: ${{ env.AWS_REGION }}
           ECR_REGISTRY: ${{ env.ECR_REGISTRY }}
         with:
           host: ${{ secrets.EC2_HOST }}
           username: ${{ secrets.EC2_USER }}
           key: ${{ secrets.EC2_SSH_KEY }}
-          envs: ENV_FILE,DB_SECRET_ID,AWS_REGION,ECR_REGISTRY
+          envs: ENV_FILE,AWS_REGION,ECR_REGISTRY
           command_timeout: 90m
           script: |
             set -euo pipefail
@@ -99,8 +98,9 @@ jobs:
             fi
 
             # Resolve DATABASE_URL from AWS Secrets Manager at deploy time
+            DB_SECRET_ID=$(awk -F= '/^DB_SECRET_ID=/{sub(/^DB_SECRET_ID=/, ""); print; exit}' .env)
             if [ -z "$DB_SECRET_ID" ]; then
-              echo "DB_SECRET_ID GitHub secret is empty; aborting deploy."
+              echo "DB_SECRET_ID is missing in ENV_FILE/.env; aborting deploy."
               exit 1
             fi
             DB_SECRET_ID=$(printf '%s' "$DB_SECRET_ID" | tr -d '\r' | xargs)
