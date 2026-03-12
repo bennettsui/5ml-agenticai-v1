@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { presentationData } from './data';
 import {
   ChevronRight, BookOpen, Play, Database, ImageIcon,
-  CheckCircle2, Loader2, AlertCircle, Library,
+  CheckCircle2, Loader2, AlertCircle, Library, ListChecks,
 } from 'lucide-react';
 
 interface GenStatus {
@@ -160,6 +160,13 @@ export default function CLPTenderDeckPage() {
             <span className="text-xs text-slate-500 bg-slate-800/60 px-3 py-1.5 rounded-full border border-slate-700/50">
               {slides.length} slides
             </span>
+            <Link
+              href="/presentation-deck/2603CLPtender/manifest"
+              className="flex items-center gap-2 text-slate-400 hover:text-slate-200 text-sm px-3 py-2 rounded-lg border border-slate-700/50 hover:border-slate-600 transition-colors"
+            >
+              <ListChecks className="w-3.5 h-3.5" />
+              Image Manifest
+            </Link>
             <Link
               href="/presentation-deck/library"
               className="flex items-center gap-2 text-slate-400 hover:text-slate-200 text-sm px-3 py-2 rounded-lg border border-slate-700/50 hover:border-slate-600 transition-colors"
