@@ -46,9 +46,18 @@ async function getSlides(slug) {
 
 router.get('/', async (req, res) => {
   try {
-    const { rows } = await pool.query(
-      'SELECT id, slug, title, title_cn, client, sections, created_at, updated_at FROM presentation_decks ORDER BY created_at DESC'
-    );
+    const { rows } = await pool.query(`
+      SELECT
+        pd.id, pd.slug, pd.title, pd.title_cn, pd.client, pd.sections,
+        pd.created_at, pd.updated_at,
+        COUNT(DISTINCT ps.id)::int AS slide_count,
+        COUNT(DISTINCT sa.id)::int AS asset_count
+      FROM presentation_decks pd
+      LEFT JOIN presentation_slides ps ON ps.deck_slug = pd.slug
+      LEFT JOIN slide_assets sa ON sa.deck_slug = pd.slug AND sa.image_data IS NOT NULL
+      GROUP BY pd.id
+      ORDER BY pd.created_at DESC
+    `);
     res.json({ decks: rows });
   } catch (err) {
     console.error('[presentation-deck] list error', err.message);
@@ -405,6 +414,42 @@ router.post('/:slug/generate-all-assets', async (req, res) => {
     })();
   } catch (err) {
     console.error('[presentation-deck] generate-all-assets error', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ─── GET /api/presentation-deck/:slug/generation-status ─────────────────────
+// Returns progress of asset generation: total visual_prompts vs generated assets
+
+router.get('/:slug/generation-status', async (req, res) => {
+  try {
+    // Count total visual prompts across all slides
+    const { rows: promptRows } = await pool.query(
+      `SELECT COALESCE(SUM(jsonb_array_length(visual_prompts)), 0)::int AS total_prompts
+       FROM presentation_slides WHERE deck_slug = $1`,
+      [req.params.slug]
+    );
+    // Count generated assets (those with image_data)
+    const { rows: assetRows } = await pool.query(
+      `SELECT COUNT(*)::int AS generated
+       FROM slide_assets
+       WHERE deck_slug = $1 AND image_data IS NOT NULL`,
+      [req.params.slug]
+    );
+
+    const total = promptRows[0]?.total_prompts ?? 0;
+    const generated = assetRows[0]?.generated ?? 0;
+
+    res.json({
+      slug: req.params.slug,
+      total_prompts: total,
+      generated,
+      pending: Math.max(0, total - generated),
+      percent: total > 0 ? Math.round((generated / total) * 100) : 0,
+      complete: total > 0 && generated >= total,
+    });
+  } catch (err) {
+    console.error('[presentation-deck] generation-status error', err.message);
     res.status(500).json({ error: err.message });
   }
 });

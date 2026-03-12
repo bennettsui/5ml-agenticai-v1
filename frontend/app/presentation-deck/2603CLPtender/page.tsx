@@ -1,12 +1,20 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { presentationData } from './data';
 import {
   ChevronRight, BookOpen, Play, Database, ImageIcon,
   CheckCircle2, Loader2, AlertCircle, Library,
 } from 'lucide-react';
+
+interface GenStatus {
+  total_prompts: number;
+  generated: number;
+  pending: number;
+  percent: number;
+  complete: boolean;
+}
 
 const SECTION_COLORS: Record<string, string> = {
   opening: 'bg-red-500/10 text-red-400 border-red-500/20',
@@ -38,6 +46,41 @@ export default function CLPTenderDeckPage() {
   const [seedMsg, setSeedMsg] = useState('');
   const [genState, setGenState] = useState<ActionState>('idle');
   const [genMsg, setGenMsg] = useState('');
+  const [genStatus, setGenStatus] = useState<GenStatus | null>(null);
+  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  // Fetch generation status once on mount, then poll while generating
+  useEffect(() => {
+    const fetchStatus = async () => {
+      try {
+        const res = await fetch(`/api/presentation-deck/${presentationData.presentation.slug}/generation-status`);
+        if (res.ok) setGenStatus(await res.json());
+      } catch {}
+    };
+    fetchStatus();
+  }, []);
+
+  useEffect(() => {
+    if (genState === 'loading') {
+      pollRef.current = setInterval(async () => {
+        try {
+          const res = await fetch(`/api/presentation-deck/${presentationData.presentation.slug}/generation-status`);
+          if (res.ok) {
+            const status: GenStatus = await res.json();
+            setGenStatus(status);
+            if (status.complete) {
+              setGenState('ok');
+              setGenMsg(`All ${status.total_prompts} images generated`);
+              if (pollRef.current) clearInterval(pollRef.current);
+            }
+          }
+        } catch {}
+      }, 4000);
+    } else {
+      if (pollRef.current) clearInterval(pollRef.current);
+    }
+    return () => { if (pollRef.current) clearInterval(pollRef.current); };
+  }, [genState]);
 
   const { presentation } = presentationData;
   // Cast slides to a mutable-friendly type for runtime use
@@ -207,6 +250,34 @@ export default function CLPTenderDeckPage() {
             Seed first, then generate. Assets stored in slide_assets (Fly Postgres).
           </span>
         </div>
+
+        {/* Generation progress bar */}
+        {genStatus && genStatus.total_prompts > 0 && (
+          <div className="mt-3 space-y-1.5">
+            <div className="flex items-center justify-between text-xs">
+              <span className="text-slate-500">
+                Image generation progress
+              </span>
+              <span className={`font-medium tabular-nums ${genStatus.complete ? 'text-emerald-400' : 'text-slate-400'}`}>
+                {genStatus.generated} / {genStatus.total_prompts}
+                {genStatus.complete && ' ✓'}
+              </span>
+            </div>
+            <div className="h-1.5 bg-slate-800 rounded-full overflow-hidden">
+              <div
+                className={`h-full rounded-full transition-all duration-700 ${
+                  genStatus.complete ? 'bg-emerald-500' : 'bg-blue-500'
+                }`}
+                style={{ width: `${genStatus.percent}%` }}
+              />
+            </div>
+            {!genStatus.complete && genStatus.generated > 0 && (
+              <p className="text-xs text-slate-600">
+                {genStatus.pending} prompts remaining — polling every 4s
+              </p>
+            )}
+          </div>
+        )}
 
         {/* Section filter */}
         <div className="flex flex-wrap gap-2 mb-8">
