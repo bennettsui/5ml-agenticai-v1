@@ -4,6 +4,64 @@ const express = require('express');
 const router = express.Router();
 const { pool } = require('../../../db');
 
+// ─── Startup schema guard ────────────────────────────────────────────────────
+// Runs once when module loads; ensures all required columns exist even if
+// the main initDatabase() SQL block failed partway through.
+(async () => {
+  try {
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS presentation_decks (
+        id         SERIAL PRIMARY KEY,
+        slug       VARCHAR(100) UNIQUE NOT NULL,
+        title      TEXT NOT NULL,
+        title_cn   TEXT,
+        client     TEXT,
+        sections   JSONB NOT NULL DEFAULT '[]',
+        metadata   JSONB NOT NULL DEFAULT '{}',
+        created_at TIMESTAMPTZ DEFAULT NOW(),
+        updated_at TIMESTAMPTZ DEFAULT NOW()
+      );
+      CREATE TABLE IF NOT EXISTS presentation_slides (
+        id           SERIAL PRIMARY KEY,
+        deck_slug    VARCHAR(100) NOT NULL REFERENCES presentation_decks(slug) ON DELETE CASCADE,
+        slide_number INTEGER NOT NULL,
+        section      VARCHAR(50),
+        title        TEXT,
+        subtitle     TEXT,
+        layout_type  VARCHAR(50),
+        content      JSONB NOT NULL DEFAULT '{}',
+        visual_prompts JSONB NOT NULL DEFAULT '[]',
+        notes        TEXT,
+        created_at   TIMESTAMPTZ DEFAULT NOW(),
+        UNIQUE (deck_slug, slide_number)
+      );
+      CREATE TABLE IF NOT EXISTS slide_assets (
+        id           SERIAL PRIMARY KEY,
+        slide_id     INTEGER REFERENCES presentation_slides(id) ON DELETE CASCADE,
+        deck_slug    VARCHAR(100),
+        asset_type   VARCHAR(50) DEFAULT 'image',
+        prompt_index INTEGER,
+        prompt_used  TEXT,
+        image_data   TEXT,
+        mime_type    VARCHAR(50) DEFAULT 'image/png',
+        file_path    TEXT,
+        public_url   TEXT,
+        metadata     JSONB NOT NULL DEFAULT '{}',
+        generated_at TIMESTAMPTZ DEFAULT NOW()
+      );
+      -- safe column migrations for older deployments
+      ALTER TABLE slide_assets ADD COLUMN IF NOT EXISTS image_data   TEXT;
+      ALTER TABLE slide_assets ADD COLUMN IF NOT EXISTS mime_type    VARCHAR(50) DEFAULT 'image/png';
+      ALTER TABLE slide_assets ADD COLUMN IF NOT EXISTS deck_slug    VARCHAR(100);
+      ALTER TABLE slide_assets ADD COLUMN IF NOT EXISTS prompt_index INTEGER;
+      ALTER TABLE slide_assets ADD COLUMN IF NOT EXISTS prompt_used  TEXT;
+    `);
+    console.log('✅ [presentation-deck] schema guard OK');
+  } catch (e) {
+    console.warn('⚠️ [presentation-deck] schema guard error:', e.message);
+  }
+})();
+
 // ─── helpers ────────────────────────────────────────────────────────────────
 
 async function getDeck(slug) {
@@ -50,12 +108,9 @@ router.get('/', async (req, res) => {
       SELECT
         pd.id, pd.slug, pd.title, pd.title_cn, pd.client, pd.sections,
         pd.created_at, pd.updated_at,
-        COUNT(DISTINCT ps.id)::int AS slide_count,
-        COUNT(DISTINCT sa.id)::int AS asset_count
+        (SELECT COUNT(*)::int FROM presentation_slides WHERE deck_slug = pd.slug) AS slide_count,
+        (SELECT COUNT(*)::int FROM slide_assets WHERE deck_slug = pd.slug) AS asset_count
       FROM presentation_decks pd
-      LEFT JOIN presentation_slides ps ON ps.deck_slug = pd.slug
-      LEFT JOIN slide_assets sa ON sa.deck_slug = pd.slug AND sa.image_data IS NOT NULL
-      GROUP BY pd.id
       ORDER BY pd.created_at DESC
     `);
     res.json({ decks: rows });
