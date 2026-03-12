@@ -470,6 +470,260 @@ router.delete('/:slug', async (req, res) => {
   }
 });
 
+// ─── POST /api/presentation-deck/:slug/build-manifest ───────────────────────
+// Reads all slides → writes image_manifests rows (status=pending). Idempotent.
+
+router.post('/:slug/build-manifest', async (req, res) => {
+  const { slug } = req.params;
+  try {
+    const deck = await getDeck(slug);
+    if (!deck) return res.status(404).json({ error: 'Deck not found' });
+
+    const { rows: slides } = await pool.query(
+      `SELECT id, slide_number, section, title, layout_type, visual_prompts
+       FROM presentation_slides WHERE deck_slug = $1 ORDER BY slide_number`,
+      [slug]
+    );
+
+    let inserted = 0;
+    let skipped = 0;
+
+    for (const slide of slides) {
+      const prompts = slide.visual_prompts || [];
+      for (let i = 0; i < prompts.length; i++) {
+        const prompt = prompts[i];
+        const usage = inferManifestUsage(slide.layout_type, i);
+
+        // Idempotent: skip if exact same original_prompt already exists for this slide+index
+        const { rows: existing } = await pool.query(
+          `SELECT id FROM image_manifests
+           WHERE slide_id = $1 AND original_prompt = $2`,
+          [slide.id, prompt]
+        );
+        if (existing.length) { skipped++; continue; }
+
+        await pool.query(
+          `INSERT INTO image_manifests
+             (presentation_slug, slide_id, slide_number, section, slide_title,
+              usage, layout_type, original_prompt, status, priority)
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,'pending',$9)`,
+          [
+            slug, slide.id, slide.slide_number, slide.section, slide.title,
+            usage, slide.layout_type, prompt,
+            usage === 'background-hero' || usage === 'section-hero' ? 'high' : 'normal',
+          ]
+        );
+        inserted++;
+      }
+    }
+
+    res.json({ ok: true, inserted, skipped, total: inserted + skipped });
+  } catch (err) {
+    console.error('[presentation-deck] build-manifest error', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+function inferManifestUsage(layout, idx) {
+  if (layout === 'cover' && idx === 0) return 'background-hero';
+  if (layout === 'section-divider' && idx === 0) return 'section-hero';
+  if (layout === 'visual-heavy') return idx === 0 ? 'main-visual' : 'secondary-visual';
+  if (layout === 'timeline') return 'content-figure';
+  return 'content-figure';
+}
+
+// ─── GET /api/presentation-deck/:slug/images ─────────────────────────────────
+// List manifest items, optionally filtered by status / section
+
+router.get('/:slug/images', async (req, res) => {
+  const { slug } = req.params;
+  const { status, section, priority, limit = '200', offset = '0' } = req.query;
+
+  try {
+    const conditions = ['im.presentation_slug = $1'];
+    const params = [slug];
+    let idx = 2;
+
+    if (status && status !== 'all') {
+      conditions.push(`im.status = $${idx++}`);
+      params.push(status);
+    }
+    if (section) {
+      conditions.push(`im.section = $${idx++}`);
+      params.push(section);
+    }
+    if (priority) {
+      conditions.push(`im.priority = $${idx++}`);
+      params.push(priority);
+    }
+
+    const where = conditions.join(' AND ');
+
+    const { rows: countRows } = await pool.query(
+      `SELECT COUNT(*)::int AS total FROM image_manifests im WHERE ${where}`,
+      params
+    );
+
+    const { rows } = await pool.query(
+      `SELECT
+         im.id, im.slide_number, im.section, im.slide_title, im.usage,
+         im.layout_type, im.original_prompt, im.override_prompt,
+         im.status, im.priority, im.notes, im.asset_id,
+         im.created_at, im.updated_at,
+         CASE WHEN im.asset_id IS NOT NULL
+           THEN '/api/presentation-deck/assets/' || im.asset_id || '/image'
+           ELSE NULL
+         END AS image_url
+       FROM image_manifests im
+       WHERE ${where}
+       ORDER BY im.slide_number ASC, im.usage ASC
+       LIMIT $${idx} OFFSET $${idx + 1}`,
+      [...params, parseInt(limit, 10), parseInt(offset, 10)]
+    );
+
+    // Summary counts
+    const { rows: summaryRows } = await pool.query(
+      `SELECT status, COUNT(*)::int AS count
+       FROM image_manifests WHERE presentation_slug = $1
+       GROUP BY status`,
+      [slug]
+    );
+    const summary = summaryRows.reduce((acc, r) => { acc[r.status] = r.count; return acc; }, {});
+
+    res.json({
+      presentation_slug: slug,
+      total: countRows[0].total,
+      summary,
+      images: rows,
+    });
+  } catch (err) {
+    console.error('[presentation-deck] images list error', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ─── PATCH /api/presentation-deck/images/:id ────────────────────────────────
+// Update a manifest item: status, override_prompt, priority, notes
+
+router.patch('/images/:id', async (req, res) => {
+  const { id } = req.params;
+  const { status, override_prompt, priority, notes } = req.body || {};
+
+  const allowed = ['pending', 'approved', 'skip', 'generated'];
+  if (status && !allowed.includes(status)) {
+    return res.status(400).json({ error: `status must be one of: ${allowed.join(', ')}` });
+  }
+
+  try {
+    const updates = [];
+    const params = [];
+    let idx = 1;
+
+    if (status !== undefined) { updates.push(`status = $${idx++}`); params.push(status); }
+    if (override_prompt !== undefined) { updates.push(`override_prompt = $${idx++}`); params.push(override_prompt || null); }
+    if (priority !== undefined) { updates.push(`priority = $${idx++}`); params.push(priority); }
+    if (notes !== undefined) { updates.push(`notes = $${idx++}`); params.push(notes); }
+
+    if (!updates.length) return res.status(400).json({ error: 'No fields to update' });
+
+    updates.push(`updated_at = NOW()`);
+    params.push(id);
+
+    const { rows } = await pool.query(
+      `UPDATE image_manifests SET ${updates.join(', ')} WHERE id = $${idx} RETURNING *`,
+      params
+    );
+    if (!rows.length) return res.status(404).json({ error: 'Manifest item not found' });
+    res.json(rows[0]);
+  } catch (err) {
+    console.error('[presentation-deck] manifest patch error', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ─── POST /api/presentation-deck/:slug/generate-approved ─────────────────────
+// Generates images only for manifest items with status='approved'
+
+router.post('/:slug/generate-approved', async (req, res) => {
+  const { slug } = req.params;
+  try {
+    const deck = await getDeck(slug);
+    if (!deck) return res.status(404).json({ error: 'Deck not found' });
+
+    const { rows: items } = await pool.query(
+      `SELECT im.*, ps.deck_slug
+       FROM image_manifests im
+       JOIN presentation_slides ps ON ps.id = im.slide_id
+       WHERE im.presentation_slug = $1 AND im.status = 'approved'
+       ORDER BY im.priority DESC, im.slide_number ASC`,
+      [slug]
+    );
+
+    res.json({ ok: true, queued: items.length, message: `Generating ${items.length} approved images` });
+
+    (async () => {
+      for (const item of items) {
+        try {
+          const prompt = item.override_prompt || item.original_prompt;
+          const imageData = await generateImageWithGemini(prompt);
+          if (!imageData) continue;
+
+          const { rows: assetRows } = await pool.query(
+            `INSERT INTO slide_assets
+               (slide_id, deck_slug, asset_type, prompt_used, image_data, mime_type, metadata)
+             VALUES ($1,$2,'image',$3,$4,$5,$6)
+             RETURNING id`,
+            [
+              item.slide_id, slug, prompt,
+              imageData.base64, imageData.mimeType,
+              JSON.stringify({ usage: item.usage, manifest_id: item.id }),
+            ]
+          );
+          const assetId = assetRows[0]?.id;
+
+          await pool.query(
+            `UPDATE image_manifests
+             SET status = 'generated', asset_id = $1, updated_at = NOW()
+             WHERE id = $2`,
+            [assetId, item.id]
+          );
+        } catch (e) {
+          console.error(`[presentation-deck] generate-approved failed item ${item.id}:`, e.message);
+        }
+      }
+      console.log(`[presentation-deck] ✅ generate-approved complete: ${slug}`);
+    })();
+  } catch (err) {
+    console.error('[presentation-deck] generate-approved error', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ─── GET /api/presentation-deck/:slug/manifest-status ───────────────────────
+// Quick summary of manifest state for UI polling
+
+router.get('/:slug/manifest-status', async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      `SELECT status, COUNT(*)::int AS count
+       FROM image_manifests WHERE presentation_slug = $1
+       GROUP BY status`,
+      [req.params.slug]
+    );
+    const summary = rows.reduce((acc, r) => { acc[r.status] = r.count; return acc; }, {});
+    const total = Object.values(summary).reduce((s, v) => s + v, 0);
+    const generated = summary.generated || 0;
+    res.json({
+      slug: req.params.slug,
+      total,
+      summary,
+      percent: total > 0 ? Math.round((generated / total) * 100) : 0,
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ─── Gemini image generation (nanobanana) ───────────────────────────────────
 
 async function generateImageWithGemini(prompt) {
