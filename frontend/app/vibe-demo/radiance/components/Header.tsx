@@ -221,28 +221,31 @@ export function Header() {
           <nav id="mobile-menu" aria-label="Mobile navigation" className="md:hidden border-t border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950">
             <div className="px-6 py-4 space-y-3">
               {navItems.map((item) => (
-                <a
-                  key={item.href}
-                  href={item.href}
-                  className="block text-sm font-medium text-slate-700 dark:text-slate-300 hover:text-purple-600 dark:hover:text-purple-400 transition"
-                  onClick={() => setMobileMenuOpen(false)}
-                >
-                  {item.label}
-                </a>
-              ))}
-              {/* Mobile service sub-links */}
-              <div className="pl-4 space-y-2 border-l border-slate-200 dark:border-slate-700">
-                {serviceLinks.map((s) => (
+                <div key={item.href}>
                   <a
-                    key={s.href}
-                    href={s.href}
-                    className="block text-xs text-slate-500 dark:text-slate-400 hover:text-purple-600 dark:hover:text-purple-400 transition"
+                    href={item.href}
+                    className="block text-sm font-medium text-slate-700 dark:text-slate-300 hover:text-purple-600 dark:hover:text-purple-400 transition"
                     onClick={() => setMobileMenuOpen(false)}
                   >
-                    {lang === 'zh' ? s.zhTitle : s.enTitle}
+                    {item.label}
                   </a>
-                ))}
-              </div>
+                  {/* Service sub-links nested under Services */}
+                  {item.hasDropdown && (
+                    <div className="mt-2 pl-4 space-y-2 border-l border-slate-200 dark:border-slate-700">
+                      {serviceLinks.map((s) => (
+                        <a
+                          key={s.href}
+                          href={s.href}
+                          className="block text-xs text-slate-500 dark:text-slate-400 hover:text-purple-600 dark:hover:text-purple-400 transition"
+                          onClick={() => setMobileMenuOpen(false)}
+                        >
+                          {lang === 'zh' ? s.zhTitle : s.enTitle}
+                        </a>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              ))}
               <div className="pt-3 border-t border-slate-200 dark:border-slate-800 space-y-3">
                 <button
                   onClick={() => { toggle(); setMobileMenuOpen(false); }}

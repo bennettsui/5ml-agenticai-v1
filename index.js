@@ -4936,6 +4936,94 @@ app.delete('/api/radiance/admin/media/:id', async (req, res) => {
   } catch (err) { res.status(500).json({ error: 'Delete failed' }); }
 });
 
+// GET /api/radiance/pr-gallery — public, returns event photo gallery
+app.get('/api/radiance/pr-gallery', async (req, res) => {
+  try {
+    const result = await pool.query('SELECT * FROM radiance_pr_gallery ORDER BY sort_order ASC, created_at ASC');
+    res.json({ success: true, photos: result.rows });
+  } catch (err) { res.status(500).json({ error: 'Failed to fetch gallery' }); }
+});
+
+// POST /api/radiance/admin/pr-gallery — admin add photo
+app.post('/api/radiance/admin/pr-gallery', async (req, res) => {
+  if (req.query.password !== RADIANCE_ADMIN_PW) return res.status(401).json({ error: 'Unauthorised' });
+  try {
+    const { url, alt, caption_en, caption_zh, sort_order } = req.body;
+    if (!url) return res.status(400).json({ error: 'url is required' });
+    const result = await pool.query(
+      'INSERT INTO radiance_pr_gallery (url, alt, caption_en, caption_zh, sort_order) VALUES ($1,$2,$3,$4,$5) RETURNING *',
+      [url, alt || '', caption_en || '', caption_zh || '', sort_order ?? 0]
+    );
+    res.json({ success: true, photo: result.rows[0] });
+  } catch (err) { res.status(500).json({ error: 'Failed to add photo' }); }
+});
+
+// PUT /api/radiance/admin/pr-gallery/:id — admin update caption/sort
+app.put('/api/radiance/admin/pr-gallery/:id', async (req, res) => {
+  if (req.query.password !== RADIANCE_ADMIN_PW) return res.status(401).json({ error: 'Unauthorised' });
+  try {
+    const { alt, caption_en, caption_zh, sort_order } = req.body;
+    await pool.query(
+      'UPDATE radiance_pr_gallery SET alt=$1, caption_en=$2, caption_zh=$3, sort_order=$4 WHERE id=$5',
+      [alt, caption_en, caption_zh, sort_order, req.params.id]
+    );
+    res.json({ success: true });
+  } catch (err) { res.status(500).json({ error: 'Failed to update photo' }); }
+});
+
+// DELETE /api/radiance/admin/pr-gallery/:id — admin delete photo
+app.delete('/api/radiance/admin/pr-gallery/:id', async (req, res) => {
+  if (req.query.password !== RADIANCE_ADMIN_PW) return res.status(401).json({ error: 'Unauthorised' });
+  try {
+    await pool.query('DELETE FROM radiance_pr_gallery WHERE id=$1', [req.params.id]);
+    res.json({ success: true });
+  } catch (err) { res.status(500).json({ error: 'Failed to delete photo' }); }
+});
+
+// GET /api/radiance/news-clippings — public, returns press clippings gallery
+app.get('/api/radiance/news-clippings', async (req, res) => {
+  try {
+    const result = await pool.query('SELECT * FROM radiance_news_clippings ORDER BY sort_order ASC, created_at ASC');
+    res.json({ success: true, clippings: result.rows });
+  } catch (err) { res.status(500).json({ error: 'Failed to fetch clippings' }); }
+});
+
+// POST /api/radiance/admin/news-clippings — admin add clipping
+app.post('/api/radiance/admin/news-clippings', async (req, res) => {
+  if (req.query.password !== RADIANCE_ADMIN_PW) return res.status(401).json({ error: 'Unauthorised' });
+  try {
+    const { url, alt, outlet, headline, sort_order } = req.body;
+    if (!url) return res.status(400).json({ error: 'url is required' });
+    const result = await pool.query(
+      'INSERT INTO radiance_news_clippings (url, alt, outlet, headline, sort_order) VALUES ($1,$2,$3,$4,$5) RETURNING *',
+      [url, alt || '', outlet || '', headline || '', sort_order ?? 0]
+    );
+    res.json({ success: true, clipping: result.rows[0] });
+  } catch (err) { res.status(500).json({ error: 'Failed to add clipping' }); }
+});
+
+// PUT /api/radiance/admin/news-clippings/:id — admin update
+app.put('/api/radiance/admin/news-clippings/:id', async (req, res) => {
+  if (req.query.password !== RADIANCE_ADMIN_PW) return res.status(401).json({ error: 'Unauthorised' });
+  try {
+    const { alt, outlet, headline, sort_order } = req.body;
+    await pool.query(
+      'UPDATE radiance_news_clippings SET alt=$1, outlet=$2, headline=$3, sort_order=$4 WHERE id=$5',
+      [alt, outlet, headline, sort_order, req.params.id]
+    );
+    res.json({ success: true });
+  } catch (err) { res.status(500).json({ error: 'Failed to update clipping' }); }
+});
+
+// DELETE /api/radiance/admin/news-clippings/:id — admin delete
+app.delete('/api/radiance/admin/news-clippings/:id', async (req, res) => {
+  if (req.query.password !== RADIANCE_ADMIN_PW) return res.status(401).json({ error: 'Unauthorised' });
+  try {
+    await pool.query('DELETE FROM radiance_news_clippings WHERE id=$1', [req.params.id]);
+    res.json({ success: true });
+  } catch (err) { res.status(500).json({ error: 'Failed to delete clipping' }); }
+});
+
 // GET /api/radiance/admin/image-slots — catalog of all image placeholders across the Radiance site
 app.get('/api/radiance/admin/image-slots', async (req, res) => {
   if (req.query.password !== RADIANCE_ADMIN_PW) return res.status(401).json({ error: 'Unauthorised' });

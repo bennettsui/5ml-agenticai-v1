@@ -1,10 +1,75 @@
 'use client';
 
+import { useState } from 'react';
 import Link from 'next/link';
 import { Header } from '../../components/Header';
 import { Footer } from '../../components/Footer';
 import { Breadcrumb } from '../../components/Breadcrumb';
 import { useParallax } from '../../hooks/useParallax';
+
+const FAQS = [
+  {
+    q: 'Why hire an event management agency?',
+    a: 'Events require detailed coordination across catering, venue, décor, photography, design, logistics and more. Radiance brings specialised knowledge, years of experience and established vendor relationships. We save you time, reduce costs through vendor networks, and proactively manage risks—emergencies, supplier issues, guest flow challenges. An agency helps ensure your event runs smoothly and delivers the results you need.',
+  },
+  {
+    q: 'Should we do this in-house or hire an agency?',
+    a: 'In-house teams often lack specialised event skills or bandwidth and must juggle events alongside regular responsibilities—which can compromise quality. A professional agency focuses entirely on event excellence, bringing creative thinking, technical expertise and hands-on execution. The result is a more polished, successful event. Many clients find that outsourcing events frees their team to focus on their core business.',
+  },
+  {
+    q: 'Events vs discounts—isn\'t it cheaper to just run a promotion?',
+    a: 'Discounts drive transactions in the short term, but events create deeper, more meaningful customer interactions that build loyalty and brand affinity. Well-designed events strengthen brand associations, foster community and generate customer insights. When combined with smart positioning and PR, events improve acquisition, conversion and retention—delivering longer-term value than discounts alone.',
+  },
+  {
+    q: 'How far in advance do we need to book your team?',
+    a: 'It depends on event size and complexity. A small product showcase might need 4–6 weeks. A large-scale gala or multi-venue activation typically benefits from 3–6 months of planning. We recommend connecting early so we can assess your timeline and confirm availability.',
+  },
+  {
+    q: 'Can you manage events outside Hong Kong?',
+    a: 'Yes, we\'ve managed events across the Greater Bay Area and beyond. We can coordinate logistics remotely or travel on-site for execution. If you\'re planning an event outside HK, let\'s discuss the scope and logistics to confirm our involvement.',
+  },
+  {
+    q: 'Do you handle all vendors or do we source some ourselves?',
+    a: 'We can handle vendor sourcing and management end-to-end, or work with your preferred vendors. Whatever makes sense for your situation. We\'ll clarify roles and responsibilities during planning so there\'s no confusion.',
+  },
+  {
+    q: 'What if things go wrong on event day?',
+    a: 'Our team is trained to anticipate and handle issues in real-time. We have contingency plans for common problems—late arrivals, technical issues, weather, talent cancellation. On-site, we\'re flexible and problem-solving focused, so your event runs smoothly despite inevitable surprises.',
+  },
+  {
+    q: 'Do you coordinate with our PR or marketing teams?',
+    a: 'Absolutely. We can coordinate with your in-house team or work alongside other agencies. In fact, we encourage it—the more aligned everyone is, the stronger the overall campaign. We\'ll work seamlessly with whoever else is involved.',
+  },
+];
+
+function FaqAccordion() {
+  const [openIndex, setOpenIndex] = useState<number | null>(null);
+  return (
+    <div className="divide-y divide-slate-200 dark:divide-slate-800 border border-slate-200 dark:border-slate-800 rounded-xl overflow-hidden">
+      {FAQS.map((faq, i) => (
+        <div key={i}>
+          <button
+            onClick={() => setOpenIndex(openIndex === i ? null : i)}
+            className="w-full flex items-center justify-between gap-4 px-6 py-4 text-left hover:bg-slate-50 dark:hover:bg-white/[0.03] transition-colors"
+          >
+            <span className="text-sm font-semibold text-slate-900 dark:text-white">{faq.q}</span>
+            <svg
+              className={`w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0 transition-transform duration-200 ${openIndex === i ? 'rotate-180' : ''}`}
+              fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}
+            >
+              <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+            </svg>
+          </button>
+          {openIndex === i && (
+            <div className="px-6 pb-5">
+              <p className="text-sm text-slate-600 dark:text-slate-400 leading-relaxed">{faq.a}</p>
+            </div>
+          )}
+        </div>
+      ))}
+    </div>
+  );
+}
 
 export default function EventManagementServicePage() {
   const parallaxRef = useParallax(0.25);
@@ -339,56 +404,7 @@ export default function EventManagementServicePage() {
       {/* FAQ */}
       <section className="py-16 px-6 max-w-6xl mx-auto border-t border-slate-200 dark:border-slate-800">
         <h2 className="text-3xl font-bold text-slate-900 dark:text-white mb-8">Frequently asked questions</h2>
-        <div className="space-y-6">
-          <div>
-            <h3 className="font-semibold text-slate-900 dark:text-white mb-2">Why hire an event management agency?</h3>
-            <p className="text-slate-600 dark:text-slate-400 leading-relaxed">
-              Events require detailed coordination across catering, venue, décor, photography, design, logistics and more. Radiance brings specialised knowledge, years of experience and established vendor relationships. We save you time, reduce costs through vendor networks, and proactively manage risks—emergencies, supplier issues, guest flow challenges. An agency helps ensure your event runs smoothly and delivers the results you need.
-            </p>
-          </div>
-          <div>
-            <h3 className="font-semibold text-slate-900 dark:text-white mb-2">Should we do this in-house or hire an agency?</h3>
-            <p className="text-slate-600 dark:text-slate-400 leading-relaxed">
-              In-house teams often lack specialised event skills or bandwidth and must juggle events alongside regular responsibilities—which can compromise quality. A professional agency focuses entirely on event excellence, bringing creative thinking, technical expertise and hands-on execution. The result is a more polished, successful event. Many clients find that outsourcing events frees their team to focus on their core business.
-            </p>
-          </div>
-          <div>
-            <h3 className="font-semibold text-slate-900 dark:text-white mb-2">Events vs discounts—isn't it cheaper to just run a promotion?</h3>
-            <p className="text-slate-600 dark:text-slate-400 leading-relaxed">
-              Discounts drive transactions in the short term, but events create deeper, more meaningful customer interactions that build loyalty and brand affinity. Well-designed events strengthen brand associations, foster community and generate customer insights. When combined with smart positioning and PR, events improve acquisition, conversion and retention—delivering longer-term value than discounts alone.
-            </p>
-          </div>
-          <div>
-            <h3 className="font-semibold text-slate-900 dark:text-white mb-2">How far in advance do we need to book your team?</h3>
-            <p className="text-slate-600 dark:text-slate-400 leading-relaxed">
-              It depends on event size and complexity. A small product showcase might need 4–6 weeks. A large-scale gala or multi-venue activation typically benefits from 3–6 months of planning. We recommend connecting early so we can assess your timeline and confirm availability.
-            </p>
-          </div>
-          <div>
-            <h3 className="font-semibold text-slate-900 dark:text-white mb-2">Can you manage events outside Hong Kong?</h3>
-            <p className="text-slate-600 dark:text-slate-400 leading-relaxed">
-              Yes, we've managed events across the Greater Bay Area and beyond. We can coordinate logistics remotely or travel on-site for execution. If you're planning an event outside HK, let's discuss the scope and logistics to confirm our involvement.
-            </p>
-          </div>
-          <div>
-            <h3 className="font-semibold text-slate-900 dark:text-white mb-2">Do you handle all vendors or do we source some ourselves?</h3>
-            <p className="text-slate-600 dark:text-slate-400 leading-relaxed">
-              We can handle vendor sourcing and management end-to-end, or work with your preferred vendors. Whatever makes sense for your situation. We'll clarify roles and responsibilities during planning so there's no confusion.
-            </p>
-          </div>
-          <div>
-            <h3 className="font-semibold text-slate-900 dark:text-white mb-2">What if things go wrong on event day?</h3>
-            <p className="text-slate-600 dark:text-slate-400 leading-relaxed">
-              Our team is trained to anticipate and handle issues in real-time. We have contingency plans for common problems—late arrivals, technical issues, weather, talent cancellation. On-site, we're flexible and problem-solving focused, so your event runs smoothly despite inevitable surprises.
-            </p>
-          </div>
-          <div>
-            <h3 className="font-semibold text-slate-900 dark:text-white mb-2">Do you coordinate with our PR or marketing teams?</h3>
-            <p className="text-slate-600 dark:text-slate-400 leading-relaxed">
-              Absolutely. We can coordinate with your in-house team or work alongside other agencies. In fact, we encourage it—the more aligned everyone is, the stronger the overall campaign. We'll work seamlessly with whoever else is involved.
-            </p>
-          </div>
-        </div>
+        <FaqAccordion />
       </section>
 
       {/* CTA */}
