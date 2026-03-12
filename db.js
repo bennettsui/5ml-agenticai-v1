@@ -1181,9 +1181,12 @@ async function initDatabase() {
       CREATE TABLE IF NOT EXISTS slide_assets (
         id           SERIAL PRIMARY KEY,
         slide_id     INTEGER REFERENCES presentation_slides(id) ON DELETE CASCADE,
+        deck_slug    VARCHAR(100),
         asset_type   VARCHAR(50) DEFAULT 'image',
         prompt_index INTEGER,
         prompt_used  TEXT,
+        image_data   TEXT,
+        mime_type    VARCHAR(50) DEFAULT 'image/png',
         file_path    TEXT,
         public_url   TEXT,
         metadata     JSONB NOT NULL DEFAULT '{}',
@@ -1191,6 +1194,12 @@ async function initDatabase() {
       );
 
       CREATE INDEX IF NOT EXISTS idx_slide_assets_slide ON slide_assets(slide_id);
+      CREATE INDEX IF NOT EXISTS idx_slide_assets_deck  ON slide_assets(deck_slug);
+
+      -- safe migrations for existing deployments
+      ALTER TABLE slide_assets ADD COLUMN IF NOT EXISTS image_data TEXT;
+      ALTER TABLE slide_assets ADD COLUMN IF NOT EXISTS mime_type  VARCHAR(50) DEFAULT 'image/png';
+      ALTER TABLE slide_assets ADD COLUMN IF NOT EXISTS deck_slug  VARCHAR(100);
     `);
 
     console.log('✅ Database schema initialized (including CRM tables)');

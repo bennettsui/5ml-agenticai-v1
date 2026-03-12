@@ -16,10 +16,22 @@ async function getDeck(slug) {
 
 async function getSlides(slug) {
   const { rows } = await pool.query(
-    `SELECT ps.*, COALESCE(
-       json_agg(sa ORDER BY sa.prompt_index) FILTER (WHERE sa.id IS NOT NULL),
-       '[]'
-     ) AS assets
+    `SELECT ps.id, ps.slide_number, ps.section, ps.title, ps.subtitle,
+            ps.layout_type, ps.content, ps.visual_prompts, ps.notes,
+            COALESCE(
+              json_agg(
+                json_build_object(
+                  'id',           sa.id,
+                  'prompt_index', sa.prompt_index,
+                  'prompt_used',  sa.prompt_used,
+                  'mime_type',    sa.mime_type,
+                  'public_url',   sa.public_url,
+                  'image_url',    '/api/presentation-deck/assets/' || sa.id || '/image',
+                  'generated_at', sa.generated_at
+                ) ORDER BY sa.prompt_index
+              ) FILTER (WHERE sa.id IS NOT NULL),
+              '[]'
+            ) AS assets
      FROM presentation_slides ps
      LEFT JOIN slide_assets sa ON sa.slide_id = ps.id
      WHERE ps.deck_slug = $1
@@ -31,7 +43,6 @@ async function getSlides(slug) {
 }
 
 // ─── GET /api/presentation-deck ─────────────────────────────────────────────
-// List all decks
 
 router.get('/', async (req, res) => {
   try {
@@ -45,8 +56,132 @@ router.get('/', async (req, res) => {
   }
 });
 
+// ─── GET /api/presentation-deck/assets ──────────────────────────────────────
+// Image library — all generated assets across all decks
+
+router.get('/assets', async (req, res) => {
+  try {
+    const { deck_slug, limit = '100', offset = '0' } = req.query;
+
+    const conditions = ['sa.image_data IS NOT NULL'];
+    const params = [];
+    let idx = 1;
+
+    if (deck_slug) {
+      conditions.push(`sa.deck_slug = $${idx++}`);
+      params.push(deck_slug);
+    }
+
+    const where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
+
+    const { rows: countRows } = await pool.query(
+      `SELECT COUNT(*)::int AS total FROM slide_assets sa ${where}`,
+      params
+    );
+
+    const { rows } = await pool.query(
+      `SELECT
+         sa.id,
+         sa.deck_slug,
+         sa.slide_id,
+         sa.prompt_index,
+         sa.prompt_used,
+         sa.mime_type,
+         sa.public_url,
+         sa.generated_at,
+         '/api/presentation-deck/assets/' || sa.id || '/image' AS image_url,
+         ps.slide_number,
+         ps.section,
+         ps.title AS slide_title,
+         pd.title  AS deck_title,
+         pd.client AS deck_client
+       FROM slide_assets sa
+       LEFT JOIN presentation_slides ps ON ps.id = sa.slide_id
+       LEFT JOIN presentation_decks  pd ON pd.slug = sa.deck_slug
+       ${where}
+       ORDER BY sa.generated_at DESC
+       LIMIT $${idx} OFFSET $${idx + 1}`,
+      [...params, parseInt(limit, 10), parseInt(offset, 10)]
+    );
+
+    res.json({
+      total: countRows[0].total,
+      limit: parseInt(limit, 10),
+      offset: parseInt(offset, 10),
+      assets: rows,
+    });
+  } catch (err) {
+    console.error('[presentation-deck] assets list error', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ─── GET /api/presentation-deck/assets/:id/image ────────────────────────────
+// Serve the actual image binary from Postgres
+
+router.get('/assets/:id/image', async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      'SELECT image_data, mime_type FROM slide_assets WHERE id = $1',
+      [parseInt(req.params.id, 10)]
+    );
+    if (!rows.length || !rows[0].image_data) {
+      return res.status(404).json({ error: 'Image not found' });
+    }
+    const { image_data, mime_type } = rows[0];
+    const buf = Buffer.from(image_data, 'base64');
+    res.set({
+      'Content-Type': mime_type || 'image/png',
+      'Content-Length': buf.length,
+      'Cache-Control': 'public, max-age=31536000, immutable',
+    });
+    res.send(buf);
+  } catch (err) {
+    console.error('[presentation-deck] image serve error', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ─── GET /api/presentation-deck/assets/:id ──────────────────────────────────
+// Single asset metadata (no binary)
+
+router.get('/assets/:id', async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      `SELECT sa.id, sa.deck_slug, sa.slide_id, sa.prompt_index, sa.prompt_used,
+              sa.mime_type, sa.public_url, sa.generated_at,
+              '/api/presentation-deck/assets/' || sa.id || '/image' AS image_url,
+              ps.slide_number, ps.section, ps.title AS slide_title
+       FROM slide_assets sa
+       LEFT JOIN presentation_slides ps ON ps.id = sa.slide_id
+       WHERE sa.id = $1`,
+      [parseInt(req.params.id, 10)]
+    );
+    if (!rows.length) return res.status(404).json({ error: 'Asset not found' });
+    res.json(rows[0]);
+  } catch (err) {
+    console.error('[presentation-deck] asset meta error', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ─── DELETE /api/presentation-deck/assets/:id ───────────────────────────────
+
+router.delete('/assets/:id', async (req, res) => {
+  try {
+    const { rowCount } = await pool.query(
+      'DELETE FROM slide_assets WHERE id = $1',
+      [parseInt(req.params.id, 10)]
+    );
+    if (!rowCount) return res.status(404).json({ error: 'Asset not found' });
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('[presentation-deck] asset delete error', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ─── GET /api/presentation-deck/:slug ───────────────────────────────────────
-// Full deck + slides + assets
 
 router.get('/:slug', async (req, res) => {
   try {
@@ -61,15 +196,23 @@ router.get('/:slug', async (req, res) => {
 });
 
 // ─── GET /api/presentation-deck/:slug/slides/:num ───────────────────────────
-// Single slide + its assets
 
 router.get('/:slug/slides/:num', async (req, res) => {
   try {
     const { rows } = await pool.query(
-      `SELECT ps.*, COALESCE(
-         json_agg(sa ORDER BY sa.prompt_index) FILTER (WHERE sa.id IS NOT NULL),
-         '[]'
-       ) AS assets
+      `SELECT ps.*,
+              COALESCE(
+                json_agg(
+                  json_build_object(
+                    'id',          sa.id,
+                    'prompt_index',sa.prompt_index,
+                    'mime_type',   sa.mime_type,
+                    'image_url',   '/api/presentation-deck/assets/' || sa.id || '/image',
+                    'generated_at',sa.generated_at
+                  ) ORDER BY sa.prompt_index
+                ) FILTER (WHERE sa.id IS NOT NULL),
+                '[]'
+              ) AS assets
        FROM presentation_slides ps
        LEFT JOIN slide_assets sa ON sa.slide_id = ps.id
        WHERE ps.deck_slug = $1 AND ps.slide_number = $2
@@ -85,8 +228,6 @@ router.get('/:slug/slides/:num', async (req, res) => {
 });
 
 // ─── POST /api/presentation-deck/seed ───────────────────────────────────────
-// Upsert a full deck JSON (from the master prompt output)
-// Body: { presentation: { slug, title, title_cn, client, sections, slides[] } }
 
 router.post('/seed', async (req, res) => {
   const { presentation } = req.body || {};
@@ -98,15 +239,14 @@ router.post('/seed', async (req, res) => {
   try {
     await client.query('BEGIN');
 
-    // Upsert deck
     await client.query(
       `INSERT INTO presentation_decks (slug, title, title_cn, client, sections, updated_at)
        VALUES ($1, $2, $3, $4, $5, NOW())
        ON CONFLICT (slug) DO UPDATE SET
-         title = EXCLUDED.title,
-         title_cn = EXCLUDED.title_cn,
-         client = EXCLUDED.client,
-         sections = EXCLUDED.sections,
+         title      = EXCLUDED.title,
+         title_cn   = EXCLUDED.title_cn,
+         client     = EXCLUDED.client,
+         sections   = EXCLUDED.sections,
          updated_at = NOW()`,
       [
         presentation.slug,
@@ -117,22 +257,20 @@ router.post('/seed', async (req, res) => {
       ]
     );
 
-    // Upsert slides
     let inserted = 0;
     for (const slide of (presentation.slides || [])) {
-      const { rows } = await client.query(
+      await client.query(
         `INSERT INTO presentation_slides
            (deck_slug, slide_number, section, title, subtitle, layout_type, content, visual_prompts, notes)
          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
          ON CONFLICT (deck_slug, slide_number) DO UPDATE SET
-           section       = EXCLUDED.section,
-           title         = EXCLUDED.title,
-           subtitle      = EXCLUDED.subtitle,
-           layout_type   = EXCLUDED.layout_type,
-           content       = EXCLUDED.content,
+           section        = EXCLUDED.section,
+           title          = EXCLUDED.title,
+           subtitle       = EXCLUDED.subtitle,
+           layout_type    = EXCLUDED.layout_type,
+           content        = EXCLUDED.content,
            visual_prompts = EXCLUDED.visual_prompts,
-           notes         = EXCLUDED.notes
-         RETURNING id`,
+           notes          = EXCLUDED.notes`,
         [
           presentation.slug,
           slide.slide_number,
@@ -160,15 +298,12 @@ router.post('/seed', async (req, res) => {
 });
 
 // ─── POST /api/presentation-deck/:slug/slides/:num/generate-asset ────────────
-// Generate image(s) for a slide's visual_prompts using Gemini (nanobanana)
-// Body: { prompt_index?: number }  — omit to generate all prompts for the slide
 
 router.post('/:slug/slides/:num/generate-asset', async (req, res) => {
   const { slug, num } = req.params;
   const { prompt_index } = req.body || {};
 
   try {
-    // Fetch slide
     const { rows } = await pool.query(
       'SELECT * FROM presentation_slides WHERE deck_slug = $1 AND slide_number = $2',
       [slug, parseInt(num, 10)]
@@ -178,40 +313,42 @@ router.post('/:slug/slides/:num/generate-asset', async (req, res) => {
     const prompts = slide.visual_prompts || [];
 
     const indices =
-      typeof prompt_index === 'number'
-        ? [prompt_index]
-        : prompts.map((_, i) => i);
+      typeof prompt_index === 'number' ? [prompt_index] : prompts.map((_, i) => i);
 
     const results = [];
-
     for (const idx of indices) {
       const promptText = prompts[idx];
       if (!promptText) continue;
 
-      // Call Gemini image generation (nanobanana)
       const imageData = await generateImageWithGemini(promptText);
-
       if (!imageData) {
         results.push({ prompt_index: idx, ok: false, error: 'No image returned' });
         continue;
       }
 
-      // Save asset record (file_path points to saved file, or null if using base64 in metadata)
       const { rows: assetRows } = await pool.query(
-        `INSERT INTO slide_assets (slide_id, asset_type, prompt_index, prompt_used, file_path, public_url, metadata)
-         VALUES ($1, 'image', $2, $3, $4, $5, $6)
-         ON CONFLICT DO NOTHING
+        `INSERT INTO slide_assets
+           (slide_id, deck_slug, asset_type, prompt_index, prompt_used, image_data, mime_type, public_url, metadata)
+         VALUES ($1, $2, 'image', $3, $4, $5, $6, $7, $8)
          RETURNING id`,
         [
           slide.id,
+          slug,
           idx,
           promptText,
-          imageData.file_path || null,
-          imageData.public_url || null,
-          JSON.stringify(imageData.metadata || {}),
+          imageData.base64,
+          imageData.mimeType,
+          null,
+          JSON.stringify({ prompt: promptText }),
         ]
       );
-      results.push({ prompt_index: idx, ok: true, asset_id: assetRows[0]?.id });
+      const assetId = assetRows[0]?.id;
+      results.push({
+        prompt_index: idx,
+        ok: true,
+        asset_id: assetId,
+        image_url: `/api/presentation-deck/assets/${assetId}/image`,
+      });
     }
 
     res.json({ ok: true, slide_id: slide.id, results });
@@ -222,7 +359,6 @@ router.post('/:slug/slides/:num/generate-asset', async (req, res) => {
 });
 
 // ─── POST /api/presentation-deck/:slug/generate-all-assets ──────────────────
-// Kick off image generation for every visual_prompt in every slide (async)
 
 router.post('/:slug/generate-all-assets', async (req, res) => {
   const { slug } = req.params;
@@ -230,42 +366,42 @@ router.post('/:slug/generate-all-assets', async (req, res) => {
     const deck = await getDeck(slug);
     if (!deck) return res.status(404).json({ error: 'Deck not found' });
 
-    const slides = await pool.query(
+    const { rows: slides } = await pool.query(
       'SELECT id, slide_number, visual_prompts FROM presentation_slides WHERE deck_slug = $1 ORDER BY slide_number',
       [slug]
     );
 
-    // Return immediately; process in background
-    res.json({ ok: true, message: 'Asset generation started', slide_count: slides.rows.length });
+    res.json({ ok: true, message: 'Asset generation started', slide_count: slides.length });
 
     // Background processing
     (async () => {
-      for (const slide of slides.rows) {
+      for (const slide of slides) {
         const prompts = slide.visual_prompts || [];
         for (let idx = 0; idx < prompts.length; idx++) {
           try {
             const imageData = await generateImageWithGemini(prompts[idx]);
             if (imageData) {
               await pool.query(
-                `INSERT INTO slide_assets (slide_id, asset_type, prompt_index, prompt_used, file_path, public_url, metadata)
-                 VALUES ($1, 'image', $2, $3, $4, $5, $6)
-                 ON CONFLICT DO NOTHING`,
+                `INSERT INTO slide_assets
+                   (slide_id, deck_slug, asset_type, prompt_index, prompt_used, image_data, mime_type, metadata)
+                 VALUES ($1, $2, 'image', $3, $4, $5, $6, $7)`,
                 [
                   slide.id,
+                  slug,
                   idx,
                   prompts[idx],
-                  imageData.file_path || null,
-                  imageData.public_url || null,
-                  JSON.stringify(imageData.metadata || {}),
+                  imageData.base64,
+                  imageData.mimeType,
+                  JSON.stringify({ prompt: prompts[idx] }),
                 ]
               );
             }
           } catch (e) {
-            console.error(`[presentation-deck] asset gen failed slide ${slide.slide_number} prompt ${idx}:`, e.message);
+            console.error(`[presentation-deck] gen failed slide ${slide.slide_number} prompt ${idx}:`, e.message);
           }
         }
       }
-      console.log(`[presentation-deck] ✅ Asset generation complete for deck: ${slug}`);
+      console.log(`[presentation-deck] ✅ Asset generation complete: ${slug}`);
     })();
   } catch (err) {
     console.error('[presentation-deck] generate-all-assets error', err.message);
@@ -289,7 +425,7 @@ router.delete('/:slug', async (req, res) => {
   }
 });
 
-// ─── Gemini image generation helper (nanobanana) ─────────────────────────────
+// ─── Gemini image generation (nanobanana) ───────────────────────────────────
 
 async function generateImageWithGemini(prompt) {
   const apiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_AI_API_KEY;
@@ -301,15 +437,13 @@ async function generateImageWithGemini(prompt) {
   const model = 'gemini-2.0-flash-preview-image-generation';
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
 
-  const body = {
-    contents: [{ parts: [{ text: prompt }] }],
-    generationConfig: { responseModalities: ['TEXT', 'IMAGE'] },
-  };
-
   const resp = await fetch(url, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
+    body: JSON.stringify({
+      contents: [{ parts: [{ text: prompt }] }],
+      generationConfig: { responseModalities: ['TEXT', 'IMAGE'] },
+    }),
   });
 
   if (!resp.ok) {
@@ -320,16 +454,11 @@ async function generateImageWithGemini(prompt) {
   const data = await resp.json();
   const parts = data?.candidates?.[0]?.content?.parts || [];
   const imagePart = parts.find(p => p.inlineData);
-
   if (!imagePart) return null;
 
-  const { mimeType, data: base64 } = imagePart.inlineData;
-
-  // Return base64 data in metadata; callers can persist to object storage if needed
   return {
-    file_path: null,
-    public_url: null,
-    metadata: { mimeType, base64, prompt },
+    base64: imagePart.inlineData.data,
+    mimeType: imagePart.inlineData.mimeType || 'image/png',
   };
 }
 
