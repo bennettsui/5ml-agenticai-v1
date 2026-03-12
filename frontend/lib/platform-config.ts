@@ -766,6 +766,31 @@ export const USE_CASES: UseCaseConfig[] = [
   },
 
   // ========================================================================
+  // PRESENTATION DECK BUILDER — FrontierVentures
+  // ========================================================================
+  {
+    id: 'presentation-deck',
+    name: 'Presentation Deck Builder',
+    description: 'AI-generated tender and pitch decks: structured slide-by-slide content with visual prompts, DB-backed persistence, browser presentation mode, and PPTX/PDF export.',
+    solutionLine: 'FrontierVentures',
+    status: 'in_progress',
+    progress: 0.55,
+    priority: 'high',
+    path: '/presentation-deck/2603CLPtender',
+    agentCount: 1,
+    features: [
+      '40-slide structured deck (CLP tender 2603)',
+      'Section-by-section layout: cover · statement · two-column · timeline · split-metrics',
+      'Visual prompts → Gemini image generation (nanobanana)',
+      'Fly Postgres persistence (presentations · slides · slide_assets)',
+      'Browser presentation mode (keyboard nav, speaker notes, thumbnails)',
+      'PPTX export via pptxgenjs (roadmap)',
+      'PDF export via Puppeteer (roadmap)',
+      'Reusable across any future tender / pitch',
+    ],
+  },
+
+  // ========================================================================
   // C-SUITE MANAGEMENT — CSuite
   // ========================================================================
   {

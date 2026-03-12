@@ -1147,6 +1147,50 @@ async function initDatabase() {
         sort_order INTEGER DEFAULT 0,
         created_at TIMESTAMPTZ DEFAULT NOW()
       );
+
+      -- ── Presentation Deck ──────────────────────────────────────────
+      CREATE TABLE IF NOT EXISTS presentation_decks (
+        id           SERIAL PRIMARY KEY,
+        slug         VARCHAR(100) UNIQUE NOT NULL,
+        title        TEXT NOT NULL,
+        title_cn     TEXT,
+        client       TEXT,
+        sections     JSONB NOT NULL DEFAULT '[]',
+        metadata     JSONB NOT NULL DEFAULT '{}',
+        created_at   TIMESTAMPTZ DEFAULT NOW(),
+        updated_at   TIMESTAMPTZ DEFAULT NOW()
+      );
+
+      CREATE TABLE IF NOT EXISTS presentation_slides (
+        id           SERIAL PRIMARY KEY,
+        deck_slug    VARCHAR(100) NOT NULL REFERENCES presentation_decks(slug) ON DELETE CASCADE,
+        slide_number INTEGER NOT NULL,
+        section      VARCHAR(50),
+        title        TEXT,
+        subtitle     TEXT,
+        layout_type  VARCHAR(50),
+        content      JSONB NOT NULL DEFAULT '{}',
+        visual_prompts JSONB NOT NULL DEFAULT '[]',
+        notes        TEXT,
+        created_at   TIMESTAMPTZ DEFAULT NOW(),
+        UNIQUE (deck_slug, slide_number)
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_pslides_deck ON presentation_slides(deck_slug);
+
+      CREATE TABLE IF NOT EXISTS slide_assets (
+        id           SERIAL PRIMARY KEY,
+        slide_id     INTEGER REFERENCES presentation_slides(id) ON DELETE CASCADE,
+        asset_type   VARCHAR(50) DEFAULT 'image',
+        prompt_index INTEGER,
+        prompt_used  TEXT,
+        file_path    TEXT,
+        public_url   TEXT,
+        metadata     JSONB NOT NULL DEFAULT '{}',
+        generated_at TIMESTAMPTZ DEFAULT NOW()
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_slide_assets_slide ON slide_assets(slide_id);
     `);
 
     console.log('✅ Database schema initialized (including CRM tables)');
