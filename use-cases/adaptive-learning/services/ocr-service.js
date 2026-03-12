@@ -20,45 +20,66 @@ function stripFences(text) {
   return text.replace(/^```(?:json)?\s*/i, '').replace(/\s*```\s*$/, '').trim();
 }
 
-async function callGemini(parts, generationConfig = {}) {
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+
+/**
+ * Call Gemini with automatic retry on 429 (rate limit / quota exhausted).
+ * logFn is an optional (message, level) callback threaded from extractFromPdf
+ * so retry waits appear in the pipeline log on the frontend.
+ */
+async function callGemini(parts, generationConfig = {}, { retries = 3, logFn } = {}) {
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) throw new Error('GEMINI_API_KEY env var not set');
 
-  const response = await fetch(`${GEMINI_URL}?key=${apiKey}`, {
-    method:  'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      contents: [{ parts }],
-      generationConfig: {
-        temperature:      0.1,
-        responseMimeType: 'application/json',
-        maxOutputTokens:  8192,
-        ...generationConfig,
-      },
-    }),
+  const log = logFn || ((msg) => console.log(`[OCR] ${msg}`));
+
+  const body = JSON.stringify({
+    contents: [{ parts }],
+    generationConfig: {
+      temperature:      0.1,
+      responseMimeType: 'application/json',
+      maxOutputTokens:  8192,
+      ...generationConfig,
+    },
   });
 
-  if (!response.ok) {
-    const errText = await response.text().catch(() => '');
-    throw new Error(`Gemini API ${response.status}: ${errText.slice(0, 400)}`);
-  }
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    const response = await fetch(`${GEMINI_URL}?key=${apiKey}`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body,
+    });
 
-  const data      = await response.json();
-  const candidate = data?.candidates?.[0];
-  const reason    = candidate?.finishReason;
+    if (response.status === 429) {
+      if (attempt === retries) {
+        throw new Error(`Gemini rate limit (429) — quota exhausted after ${retries + 1} attempts. Try again in a minute.`);
+      }
+      const waitSec = [15, 30, 60][attempt] ?? 60;
+      log(`Gemini 429 rate limit — waiting ${waitSec}s before retry ${attempt + 1}/${retries}…`, 'warn');
+      await sleep(waitSec * 1000);
+      continue;
+    }
 
-  if (reason && reason !== 'STOP') {
-    console.warn(`[OCR] Gemini finishReason=${reason}`);
-  }
-  if (!candidate && data?.promptFeedback?.blockReason) {
-    throw new Error(`Gemini blocked: ${data.promptFeedback.blockReason}`);
-  }
+    if (!response.ok) {
+      const errText = await response.text().catch(() => '');
+      throw new Error(`Gemini API ${response.status}: ${errText.slice(0, 200)}`);
+    }
 
-  const text = candidate?.content?.parts?.[0]?.text || '';
-  if (!text) {
-    console.warn('[OCR] Empty response. Full data:', JSON.stringify(data).slice(0, 400));
+    const data      = await response.json();
+    const candidate = data?.candidates?.[0];
+    const reason    = candidate?.finishReason;
+
+    if (reason && reason !== 'STOP') {
+      log(`Gemini finishReason=${reason}`, 'warn');
+    }
+    if (!candidate && data?.promptFeedback?.blockReason) {
+      throw new Error(`Gemini blocked: ${data.promptFeedback.blockReason}`);
+    }
+
+    const text = candidate?.content?.parts?.[0]?.text || '';
+    if (!text) {
+      log('Gemini returned empty response', 'warn');
+    }
+    return text;
   }
-  return text;
 }
 
 function tryParseJson(text) {
@@ -71,7 +92,7 @@ function tryParseJson(text) {
 
 // ─── Phase 1: count questions ─────────────────────────────────────────────────
 
-async function countQuestions(pdfBase64) {
+async function countQuestions(pdfBase64, logFn) {
   const prompt = `This is a Hong Kong Secondary School mathematics paper. It may be a standard exam paper OR a compiled/sorted past-paper booklet containing questions from multiple exams.
 
 Count the total number of top-level numbered questions (e.g. "1.", "11.", "12." etc.) across all pages.
@@ -86,20 +107,19 @@ Rules:
   const text = await callGemini([
     { inline_data: { mime_type: 'application/pdf', data: pdfBase64 } },
     { text: prompt },
-  ], { maxOutputTokens: 512 });
+  ], { maxOutputTokens: 512 }, { logFn });
 
   const parsed = tryParseJson(text);
   if (!parsed || !Array.isArray(parsed.question_numbers)) {
-    console.warn('[OCR] Phase 1 parse failed, raw:', text.slice(0, 200));
+    if (logFn) logFn(`Phase 1 parse failed (raw: ${text?.slice(0, 80) ?? 'empty'})`, 'warn');
     return null;
   }
-  console.log(`[OCR] Phase 1: found ${parsed.total} questions: [${parsed.question_numbers.join(', ')}]`);
   return parsed.question_numbers;
 }
 
 // ─── Phase 2: extract a batch of questions ────────────────────────────────────
 
-async function extractBatch(pdfBase64, questionNumbers) {
+async function extractBatch(pdfBase64, questionNumbers, logFn) {
   const list = questionNumbers.join(', ');
   const prompt = `Extract ONLY questions numbered ${list} from this Hong Kong Secondary School mathematics paper (may be a standard exam or a compiled sorted past-paper booklet).
 
@@ -127,14 +147,13 @@ Rules:
   const text = await callGemini([
     { inline_data: { mime_type: 'application/pdf', data: pdfBase64 } },
     { text: prompt },
-  ]);
+  ], {}, { logFn });
 
   const parsed = tryParseJson(text);
   if (!Array.isArray(parsed)) {
-    console.warn(`[OCR] Batch [${list}] parse failed, raw:`, text.slice(0, 300));
+    if (logFn) logFn(`Batch [${list}] parse failed — skipping`, 'warn');
     return [];
   }
-  console.log(`[OCR] Batch [${list}]: extracted ${parsed.length}/${questionNumbers.length} questions`);
   return parsed;
 }
 
@@ -149,23 +168,23 @@ async function extractFromPdf(pdfBuffer, onLog) {
 
   // Phase 1: discover question numbers
   log('Phase 1: asking Gemini to count questions in the PDF…');
-  let questionNumbers = await countQuestions(base64);
+  let questionNumbers = await countQuestions(base64, log);
 
   if (!questionNumbers || questionNumbers.length === 0) {
     log('Phase 1 failed to parse a question list — falling back to questions 1–20', 'warn');
     questionNumbers = Array.from({ length: 20 }, (_, i) => i + 1);
   } else {
-    log(`Phase 1 complete: found ${questionNumbers.length} questions [${questionNumbers.slice(0, 10).join(', ')}${questionNumbers.length > 10 ? '…' : ''}]`, 'info');
+    log(`Phase 1 complete: found ${questionNumbers.length} questions [${questionNumbers.slice(0, 10).join(', ')}${questionNumbers.length > 10 ? '…' : ''}]`);
   }
 
   // Phase 2: extract in batches
-  const allBlocks = [];
+  const allBlocks    = [];
   const totalBatches = Math.ceil(questionNumbers.length / BATCH_SIZE);
   for (let i = 0; i < questionNumbers.length; i += BATCH_SIZE) {
-    const batch     = questionNumbers.slice(i, i + BATCH_SIZE);
-    const batchNum  = Math.floor(i / BATCH_SIZE) + 1;
+    const batch    = questionNumbers.slice(i, i + BATCH_SIZE);
+    const batchNum = Math.floor(i / BATCH_SIZE) + 1;
     log(`Phase 2 batch ${batchNum}/${totalBatches}: extracting Q${batch[0]}–Q${batch[batch.length - 1]}…`);
-    const results = await extractBatch(base64, batch);
+    const results = await extractBatch(base64, batch, log);
     log(`  → batch ${batchNum} returned ${results.length}/${batch.length} questions`);
     allBlocks.push(...results);
   }
