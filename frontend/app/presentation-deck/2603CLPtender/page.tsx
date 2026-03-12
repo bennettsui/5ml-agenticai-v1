@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { presentationData } from './data';
 import {
   ChevronRight, BookOpen, Play, Database, ImageIcon,
-  CheckCircle2, Loader2, AlertCircle,
+  CheckCircle2, Loader2, AlertCircle, Library,
 } from 'lucide-react';
 
 const SECTION_COLORS: Record<string, string> = {
@@ -117,6 +117,13 @@ export default function CLPTenderDeckPage() {
             <span className="text-xs text-slate-500 bg-slate-800/60 px-3 py-1.5 rounded-full border border-slate-700/50">
               {slides.length} slides
             </span>
+            <Link
+              href="/presentation-deck/library"
+              className="flex items-center gap-2 text-slate-400 hover:text-slate-200 text-sm px-3 py-2 rounded-lg border border-slate-700/50 hover:border-slate-600 transition-colors"
+            >
+              <Library className="w-3.5 h-3.5" />
+              Image Library
+            </Link>
             <Link
               href="/presentation-deck/2603CLPtender/slides"
               className="flex items-center gap-2 bg-red-600 hover:bg-red-500 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors"
