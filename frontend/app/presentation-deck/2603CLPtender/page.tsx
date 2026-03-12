@@ -4,7 +4,8 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { presentationData } from './data';
 import {
-  ChevronRight, BookOpen, Play,
+  ChevronRight, BookOpen, Play, Database, ImageIcon,
+  CheckCircle2, Loader2, AlertCircle,
 } from 'lucide-react';
 
 const SECTION_COLORS: Record<string, string> = {
@@ -29,19 +30,72 @@ const SECTION_LABELS: Record<string, string> = {
   closing: 'Closing',
 };
 
+type ActionState = 'idle' | 'loading' | 'ok' | 'error';
+
 export default function CLPTenderDeckPage() {
   const [activeSection, setActiveSection] = useState<string>('all');
+  const [seedState, setSeedState] = useState<ActionState>('idle');
+  const [seedMsg, setSeedMsg] = useState('');
+  const [genState, setGenState] = useState<ActionState>('idle');
+  const [genMsg, setGenMsg] = useState('');
+
   const { presentation } = presentationData;
-  const slides = presentation.slides;
+  // Cast slides to a mutable-friendly type for runtime use
+  const slides = presentation.slides as readonly {
+    slide_number: number;
+    section: string;
+    title: string;
+    subtitle: string | null;
+    layout_type: string;
+    content: Record<string, unknown>;
+    visual_prompts: readonly string[];
+    notes: string;
+  }[];
 
   const filteredSlides = activeSection === 'all'
     ? slides
     : slides.filter(s => s.section === activeSection);
 
-  const sectionCounts = presentation.sections.reduce((acc, sec) => {
+  const sectionCounts = (presentation.sections as readonly string[]).reduce((acc, sec) => {
     acc[sec] = slides.filter(s => s.section === sec).length;
     return acc;
   }, {} as Record<string, number>);
+
+  async function handleSeedToDB() {
+    setSeedState('loading');
+    setSeedMsg('');
+    try {
+      const res = await fetch('/api/presentation-deck/seed', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ presentation }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Seed failed');
+      setSeedState('ok');
+      setSeedMsg(`${data.slides_upserted} slides synced to DB`);
+    } catch (e: unknown) {
+      setSeedState('error');
+      setSeedMsg(e instanceof Error ? e.message : 'Unknown error');
+    }
+  }
+
+  async function handleGenerateAssets() {
+    setGenState('loading');
+    setGenMsg('');
+    try {
+      const res = await fetch(`/api/presentation-deck/${presentation.slug}/generate-all-assets`, {
+        method: 'POST',
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Generation failed');
+      setGenState('ok');
+      setGenMsg(`Generation started for ${data.slide_count} slides`);
+    } catch (e: unknown) {
+      setGenState('error');
+      setGenMsg(e instanceof Error ? e.message : 'Unknown error');
+    }
+  }
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100">
@@ -76,7 +130,7 @@ export default function CLPTenderDeckPage() {
 
       <div className="max-w-7xl mx-auto px-6 py-8">
         {/* Hero */}
-        <div className="mb-8">
+        <div className="mb-6">
           <h1 className="text-3xl font-bold text-slate-100 mb-1">
             {presentation.title}
           </h1>
@@ -86,8 +140,65 @@ export default function CLPTenderDeckPage() {
             <span>·</span>
             <span>5 Miles Lab</span>
             <span>·</span>
-            <span>Internal slug: /presentation-deck/{presentation.slug}</span>
+            <span className="font-mono">/presentation-deck/{presentation.slug}</span>
           </div>
+        </div>
+
+        {/* DB actions bar */}
+        <div className="flex flex-wrap items-center gap-3 mb-8 p-4 bg-white/[0.02] border border-white/[0.04] rounded-xl">
+          <span className="text-xs text-slate-500 mr-1">Persistence:</span>
+
+          <button
+            onClick={handleSeedToDB}
+            disabled={seedState === 'loading'}
+            className="flex items-center gap-2 text-xs font-medium px-3 py-1.5 rounded-lg border border-slate-700/50 bg-slate-800/60 hover:bg-slate-700/60 text-slate-300 disabled:opacity-50 transition-colors"
+          >
+            {seedState === 'loading' ? (
+              <Loader2 className="w-3.5 h-3.5 animate-spin" />
+            ) : seedState === 'ok' ? (
+              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+            ) : seedState === 'error' ? (
+              <AlertCircle className="w-3.5 h-3.5 text-red-400" />
+            ) : (
+              <Database className="w-3.5 h-3.5" />
+            )}
+            {seedState === 'loading' ? 'Seeding…' : 'Seed to DB'}
+          </button>
+
+          {seedMsg && (
+            <span className={`text-xs ${seedState === 'ok' ? 'text-emerald-400' : 'text-red-400'}`}>
+              {seedMsg}
+            </span>
+          )}
+
+          <div className="h-4 w-px bg-slate-800 mx-1" />
+
+          <button
+            onClick={handleGenerateAssets}
+            disabled={genState === 'loading'}
+            className="flex items-center gap-2 text-xs font-medium px-3 py-1.5 rounded-lg border border-slate-700/50 bg-slate-800/60 hover:bg-slate-700/60 text-slate-300 disabled:opacity-50 transition-colors"
+          >
+            {genState === 'loading' ? (
+              <Loader2 className="w-3.5 h-3.5 animate-spin" />
+            ) : genState === 'ok' ? (
+              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+            ) : genState === 'error' ? (
+              <AlertCircle className="w-3.5 h-3.5 text-red-400" />
+            ) : (
+              <ImageIcon className="w-3.5 h-3.5" />
+            )}
+            {genState === 'loading' ? 'Starting…' : 'Generate All Assets'}
+          </button>
+
+          {genMsg && (
+            <span className={`text-xs ${genState === 'ok' ? 'text-emerald-400' : 'text-red-400'}`}>
+              {genMsg}
+            </span>
+          )}
+
+          <span className="ml-auto text-xs text-slate-600">
+            Seed first, then generate. Assets stored in slide_assets (Fly Postgres).
+          </span>
         </div>
 
         {/* Section filter */}
@@ -102,7 +213,7 @@ export default function CLPTenderDeckPage() {
           >
             All ({slides.length})
           </button>
-          {presentation.sections.map(sec => (
+          {(presentation.sections as readonly string[]).map(sec => (
             <button
               key={sec}
               onClick={() => setActiveSection(sec)}
@@ -151,9 +262,17 @@ export default function CLPTenderDeckPage() {
                 {slide.notes}
               </p>
 
-              <div className="mt-3 flex items-center gap-1 text-xs text-slate-600 group-hover:text-slate-400 transition-colors">
-                <span>View slide</span>
-                <ChevronRight className="w-3 h-3" />
+              <div className="mt-3 flex items-center justify-between">
+                <div className="flex items-center gap-1 text-xs text-slate-600 group-hover:text-slate-400 transition-colors">
+                  <span>View slide</span>
+                  <ChevronRight className="w-3 h-3" />
+                </div>
+                {slide.visual_prompts.length > 0 && (
+                  <span className="text-xs text-slate-700 flex items-center gap-1">
+                    <ImageIcon className="w-3 h-3" />
+                    {slide.visual_prompts.length}
+                  </span>
+                )}
               </div>
             </Link>
           ))}

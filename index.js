@@ -4171,6 +4171,15 @@ try {
   console.warn('⚠️ Adaptive Learning routes not loaded:', error.message);
 }
 
+// Presentation Deck
+try {
+  const presentationDeckRoutes = require('./use-cases/presentation-deck/api/routes');
+  app.use('/api/presentation-deck', presentationDeckRoutes);
+  console.log('✅ Presentation Deck routes loaded: /api/presentation-deck');
+} catch (error) {
+  console.warn('⚠️ Presentation Deck routes not loaded:', error.message);
+}
+
 // Scheduler Service
 const scheduler = require('./services/scheduler');
 const scheduleRegistry = require('./services/schedule-registry');
