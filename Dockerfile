@@ -1,9 +1,9 @@
-FROM node:18-alpine
+FROM node:20-alpine
 
 WORKDIR /usr/src/app
 
 # Install system dependencies
-RUN apk add --no-cache python3 make g++ curl ca-certificates
+RUN apk add --no-cache python3 make g++ curl ca-certificates ffmpeg
 
 # Install AWS RDS CA bundle for TLS verification
 RUN curl -fsSL https://truststore.pki.rds.amazonaws.com/global/global-bundle.pem \

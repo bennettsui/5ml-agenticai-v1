@@ -441,6 +441,26 @@ router.get('/student/concepts/overview', async (req, res) => {
   }
 });
 
+// ─── CDN helpers ──────────────────────────────────────────────────────────────
+
+/**
+ * Upload a PDF buffer to mmdbfiles CDN.
+ * Returns the public_url string.
+ */
+async function _uploadPdfToCdn(pdfBuffer, filename) {
+  const base64   = pdfBuffer.toString('base64');
+  const fileData = `data:application/pdf;base64,${base64}`;
+  const response = await fetch('http://5ml.mmdbfiles.com/api/upload', {
+    method:  'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body:    JSON.stringify({ file_data: fileData, filename }),
+  });
+  if (!response.ok) throw new Error(`mmdbfiles upload failed (${response.status})`);
+  const data = await response.json();
+  if (!data.success) throw new Error('mmdbfiles returned success:false');
+  return data.public_url;
+}
+
 // ─── Teacher: paper upload ────────────────────────────────────────────────────
 
 /**
@@ -454,33 +474,46 @@ router.post('/teachers/papers/upload', upload.single('file'), async (req, res) =
   if (req.file.mimetype !== 'application/pdf') return res.status(400).json({ success: false, error: 'Only PDF files are accepted' });
 
   try {
-    // Store on Fly persistent volume if available, else keep in-memory reference
-    const fileKey  = `papers/${Date.now()}-${req.file.originalname.replace(/[^a-zA-Z0-9._-]/g, '_')}`;
-    const fileUrl  = `/uploads/${fileKey}`; // will be served from Fly volume
-
-    // Write to volume
     const fs   = require('fs');
     const path = require('path');
-    const dir  = path.join('/app/uploads/papers');
+    const fileKey  = `papers/${Date.now()}-${req.file.originalname.replace(/[^a-zA-Z0-9._-]/g, '_')}`;
+    const fileUrl  = `/uploads/${fileKey}`;
+
+    // Write to local volume (ephemeral on Fly)
+    const dir = path.join('/app/uploads/papers');
     if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
     fs.writeFileSync(path.join('/app/uploads', fileKey), req.file.buffer);
 
     const paper = await db.createPaper({
-      teacherId: teacherId || null,
-      subject:   req.body.subject   || 'MATH',
-      gradeBand: req.body.grade_band || 'S1-S2',
-      examName:  req.body.exam_name  || req.file.originalname,
-      year:      req.body.year       || new Date().getFullYear(),
+      teacherId:     teacherId || null,
+      subject:       req.body.subject    || 'MATH',
+      gradeBand:     req.body.grade_band || 'S1-S2',
+      examName:      req.body.exam_name  || req.file.originalname,
+      year:          req.body.year       || new Date().getFullYear(),
       fileUrl,
       fileKey,
+      fileSizeBytes: req.file.size || req.file.buffer.length,
     });
 
+    const bufferCopy = Buffer.from(req.file.buffer);
+
+    // CDN push is synchronous so cdn_url is always saved before we respond.
+    // On Fly.io the local file is ephemeral; CDN is the only durable copy.
+    let cdnUrl = null;
+    try {
+      cdnUrl = await _uploadPdfToCdn(bufferCopy, path.basename(fileKey));
+      await db.updatePaperCdnUrl(paper.id, cdnUrl);
+      console.log(`[AdaptiveLearning] Paper ${paper.id} → CDN: ${cdnUrl}`);
+    } catch (cdnErr) {
+      console.warn(`[AdaptiveLearning] CDN push failed for ${paper.id}:`, cdnErr.message);
+    }
+
     // Fire OCR + QuestionAgent pipeline async (non-blocking)
-    _runOcrPipeline(paper.id, req.file.buffer, req.body.grade_band || 'S1-S2').catch(err =>
+    _runOcrPipeline(paper.id, bufferCopy, req.body.grade_band || 'S1-S2').catch(err =>
       console.error(`OCR pipeline failed for paper ${paper.id}:`, err.message)
     );
 
-    res.json({ success: true, paper_id: paper.id, status: 'UPLOADED', message: 'PDF uploaded. Draft questions will be ready shortly.' });
+    res.json({ success: true, paper_id: paper.id, status: 'UPLOADED', cdn_backed: !!cdnUrl, message: 'PDF uploaded. Draft questions will be ready shortly.' });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
   }
@@ -494,7 +527,18 @@ router.get('/teachers/papers/:id/draft-questions', async (req, res) => {
     const paper  = await db.getPaper(req.params.id);
     if (!paper) return res.status(404).json({ success: false, error: 'Paper not found' });
     const drafts = await db.getDraftQuestions(req.params.id);
-    res.json({ success: true, paper_id: paper.id, status: paper.status, exam_name: paper.exam_name, draft_questions: drafts });
+    // Also include live in-memory progress (if pipeline is still running)
+    const liveProgress = _pipelineProgress.get(req.params.id) || null;
+    res.json({
+      success: true,
+      paper_id: paper.id,
+      status: paper.status,
+      exam_name: paper.exam_name,
+      paper_file_url: paper.file_url || null,
+      draft_questions: drafts,
+      pipeline_log: liveProgress?.log ?? paper.pipeline_log ?? null,
+      live_progress: liveProgress ? { stage: liveProgress.stage, detail: liveProgress.detail, questions_found: liveProgress.questions_found, questions_analysed: liveProgress.questions_analysed } : null,
+    });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
   }
@@ -601,62 +645,140 @@ router.get('/teacher/classes/:className/mastery', async (req, res) => {
 
 // ─── OCR pipeline (async) ─────────────────────────────────────────────────────
 
+// In-memory progress store: paperId → { stage, detail, questions_found, questions_analysed }
+const _pipelineProgress = new Map();
+
+/**
+ * GET /api/adaptive-learning/teachers/papers/:id/progress
+ * Returns live pipeline progress while OCR is running.
+ */
+router.get('/teachers/papers/:id/progress', (req, res) => {
+  const p = _pipelineProgress.get(req.params.id);
+  res.json({ progress: p || null });
+});
+
 async function _runOcrPipeline(paperId, pdfBuffer, gradeBand) {
-  await db.updatePaperStatus(paperId, 'OCR_RUNNING');
-
-  let rawBlocks = [];
-  if (await ocrService.isAvailable()) {
-    rawBlocks = await ocrService.extractFromPdf(pdfBuffer);
-  } else {
-    console.warn(`Paper ${paperId}: Google Document AI not configured, skipping OCR`);
-    await db.updatePaperStatus(paperId, 'NEEDS_REVIEW');
-    return;
+  // Structured log — persisted to DB at end so validate page can trace history
+  const log = [];
+  function addLog(message, level = 'info') {
+    const entry = { time: new Date().toISOString(), message, level };
+    log.push(entry);
+    console.log(`[OCR ${paperId.slice(0, 8)}] [${level}] ${message}`);
   }
 
-  if (rawBlocks.length === 0) {
-    await db.updatePaperStatus(paperId, 'NEEDS_REVIEW');
-    return;
+  function setProgress(stage, detail, extra = {}) {
+    _pipelineProgress.set(paperId, { stage, detail, log, ...extra });
   }
 
-  await db.updatePaperStatus(paperId, 'DRAFT_READY');
+  setProgress('reading', 'Starting OCR pipeline…', { questions_found: 0, questions_analysed: 0 });
+  addLog('Pipeline started');
 
-  // Get candidate LOs for this grade
-  const los = await db.getLearningObjectives({ grade: gradeBand.split('-')[0] || 'S1' });
-  const candidateObjectives = los.slice(0, 20).map(lo => ({ code: lo.code, name_en: lo.name_en, name_zh: lo.name_zh }));
+  try {
+    await db.updatePaperStatus(paperId, 'OCR_RUNNING');
 
-  // Run QuestionAgent on each block
-  for (const block of rawBlocks) {
-    let draft = {
-      paperId,
-      rawOcrText:  block.raw_text,
-      hasImage:    block.has_image,
-      stemEn:      block.raw_text,
-      suggestedDifficulty: 2,
-      candidateObjectives,
-    };
-
-    if (process.env.ANTHROPIC_API_KEY && block.raw_text.length > 20) {
-      try {
-        const result = await getAgent().question.authorQuestion({
-          rawTextEn:            block.raw_text,
-          imageDescription:     block.has_image ? 'Question contains a diagram or figure' : null,
-          candidateObjectives,
-          gradeBand,
-        });
-        draft.stemEn               = result.clean_stem_en  || block.raw_text;
-        draft.stemZh               = result.clean_stem_zh  || null;
-        draft.suggestedType        = result.question_type  || 'MCQ';
-        draft.suggestedDifficulty  = result.difficulty_estimate || 2;
-        draft.candidateObjectives  = result.selected_objective_codes?.map(code =>
-          candidateObjectives.find(lo => lo.code === code)
-        ).filter(Boolean) || candidateObjectives;
-      } catch (err) {
-        console.warn(`QuestionAgent failed for block (non-fatal):`, err.message);
-      }
+    let rawBlocks = [];
+    if (await ocrService.isAvailable()) {
+      setProgress('reading', 'Phase 1: Gemini counting questions…', { questions_found: 0, questions_analysed: 0 });
+      rawBlocks = await ocrService.extractFromPdf(pdfBuffer, (msg, level) => {
+        addLog(msg, level || 'info');
+        // Keep live detail in sync with latest log message
+        setProgress('reading', msg, { questions_found: 0, questions_analysed: 0 });
+      });
+    } else {
+      addLog('GEMINI_API_KEY not set — OCR skipped. Set env var to enable.', 'warn');
+      await db.updatePaperStatus(paperId, 'NEEDS_REVIEW');
+      await db.updatePaperPipelineLog(paperId, log).catch(() => {});
+      setProgress('done', 'Skipped (no API key)', { questions_found: 0, questions_analysed: 0 });
+      setTimeout(() => _pipelineProgress.delete(paperId), 5 * 60 * 1000);
+      return;
     }
 
-    await db.createDraftQuestion(draft);
+    if (rawBlocks.length === 0) {
+      addLog('Gemini returned 0 questions — PDF may be image-only or unreadable. Set status to NEEDS_REVIEW.', 'warn');
+      await db.updatePaperStatus(paperId, 'NEEDS_REVIEW');
+      await db.updatePaperPipelineLog(paperId, log).catch(() => {});
+      setProgress('done', '0 questions found — needs review', { questions_found: 0, questions_analysed: 0 });
+      setTimeout(() => _pipelineProgress.delete(paperId), 5 * 60 * 1000);
+      return;
+    }
+
+    setProgress('analysing', `Gemini found ${rawBlocks.length} questions. Running QuestionAgent…`, { questions_found: rawBlocks.length, questions_analysed: 0 });
+
+    // Get candidate LOs for this grade
+    const los = await db.getLearningObjectives({ grade: gradeBand.split('-')[0] || 'S1' });
+    const candidateObjectives = los.slice(0, 20).map(lo => ({ code: lo.code, name_en: lo.name_en, name_zh: lo.name_zh }));
+    addLog(`Loaded ${los.length} learning objectives for grade ${gradeBand}`);
+
+    const hasClaudeKey = !!process.env.ANTHROPIC_API_KEY;
+    if (!hasClaudeKey) addLog('ANTHROPIC_API_KEY not set — QuestionAgent enhancement skipped', 'warn');
+
+    // Run QuestionAgent on each block
+    for (let i = 0; i < rawBlocks.length; i++) {
+      const block = rawBlocks[i];
+      const qLabel = `Q${block.question_number ?? i + 1}`;
+      setProgress('analysing', `Saving ${qLabel} (${i + 1}/${rawBlocks.length})…`, { questions_found: rawBlocks.length, questions_analysed: i });
+
+      // Build ocrMeta from the block's extracted fields
+      const ocrMeta = JSON.stringify({
+        text:              block.raw_text,
+        options:           block.options,
+        image_description: block.image_description,
+        page_number:       block.page_number,
+        question_number:   block.question_number,
+      });
+      const imageDesc = block.image_description || '';
+
+      let draft = {
+        paperId,
+        rawOcrText:          ocrMeta,
+        hasImage:            block.has_image,
+        stemEn:              block.stem_en || block.raw_text,
+        stemZh:              block.stem_zh || null,
+        suggestedType:       block.suggested_type || 'MCQ',
+        suggestedDifficulty: block.difficulty_hint || 2,
+        candidateObjectives,
+      };
+
+      if (hasClaudeKey && (block.stem_en || block.raw_text || '').length > 20) {
+        try {
+          const result = await getAgent().question.authorQuestion({
+            rawTextEn:        block.stem_en || block.raw_text,
+            imageDescription: imageDesc,
+            candidateObjectives,
+            gradeBand,
+          });
+          draft.stemEn               = result.clean_stem_en  || draft.stemEn;
+          draft.stemZh               = result.clean_stem_zh  || draft.stemZh;
+          draft.suggestedType        = result.question_type  || draft.suggestedType;
+          draft.suggestedDifficulty  = result.difficulty_estimate || draft.suggestedDifficulty;
+          draft.candidateObjectives  = result.selected_objective_codes?.map(code =>
+            candidateObjectives.find(lo => lo.code === code)
+          ).filter(Boolean) || candidateObjectives;
+          addLog(`${qLabel}: Claude enhanced → ${result.question_type}, difficulty ${result.difficulty_estimate}`);
+        } catch (err) {
+          addLog(`${qLabel}: Claude enhancement failed (non-fatal) — ${err.message}`, 'warn');
+        }
+      }
+
+      await db.createDraftQuestion(draft);
+    }
+
+    // Status → DRAFT_READY only after all questions are actually saved
+    addLog(`Done: ${rawBlocks.length} questions saved to database`, 'success');
+    await db.updatePaperStatus(paperId, 'DRAFT_READY');
+    await db.updatePaperPipelineLog(paperId, log).catch(() => {});
+    setProgress('done', `${rawBlocks.length} questions saved`, { questions_found: rawBlocks.length, questions_analysed: rawBlocks.length });
+
+  } catch (err) {
+    addLog(`Pipeline crashed: ${err.message}`, 'error');
+    console.error(`[OCR] Pipeline crashed for paper ${paperId}:`, err.message, err.stack);
+    await db.updatePaperStatus(paperId, 'OCR_ISSUE').catch(() => {});
+    await db.updatePaperPipelineLog(paperId, log).catch(() => {});
+    setProgress('error', `Failed: ${err.message}`, { questions_found: 0, questions_analysed: 0 });
   }
+
+  // Keep progress in memory for 5 min so validate page can read it on first load
+  setTimeout(() => _pipelineProgress.delete(paperId), 5 * 60 * 1000);
 }
 
 // ─── Additional routes appended below ──────────────────────────────────────
@@ -1101,6 +1223,159 @@ router.get('/student/sessions', async (req, res) => {
   }
 });
 
+// ─── Teacher: serve paper PDF ──────────────────────────────────────────────────
+
+/**
+ * GET /api/adaptive-learning/teachers/papers/:id/file
+ * Streams the local PDF or 302-redirects to CDN if the local file is gone.
+ */
+router.get('/teachers/papers/:id/file', async (req, res) => {
+  try {
+    const paper = await db.getPaper(req.params.id);
+    if (!paper) return res.status(404).json({ success: false, error: 'Paper not found' });
+
+    const fs   = require('fs');
+    const path = require('path');
+    // file_url is stored as a path like /uploads/papers/xxx.pdf
+    const localPath = paper.file_url ? path.join('/app', paper.file_url) : null;
+
+    if (localPath && fs.existsSync(localPath)) {
+      res.setHeader('Content-Type', 'application/pdf');
+      res.setHeader('Content-Disposition', `inline; filename="${encodeURIComponent(paper.exam_name)}.pdf"`);
+      return fs.createReadStream(localPath).pipe(res);
+    }
+
+    // Local file gone (ephemeral FS) — proxy from CDN so pdf.js can load it
+    if (paper.cdn_url) {
+      const https = require('https');
+      const http  = require('http');
+      const cdnModule = paper.cdn_url.startsWith('https') ? https : http;
+      res.setHeader('Content-Type', 'application/pdf');
+      res.setHeader('Content-Disposition', `inline; filename="${encodeURIComponent(paper.exam_name)}.pdf"`);
+      cdnModule.get(paper.cdn_url, cdnRes => {
+        if (cdnRes.statusCode >= 400) {
+          res.status(502).json({ success: false, error: `CDN returned ${cdnRes.statusCode}` });
+        } else {
+          cdnRes.pipe(res);
+        }
+      }).on('error', err => {
+        if (!res.headersSent) res.status(502).json({ success: false, error: err.message });
+      });
+      return;
+    }
+
+    res.status(404).json({ success: false, error: 'PDF not available locally or on CDN. Re-upload to restore.', reason: 'pdf_lost' });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// ─── Teacher: visual page extraction (validate page) ─────────────────────────
+
+/**
+ * POST /api/adaptive-learning/teachers/papers/:id/visual-extract
+ * Body: { page_image_base64: string, page_number: number, mime_type?: string }
+ * Sends a rendered page image to Gemini Vision and returns detected elements
+ * with bounding boxes (x/y/w/h as % of image dimensions).
+ */
+router.post('/teachers/papers/:id/visual-extract', async (req, res) => {
+  const { page_image_base64, page_number = 1, mime_type = 'image/png' } = req.body || {};
+  if (!page_image_base64) return res.status(400).json({ success: false, error: 'page_image_base64 required' });
+
+  const apiKey = process.env.GEMINI_API_KEY;
+  if (!apiKey) return res.status(503).json({ success: false, error: 'GEMINI_API_KEY not configured' });
+
+  const GEMINI_MODEL = 'gemini-1.5-flash';
+  const GEMINI_URL   = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`;
+
+  const prompt = `You are analyzing a page from a Hong Kong secondary school math exam paper.
+
+Detect every element visible on this page. For each element output a JSON array where each item is:
+{
+  "id": <sequential integer starting from 1>,
+  "type": "question_number" | "question_stem" | "sub_part" | "math_expression" | "diagram" | "graph" | "table" | "option" | "answer_line" | "instruction",
+  "content": "<full text content in English or romanized form>",
+  "content_zh": "<text in Traditional Chinese if present, else empty string>",
+  "bbox": { "x": <left edge as % of image width 0-100>, "y": <top edge as % of image height 0-100>, "w": <width as % 0-100>, "h": <height as % 0-100> },
+  "confidence": <float 0.0-1.0, your certainty>,
+  "needs_review": <true if text is unclear, illegible, or you are uncertain>
+}
+
+Rules:
+- bbox coordinates MUST be percentages relative to the full image (0 to 100).
+- Include every question number, question stem, sub-part, math expression, diagram/graph region, MCQ option, blank answer line, and instruction block.
+- For diagrams or graphs with no text, set content to a brief description like "geometry diagram" or "bar chart".
+- Output ONLY the JSON array. No markdown fences, no explanation.`;
+
+  try {
+    const response = await fetch(`${GEMINI_URL}?key=${apiKey}`, {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify({
+        contents: [{
+          parts: [
+            { inline_data: { mime_type, data: page_image_base64 } },
+            { text: prompt },
+          ],
+        }],
+        generationConfig: { temperature: 0.1, responseMimeType: 'application/json' },
+      }),
+    });
+
+    if (!response.ok) {
+      const errText = await response.text();
+      return res.status(502).json({ success: false, error: `Gemini error ${response.status}: ${errText.slice(0, 300)}` });
+    }
+
+    const data = await response.json();
+    const text = data?.candidates?.[0]?.content?.parts?.[0]?.text || '[]';
+
+    let elements = [];
+    try {
+      const parsed = JSON.parse(text);
+      elements = Array.isArray(parsed) ? parsed : [];
+    } catch {
+      console.warn('[visual-extract] Gemini non-JSON response:', text.slice(0, 200));
+    }
+
+    res.json({ success: true, page_number, elements });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// ─── Teacher: storage overview ─────────────────────────────────────────────────
+
+/**
+ * GET /api/adaptive-learning/teachers/papers/storage
+ * Returns all papers with local file existence flag and CDN status.
+ * NOTE: must be defined before /teachers/papers/:id routes to avoid param collision.
+ */
+router.get('/teachers/papers/storage', async (req, res) => {
+  try {
+    const fs   = require('fs');
+    const path = require('path');
+    const { pool } = require('../../../db');
+    const { rows } = await pool.query(
+      `SELECT id, exam_name, grade_band, year, status,
+              file_url, cdn_url, file_size_bytes, created_at
+       FROM papers
+       ORDER BY created_at DESC`
+    );
+    const papers = rows.map(p => {
+      const localPath        = p.file_url ? path.join('/app', p.file_url) : null;
+      const fileExistsLocally = localPath ? fs.existsSync(localPath) : false;
+      const serveUrl         = fileExistsLocally
+        ? `/api/adaptive-learning/teachers/papers/${p.id}/file`
+        : (p.cdn_url || null);
+      return { ...p, file_exists_locally: fileExistsLocally, serve_url: serveUrl };
+    });
+    res.json({ success: true, papers });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 // ─── Teacher: list papers ──────────────────────────────────────────────────────
 
 /**
@@ -1113,7 +1388,7 @@ router.get('/teachers/papers', async (req, res) => {
     const { pool } = require('../../../db');
     const { rows } = await pool.query(
       `SELECT p.id, p.exam_name, p.grade_band, p.year, p.status,
-              p.file_url, p.created_at,
+              p.file_url, p.cdn_url, p.file_size_bytes, p.created_at,
               COUNT(dq.id)::int AS draft_count,
               COUNT(dq.id) FILTER (WHERE dq.status = 'CONFIRMED')::int AS confirmed_count
        FROM papers p
@@ -1125,6 +1400,271 @@ router.get('/teachers/papers', async (req, res) => {
     );
     res.json({ success: true, papers: rows });
   } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// ─── Teacher: reprocess OCR ───────────────────────────────────────────────────
+
+/**
+ * POST /api/adaptive-learning/teachers/papers/:id/reprocess
+ * Re-runs the full OCR + QuestionAgent pipeline on an existing paper.
+ * Deletes current draft questions and re-extracts from the stored PDF.
+ * Fetches PDF from local filesystem first, falls back to CDN.
+ */
+router.post('/teachers/papers/:id/reprocess', async (req, res) => {
+  try {
+    const paper = await db.getPaper(req.params.id);
+    if (!paper) return res.status(404).json({ success: false, error: 'Paper not found' });
+
+    const fs   = require('fs');
+    const path = require('path');
+
+    // Resolve PDF buffer — local first, then CDN
+    let pdfBuffer;
+    const localPath = paper.file_url ? path.join('/app', paper.file_url) : null;
+
+    if (localPath && fs.existsSync(localPath)) {
+      pdfBuffer = fs.readFileSync(localPath);
+    } else if (paper.cdn_url) {
+      const response = await fetch(paper.cdn_url);
+      if (!response.ok) throw new Error(`CDN fetch failed: ${response.status}`);
+      const buf = await response.arrayBuffer();
+      pdfBuffer = Buffer.from(buf);
+    } else {
+      return res.status(404).json({ success: false, error: 'PDF not available locally or on CDN. Re-upload to restore.' });
+    }
+
+    // Delete existing draft questions for this paper
+    const { pool } = require('../../../db');
+    await pool.query(`DELETE FROM draft_questions WHERE paper_id = $1`, [paper.id]);
+
+    // Fire new pipeline async
+    _runOcrPipeline(paper.id, pdfBuffer, paper.grade_band || 'S1-S2').catch(err =>
+      console.error(`[reprocess] OCR pipeline failed for paper ${paper.id}:`, err.message)
+    );
+
+    res.json({ success: true, message: 'Re-extraction started. Refresh in ~30–60 s.' });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// ─── Teacher: update paper metadata ───────────────────────────────────────────
+
+/**
+ * PATCH /api/adaptive-learning/teachers/papers/:id
+ * Body: { exam_name?, grade_band?, year?, status? }
+ * Allows editing metadata and manually resetting a stuck paper to NEEDS_REVIEW.
+ */
+router.patch('/teachers/papers/:id', async (req, res) => {
+  try {
+    const { pool } = require('../../../db');
+    const { exam_name, grade_band, year, status } = req.body || {};
+    const allowed = ['UPLOADED', 'OCR_RUNNING', 'DRAFT_READY', 'CONFIRMED', 'NEEDS_REVIEW'];
+    if (status && !allowed.includes(status)) {
+      return res.status(400).json({ success: false, error: 'Invalid status' });
+    }
+    const { rows } = await pool.query(
+      `UPDATE papers
+       SET exam_name  = COALESCE($1, exam_name),
+           grade_band = COALESCE($2, grade_band),
+           year       = COALESCE($3, year),
+           status     = COALESCE($4, status),
+           updated_at = NOW()
+       WHERE id = $5
+       RETURNING *`,
+      [exam_name || null, grade_band || null, year ? parseInt(year) : null, status || null, req.params.id]
+    );
+    if (!rows[0]) return res.status(404).json({ success: false, error: 'Paper not found' });
+    res.json({ success: true, paper: rows[0] });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// ─── Teacher: delete paper ─────────────────────────────────────────────────────
+
+/**
+ * DELETE /api/adaptive-learning/teachers/papers/:id
+ * Removes paper and all associated draft questions.
+ */
+router.delete('/teachers/papers/:id', async (req, res) => {
+  try {
+    const { pool } = require('../../../db');
+    await pool.query('DELETE FROM draft_questions WHERE paper_id = $1', [req.params.id]);
+    const { rowCount } = await pool.query('DELETE FROM papers WHERE id = $1', [req.params.id]);
+    if (!rowCount) return res.status(404).json({ success: false, error: 'Paper not found' });
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// ─── Teacher: visual element extraction (per-page) ─────────────────────────────
+
+/**
+ * POST /api/adaptive-learning/teachers/papers/:id/visual-extract
+ * Body: { page_image_base64: string, page_number: number, mime_type?: string }
+ *
+ * Sends the rendered page image to Gemini 2.0 and asks it to locate every
+ * question/element with a normalised bounding box (0–100 %).
+ *
+ * Returns: { success, elements: [{ id, type, content, content_zh, bbox, confidence, needs_review }] }
+ */
+router.post('/teachers/papers/:id/visual-extract', async (req, res) => {
+  const { page_image_base64, page_number = 1, mime_type = 'image/png' } = req.body || {};
+  if (!page_image_base64) return res.status(400).json({ success: false, error: 'page_image_base64 required' });
+
+  const apiKey = process.env.GEMINI_API_KEY;
+  if (!apiKey) return res.status(503).json({ success: false, error: 'GEMINI_API_KEY not configured' });
+
+  const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent`;
+
+  const prompt = `You are analysing page ${page_number} of a Hong Kong Secondary School mathematics exam paper.
+
+Identify every distinct element on this page. For each element return a JSON object with:
+{
+  "type": "question_stem" | "sub_part" | "math_expression" | "diagram" | "graph" | "table" | "option" | "answer_line" | "instruction" | "question_number",
+  "content": "<English text / math / description of the element>",
+  "content_zh": "<Traditional Chinese text if present, else empty string>",
+  "bbox": [ymin, xmin, ymax, xmax],   // integers 0–1000, as fraction of page dimensions × 1000
+  "confidence": <0.0–1.0>,
+  "needs_review": <true if the text is ambiguous, partially cut off, or the bounding box is uncertain>
+}
+
+Rules:
+- Number each question stem — even if it spans multiple lines, treat as one element.
+- Include MCQ options (A B C D) as separate "option" elements.
+- If a diagram or graph has no readable text, set content to a brief description in English.
+- For bilingual text, put English in "content" and Chinese in "content_zh".
+- bbox MUST be tight around the actual content, not the whole page.
+- Output ONLY a JSON array. No markdown, no explanation.`;
+
+  try {
+    const response = await fetch(`${GEMINI_URL}?key=${apiKey}`, {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        contents: [{
+          parts: [
+            { inline_data: { mime_type, data: page_image_base64 } },
+            { text: prompt },
+          ],
+        }],
+        generationConfig: {
+          temperature:      0.1,
+          responseMimeType: 'application/json',
+          maxOutputTokens:  4096,
+        },
+      }),
+    });
+
+    if (!response.ok) {
+      const errText = await response.text().catch(() => '');
+      return res.status(502).json({ success: false, error: `Gemini ${response.status}: ${errText.slice(0, 300)}` });
+    }
+
+    const data      = await response.json();
+    const candidate = data?.candidates?.[0];
+    const rawText   = candidate?.content?.parts?.[0]?.text || '';
+
+    if (!rawText) {
+      console.warn('[visual-extract] Empty Gemini response:', JSON.stringify(data).slice(0, 400));
+      return res.json({ success: true, elements: [] });
+    }
+
+    // Strip markdown fences
+    const cleaned = rawText.replace(/^```(?:json)?\s*/i, '').replace(/\s*```\s*$/, '').trim();
+
+    let parsed = [];
+    try {
+      parsed = JSON.parse(cleaned);
+    } catch {
+      const match = cleaned.match(/\[[\s\S]*\]/);
+      if (match) { try { parsed = JSON.parse(match[0]); } catch {} }
+    }
+
+    if (!Array.isArray(parsed)) parsed = [];
+
+    // Normalise bbox from [ymin, xmin, ymax, xmax] 0-1000 → { x, y, w, h } as percentages
+    const elements = parsed.map((el, i) => {
+      let bbox = { x: 0, y: 0, w: 100, h: 5 };
+      if (Array.isArray(el.bbox) && el.bbox.length === 4) {
+        const [ymin, xmin, ymax, xmax] = el.bbox.map(Number);
+        bbox = {
+          x: xmin / 10,
+          y: ymin / 10,
+          w: (xmax - xmin) / 10,
+          h: (ymax - ymin) / 10,
+        };
+      }
+      return {
+        id:           i + 1,
+        type:         el.type         || 'question_stem',
+        content:      el.content      || '',
+        content_zh:   el.content_zh   || '',
+        bbox,
+        confidence:   typeof el.confidence === 'number' ? el.confidence : 0.8,
+        needs_review: !!el.needs_review,
+      };
+    });
+
+    console.log(`[visual-extract] Paper ${req.params.id} page ${page_number}: ${elements.length} elements`);
+    res.json({ success: true, elements });
+
+  } catch (err) {
+    console.error('[visual-extract] Error:', err.message);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// ─── Teacher: OCR AI assistant ────────────────────────────────────────────────
+
+/**
+ * POST /api/adaptive-learning/teachers/ocr-assistant
+ * Body: { paper_id, context: string, messages: [{role, content}] }
+ *
+ * Chat assistant that understands the OCR extraction context and can help
+ * the teacher identify issues, explain gaps, and suggest corrections.
+ */
+router.post('/teachers/ocr-assistant', async (req, res) => {
+  const { context, messages = [] } = req.body || {};
+
+  const apiKey = process.env.ANTHROPIC_API_KEY;
+  if (!apiKey) return res.status(503).json({ success: false, error: 'ANTHROPIC_API_KEY not configured' });
+
+  try {
+    const Anthropic = require('@anthropic-ai/sdk');
+    const client    = new Anthropic.default({ apiKey });
+
+    const systemPrompt = `You are an OCR review assistant for a Hong Kong Secondary School mathematics teacher portal.
+The teacher has uploaded a past paper and an AI (Gemini) extracted questions from it.
+You help the teacher understand and fix OCR extraction issues.
+
+Current extraction context:
+${context || '(no context provided)'}
+
+Your role:
+- Explain why questions might be missing (token limits, complex layouts, bilingual text)
+- Help identify which questions have missing MCQ options or diagram descriptions
+- Suggest what the teacher should manually correct
+- Answer questions about the extraction quality
+- Be concise and practical — teachers are busy
+
+Keep responses short (2-4 sentences max unless detail is needed).`;
+
+    const response = await client.messages.create({
+      model:      'claude-haiku-4-5-20251001',
+      max_tokens: 512,
+      system:     systemPrompt,
+      messages:   messages.slice(-10).map(m => ({ role: m.role, content: m.content })),
+    });
+
+    const reply = response.content[0]?.text || 'I could not generate a response.';
+    res.json({ success: true, reply });
+  } catch (err) {
+    console.error('[ocr-assistant]', err.message);
     res.status(500).json({ success: false, error: err.message });
   }
 });

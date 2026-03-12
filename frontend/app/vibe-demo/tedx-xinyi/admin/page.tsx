@@ -6,7 +6,7 @@ import Link from 'next/link';
 const API_BASE = typeof window !== 'undefined'
   ? (process.env.NEXT_PUBLIC_API_URL || '')
   : (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080');
-const ADMIN_PASSWORD = '5milesLab01@';
+const ADMIN_PASSWORD = '5mileslab';
 
 type Tab = 'slots' | 'media' | 'circles' | 'social' | 'publish' | 'records' | 'sponsor-logos';
 

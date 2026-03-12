@@ -1,17 +1,16 @@
 'use client';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Users, Upload, BookOpen, FileText, LogOut, GraduationCap, FolderOpen, ListChecks } from 'lucide-react';
+import { Users, FileText, LogOut, GraduationCap, FolderOpen, ListChecks, HardDrive } from 'lucide-react';
 import { useTeacherAuth } from '@/components/adaptive/useTeacherAuth';
 
 const NAV = [
-  { href: '/teach',                   label: 'Dashboard', icon: Users },
-  { href: '/teach/students',          label: 'Students',  icon: GraduationCap },
-  { href: '/teach/papers',            label: 'Papers',    icon: FolderOpen },
-  { href: '/teach/upload',            label: 'Upload',    icon: Upload },
-  { href: '/teach/questions/pending', label: 'Review',    icon: BookOpen },
-  { href: '/teach/syllabus',          label: 'Syllabus',  icon: ListChecks },
-  { href: '/teach/reports',           label: 'Reports',   icon: FileText },
+  { href: '/teach',          label: 'Dashboard', icon: Users },
+  { href: '/teach/students', label: 'Students',  icon: GraduationCap },
+  { href: '/teach/papers',   label: 'Papers',    icon: FolderOpen },
+  { href: '/teach/syllabus', label: 'Syllabus',  icon: ListChecks },
+  { href: '/teach/reports',  label: 'Reports',   icon: FileText },
+  { href: '/teach/storage',  label: 'Storage',   icon: HardDrive },
 ];
 
 export default function TeachLayout({ children }: { children: React.ReactNode }) {
@@ -21,7 +20,7 @@ export default function TeachLayout({ children }: { children: React.ReactNode })
   return (
     <div className="min-h-screen bg-slate-950 flex flex-col">
       <header className="border-b border-slate-800/60 bg-slate-900/80 backdrop-blur-sm sticky top-0 z-50">
-        <div className="max-w-5xl mx-auto px-6 h-14 flex items-center justify-between">
+        <div className="w-full px-8 h-14 flex items-center justify-between">
           <Link href="/teach" className="flex items-center gap-2.5">
             <div className="w-7 h-7 rounded-lg bg-purple-600 flex items-center justify-center">
               <GraduationCap className="w-4 h-4 text-white" />
@@ -55,7 +54,7 @@ export default function TeachLayout({ children }: { children: React.ReactNode })
         </div>
       </header>
 
-      <main className="flex-1 max-w-5xl mx-auto w-full px-6 py-8">
+      <main className="flex-1 w-full px-8 py-8">
         {children}
       </main>
 

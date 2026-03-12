@@ -127,7 +127,7 @@ export default function SyllabusPage() {
   const totalAll = CURRICULUM.reduce((s, st) => s + st.objectives.length, 0);
 
   return (
-    <div className="flex flex-col gap-6 max-w-3xl">
+    <div className="flex flex-col gap-6">
       {/* Header */}
       <div>
         <h1 className="text-2xl font-bold text-white">S1–S3 Mathematics Syllabus</h1>
