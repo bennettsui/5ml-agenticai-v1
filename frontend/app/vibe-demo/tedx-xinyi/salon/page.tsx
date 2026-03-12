@@ -267,14 +267,25 @@ const TICKET_TYPES = [
 ];
 
 interface CirclePhoto { key: string; src: string; alt: string; }
+interface EventPhoto { key: string; src: string; alt: string; }
+
+const API_BASE = typeof window !== 'undefined'
+  ? (process.env.NEXT_PUBLIC_API_URL || '')
+  : (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080');
 
 export default function SalonPage() {
   const [circlePhotos, setCirclePhotos] = useState<CirclePhoto[]>([]);
+  const [eventPhotos, setEventPhotos] = useState<EventPhoto[]>([]);
+  const [lightboxSrc, setLightboxSrc] = useState<string | null>(null);
 
   useEffect(() => {
     fetch('/api/tedx-xinyi/circles')
       .then(r => r.json())
       .then(d => setCirclePhotos(d.photos || []))
+      .catch(() => {});
+    fetch(`${API_BASE}/api/tedx-xinyi/event-photos`)
+      .then(r => r.json())
+      .then(d => setEventPhotos(d.photos || []))
       .catch(() => {});
   }, []);
 
@@ -910,9 +921,61 @@ export default function SalonPage() {
         </div>
       </Section>
 
-      {/* PHOTO GALLERY — hidden for now */}
+      {/* ==================== BLOCK E2 — EVENT PHOTO GALLERY ==================== */}
+      {eventPhotos.length > 0 && (
+        <Section bg="warm">
+          <FadeIn>
+            <SectionLabel>GALLERY</SectionLabel>
+            <h2 className="text-2xl sm:text-3xl md:text-4xl font-black mb-2" lang="zh-TW">活動花絮</h2>
+            <p className="text-neutral-500 text-base mb-10" lang="zh-TW">現場精彩瞬間。</p>
+          </FadeIn>
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+            {eventPhotos.map((photo, i) => (
+              <FadeIn key={photo.key} delay={i * 50}>
+                <button
+                  className="group w-full rounded-xl overflow-hidden focus:outline-none"
+                  onClick={() => setLightboxSrc(photo.src)}
+                >
+                  <div className="aspect-square bg-neutral-200 overflow-hidden">
+                    <img
+                      src={photo.src}
+                      alt={photo.alt || ''}
+                      loading="lazy"
+                      className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
+                      onError={e => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                    />
+                  </div>
+                </button>
+              </FadeIn>
+            ))}
+          </div>
+        </Section>
+      )}
 
-            {/* ==================== BLOCK F — CTA ==================== */}
+      {/* Lightbox */}
+      {lightboxSrc && (
+        <div
+          className="fixed inset-0 z-50 bg-black/90 flex items-center justify-center p-4"
+          onClick={() => setLightboxSrc(null)}
+        >
+          <img
+            src={lightboxSrc}
+            alt=""
+            className="max-w-full max-h-full rounded-lg shadow-2xl"
+            onClick={e => e.stopPropagation()}
+          />
+          <button
+            onClick={() => setLightboxSrc(null)}
+            className="absolute top-4 right-4 w-10 h-10 flex items-center justify-center text-white/70 hover:text-white bg-white/10 hover:bg-white/20 rounded-full transition-colors"
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+              <path d="M18 6L6 18M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+      )}
+
+      {/* ==================== BLOCK F — CTA ==================== */}
       <section className="py-20 md:py-28 text-white" style={{ backgroundColor: TED_RED }}>
         <div className="max-w-3xl mx-auto px-6 text-center">
           <FadeIn>
