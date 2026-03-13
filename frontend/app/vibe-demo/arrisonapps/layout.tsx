@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import AgeGate from './AgeGate';
 
 export const metadata: Metadata = {
   title: 'Arrisonapps — Fine Cigars',
@@ -6,5 +7,5 @@ export const metadata: Metadata = {
 };
 
 export default function ArrisonappsLayout({ children }: { children: React.ReactNode }) {
-  return children;
+  return <AgeGate>{children}</AgeGate>;
 }
