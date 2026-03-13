@@ -596,6 +596,7 @@ export default function CantoneseTranscriptionPage() {
   const [sttProgress, setSttProgress]       = useState<number | null>(null);
   const [sttFileName, setSttFileName]       = useState<string | null>(null);
   const [sttFileSize, setSttFileSize]       = useState<number | null>(null);
+  const [sttLog, setSttLog]                 = useState<string[]>([]);
   const audioInputRef                        = useRef<HTMLInputElement>(null);
   const sttXhrRef                            = useRef<XMLHttpRequest | null>(null);
 
@@ -607,7 +608,7 @@ export default function CantoneseTranscriptionPage() {
     id: string; filename: string; size: number; format: ConvFormat;
     startTime: number; endTime: number; splitChunks: boolean; chunkLen: number;
     status: ConvStatus; error?: string; progress?: number;
-    result?: { single?: { dataUrl: string; filename: string }; chunks?: ConvChunk[] };
+    result?: { single?: { dataUrl: string; filename: string; blob?: Blob }; chunks?: ConvChunk[] };
     createdAt: number;
   }
   const [convFile, setConvFile]             = useState<File | null>(null);
@@ -929,9 +930,10 @@ export default function CantoneseTranscriptionPage() {
           // Single file — create object URL for download
           const blob = new Blob([buf], { type: contentType });
           const dataUrl = URL.createObjectURL(blob);
-          const filename = `converted.${convFormat}`;
+          const baseName = convFile.name.replace(/\.[^.]+$/, '');
+          const filename = `${baseName}.${convFormat}`;
           setConvJobs(prev => prev.map(j => j.id === jobId
-            ? { ...j, status: 'done', progress: 100, result: { single: { dataUrl, filename } } }
+            ? { ...j, status: 'done', progress: 100, result: { single: { dataUrl, filename, blob } } }
             : j));
         } else {
           // JSON response (chunks mode or error)
@@ -975,16 +977,18 @@ export default function CantoneseTranscriptionPage() {
     setConvActiveJob(null);
   }
 
-  function convSendToTranscribe(dataUrl: string, filename: string) {
-    // Convert data URL back to File and send to STT
+  function convSendToTranscribe(dataUrl: string, filename: string, blob?: Blob) {
+    const go = (b: Blob) => {
+      const file = new File([b], filename, { type: b.type });
+      setSttEngine('google-stt');
+      setPageTab('analyze');
+      setTimeout(() => handleSttUpload(file), 100);
+    };
+    if (blob) { go(blob); return; }
     fetch(dataUrl)
       .then(r => r.blob())
-      .then(blob => {
-        const file = new File([blob], filename, { type: blob.type });
-        setSttEngine('google-stt');
-        setPageTab('analyze');
-        setTimeout(() => handleSttUpload(file), 100);
-      });
+      .then(go)
+      .catch(err => console.error('[convSendToTranscribe]', err));
   }
 
   function cancelSttUpload() {
@@ -1003,6 +1007,7 @@ export default function CantoneseTranscriptionPage() {
     setSttProgress(0);
     setSttFileName(file.name);
     setSttFileSize(file.size);
+    setSttLog([]);
 
     const form = new FormData();
     form.append('audio', file);
@@ -1016,10 +1021,39 @@ export default function CantoneseTranscriptionPage() {
       if (e.lengthComputable) setSttProgress(Math.round((e.loaded / e.total) * 100));
     };
     xhr.upload.onload = () => setSttProgress(100);
+
+    // Parse streaming NDJSON progress lines as they arrive
+    let parsedUpTo = 0;
+    xhr.onprogress = () => {
+      const newText = xhr.responseText.slice(parsedUpTo);
+      parsedUpTo = xhr.responseText.length;
+      const lines = newText.split('\n');
+      const logLines: string[] = [];
+      for (const line of lines) {
+        if (!line.trim()) continue;
+        try {
+          const obj = JSON.parse(line) as Record<string, unknown>;
+          if (obj.type === 'log') logLines.push(obj.message as string);
+        } catch { /* incomplete line, will retry on next progress */ }
+      }
+      if (logLines.length) setSttLog(prev => [...prev, ...logLines]);
+    };
+
     xhr.onload = () => {
       sttXhrRef.current = null;
+      // Parse final NDJSON result (last 'done' or 'error' entry)
       let data: Record<string, unknown> = {};
-      try { data = JSON.parse(xhr.responseText); } catch { /* ignore */ }
+      const lines = xhr.responseText.split('\n').filter(l => l.trim());
+      for (const line of lines) {
+        try {
+          const obj = JSON.parse(line) as Record<string, unknown>;
+          if (obj.type === 'done' || obj.type === 'error') data = obj;
+        } catch { /* ignore */ }
+      }
+      if (!data.ok && lines.length === 1) {
+        // Fallback: plain JSON error from early validation
+        try { data = JSON.parse(xhr.responseText); } catch { /* ignore */ }
+      }
       if (xhr.status < 200 || xhr.status >= 300 || !data.ok) {
         setSttError((data.error as string) ?? `轉錄失敗 (HTTP ${xhr.status})`);
       } else {
@@ -1289,6 +1323,13 @@ export default function CantoneseTranscriptionPage() {
                           <>
                             <Loader2 className={`w-6 h-6 animate-spin ${sttEngine === 'whisper' ? 'text-violet-400' : 'text-blue-400'}`} />
                             <span className="text-xs text-slate-400">轉錄中，請稍候…</span>
+                            {sttLog.length > 0 && (
+                              <div className="w-full max-h-28 overflow-y-auto space-y-0.5 px-2">
+                                {sttLog.map((msg, i) => (
+                                  <p key={i} className={`text-[10px] text-center font-mono ${i === sttLog.length - 1 ? 'text-slate-400' : 'text-slate-600'}`}>{msg}</p>
+                                ))}
+                              </div>
+                            )}
                           </>
                         ) : (
                           <>
@@ -2190,7 +2231,7 @@ export default function CantoneseTranscriptionPage() {
                               className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-green-600/20 hover:bg-green-600/30 text-green-400 text-xs transition-colors border border-green-600/20"
                             ><Download className="w-3.5 h-3.5" />下載 .{job.format.toUpperCase()}</a>
                             <button
-                              onClick={() => convSendToTranscribe(job.result!.single!.dataUrl, job.result!.single!.filename)}
+                              onClick={() => convSendToTranscribe(job.result!.single!.dataUrl, job.result!.single!.filename, job.result!.single!.blob)}
                               className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-indigo-600/20 hover:bg-indigo-600/30 text-indigo-400 text-xs transition-colors border border-indigo-600/20"
                             ><Mic className="w-3.5 h-3.5" />轉錄</button>
                           </div>
