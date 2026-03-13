@@ -776,6 +776,11 @@ router.post('/:slug/generate-approved', async (req, res) => {
           );
         } catch (e) {
           console.error(`[presentation-deck] generate-approved failed item ${item.id}:`, e.message);
+          // Reset to 'pending' so the progress bar doesn't block forever and user can retry
+          await pool.query(
+            `UPDATE image_manifests SET status = 'pending', updated_at = NOW() WHERE id = $1`,
+            [item.id]
+          ).catch(() => {});
         }
       }
       console.log(`[presentation-deck] ✅ generate-approved complete: ${slug}`);
@@ -811,7 +816,7 @@ router.get('/:slug/manifest-status', async (req, res) => {
   }
 });
 
-// ─── Gemini image generation (nanobanana) ───────────────────────────────────
+// ─── Gemini image generation ─────────────────────────────────────────────────
 
 async function generateImageWithGemini(prompt) {
   const apiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_AI_API_KEY;
@@ -820,7 +825,8 @@ async function generateImageWithGemini(prompt) {
     return null;
   }
 
-  const model = 'gemini-2.0-flash-preview-image-generation';
+  // gemini-2.5-flash-image (nanobanana) — same model used by photo-booth & tedx
+  const model = 'gemini-2.5-flash-image';
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
 
   const resp = await fetch(url, {
@@ -838,14 +844,27 @@ async function generateImageWithGemini(prompt) {
   }
 
   const data = await resp.json();
-  const parts = data?.candidates?.[0]?.content?.parts || [];
-  const imagePart = parts.find(p => p.inlineData);
-  if (!imagePart) return null;
 
-  return {
-    base64: imagePart.inlineData.data,
-    mimeType: imagePart.inlineData.mimeType || 'image/png',
-  };
+  if (data.error) {
+    throw new Error(`Gemini error: ${data.error.message || JSON.stringify(data.error)}`);
+  }
+
+  const parts = data?.candidates?.[0]?.content?.parts || [];
+  for (const part of parts) {
+    // Handle both camelCase (SDK) and snake_case (REST API) formats
+    const imgData = part.inlineData || part.inline_data;
+    if (imgData?.data) {
+      return {
+        base64: imgData.data,
+        mimeType: imgData.mimeType || imgData.mime_type || 'image/png',
+      };
+    }
+  }
+
+  // Log response for debugging if no image found
+  console.error('[presentation-deck] generateImageWithGemini: no image in response',
+    JSON.stringify({ candidateCount: data.candidates?.length, promptFeedback: data.promptFeedback }, null, 2));
+  return null;
 }
 
 module.exports = router;
