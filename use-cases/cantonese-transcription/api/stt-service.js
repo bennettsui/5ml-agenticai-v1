@@ -83,7 +83,7 @@ function parseV1Response(data) {
 // Uses Gemini 2.0 Flash via the Generative Language API (same key as GEMINI_API_KEY).
 // For files ≤ 15 MB: sends audio inline as base64.
 // For larger files: uploads via the Files API first, then references by URI.
-async function transcribeWithGoogle({ fileBuffer, mimeType, language }) {
+async function transcribeWithGoogle({ fileBuffer, mimeType, language, onProgress }) {
   const apiKey = process.env.GEMINI_API_KEY;
 
   if (!apiKey) {
@@ -104,9 +104,11 @@ async function transcribeWithGoogle({ fileBuffer, mimeType, language }) {
 
   if (fileBuffer.length <= INLINE_LIMIT) {
     // Inline base64
+    onProgress?.(`準備音訊（${(fileBuffer.length / 1024 / 1024).toFixed(1)} MB）...`);
     audioPart = { inline_data: { mime_type: mimeType, data: fileBuffer.toString('base64') } };
   } else {
     // Upload via Files API
+    onProgress?.(`上傳音訊至 Gemini Files API（${(fileBuffer.length / 1024 / 1024).toFixed(1)} MB）...`);
     const initResp = await fetch(`${BASE}/upload/v1beta/files?key=${apiKey}`, {
       method: 'POST',
       headers: {
@@ -139,9 +141,11 @@ async function transcribeWithGoogle({ fileBuffer, mimeType, language }) {
       throw err;
     }
     const fileData = await uploadResp.json();
+    onProgress?.('音訊上傳完成，正在轉錄...');
     audioPart = { file_data: { mime_type: mimeType, file_uri: fileData.file.uri } };
   }
 
+  onProgress?.('正在呼叫 Gemini 2.0 Flash...');
   const genUrl = `${BASE}/v1beta/models/${MODEL}:generateContent?key=${apiKey}`;
   const resp = await fetch(genUrl, {
     method: 'POST',
@@ -166,6 +170,7 @@ async function transcribeWithGoogle({ fileBuffer, mimeType, language }) {
 
   const data = await resp.json();
   const transcript = (data.candidates?.[0]?.content?.parts?.[0]?.text || '').trim();
+  onProgress?.(`轉錄完成（${transcript.length} 字元）`);
   return { provider: 'google-stt', language, transcript, segments: [] };
 }
 
@@ -245,7 +250,7 @@ async function transcribeWithWhisper({ fileBuffer, mimeType, language, filename 
 // ── Main entrypoint ───────────────────────────────────────────────────────────
 // provider: 'whisper' | 'google-stt' | 'auto' (default)
 // Returns: { provider, transcript, segments, language, confidence?, fallbackFrom? }
-async function transcribeAudio({ fileBuffer, mimeType, language, filename, provider }) {
+async function transcribeAudio({ fileBuffer, mimeType, language, filename, provider, onProgress }) {
   const resolved = provider || process.env.STT_PROVIDER || 'auto';
 
   const wantWhisper = resolved === 'whisper' ||
@@ -258,7 +263,8 @@ async function transcribeAudio({ fileBuffer, mimeType, language, filename, provi
       // If Google STT is available, fall back silently
       if (process.env.GEMINI_API_KEY && resolved !== 'whisper') {
         console.warn('[stt-service] Whisper failed, falling back to Google STT:', err.message);
-        const result = await transcribeWithGoogle({ fileBuffer, mimeType, language });
+        onProgress?.('Whisper 失敗，切換至 Gemini...');
+        const result = await transcribeWithGoogle({ fileBuffer, mimeType, language, onProgress });
         return { ...result, fallbackFrom: 'whisper' };
       }
       throw err; // no fallback available, surface the error
@@ -266,7 +272,7 @@ async function transcribeAudio({ fileBuffer, mimeType, language, filename, provi
   }
 
   // Google STT (explicit or auto-fallback when no Whisper URL)
-  return await transcribeWithGoogle({ fileBuffer, mimeType, language });
+  return await transcribeWithGoogle({ fileBuffer, mimeType, language, onProgress });
 }
 
 // ── Available providers check ─────────────────────────────────────────────────

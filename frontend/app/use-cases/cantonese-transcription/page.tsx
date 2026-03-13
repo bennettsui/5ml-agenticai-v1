@@ -596,6 +596,7 @@ export default function CantoneseTranscriptionPage() {
   const [sttProgress, setSttProgress]       = useState<number | null>(null);
   const [sttFileName, setSttFileName]       = useState<string | null>(null);
   const [sttFileSize, setSttFileSize]       = useState<number | null>(null);
+  const [sttLog, setSttLog]                 = useState<string[]>([]);
   const audioInputRef                        = useRef<HTMLInputElement>(null);
   const sttXhrRef                            = useRef<XMLHttpRequest | null>(null);
 
@@ -1006,6 +1007,7 @@ export default function CantoneseTranscriptionPage() {
     setSttProgress(0);
     setSttFileName(file.name);
     setSttFileSize(file.size);
+    setSttLog([]);
 
     const form = new FormData();
     form.append('audio', file);
@@ -1019,10 +1021,39 @@ export default function CantoneseTranscriptionPage() {
       if (e.lengthComputable) setSttProgress(Math.round((e.loaded / e.total) * 100));
     };
     xhr.upload.onload = () => setSttProgress(100);
+
+    // Parse streaming NDJSON progress lines as they arrive
+    let parsedUpTo = 0;
+    xhr.onprogress = () => {
+      const newText = xhr.responseText.slice(parsedUpTo);
+      parsedUpTo = xhr.responseText.length;
+      const lines = newText.split('\n');
+      const logLines: string[] = [];
+      for (const line of lines) {
+        if (!line.trim()) continue;
+        try {
+          const obj = JSON.parse(line) as Record<string, unknown>;
+          if (obj.type === 'log') logLines.push(obj.message as string);
+        } catch { /* incomplete line, will retry on next progress */ }
+      }
+      if (logLines.length) setSttLog(prev => [...prev, ...logLines]);
+    };
+
     xhr.onload = () => {
       sttXhrRef.current = null;
+      // Parse final NDJSON result (last 'done' or 'error' entry)
       let data: Record<string, unknown> = {};
-      try { data = JSON.parse(xhr.responseText); } catch { /* ignore */ }
+      const lines = xhr.responseText.split('\n').filter(l => l.trim());
+      for (const line of lines) {
+        try {
+          const obj = JSON.parse(line) as Record<string, unknown>;
+          if (obj.type === 'done' || obj.type === 'error') data = obj;
+        } catch { /* ignore */ }
+      }
+      if (!data.ok && lines.length === 1) {
+        // Fallback: plain JSON error from early validation
+        try { data = JSON.parse(xhr.responseText); } catch { /* ignore */ }
+      }
       if (xhr.status < 200 || xhr.status >= 300 || !data.ok) {
         setSttError((data.error as string) ?? `轉錄失敗 (HTTP ${xhr.status})`);
       } else {
@@ -1292,6 +1323,13 @@ export default function CantoneseTranscriptionPage() {
                           <>
                             <Loader2 className={`w-6 h-6 animate-spin ${sttEngine === 'whisper' ? 'text-violet-400' : 'text-blue-400'}`} />
                             <span className="text-xs text-slate-400">轉錄中，請稍候…</span>
+                            {sttLog.length > 0 && (
+                              <div className="w-full max-h-28 overflow-y-auto space-y-0.5 px-2">
+                                {sttLog.map((msg, i) => (
+                                  <p key={i} className={`text-[10px] text-center font-mono ${i === sttLog.length - 1 ? 'text-slate-400' : 'text-slate-600'}`}>{msg}</p>
+                                ))}
+                              </div>
+                            )}
                           </>
                         ) : (
                           <>

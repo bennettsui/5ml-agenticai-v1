@@ -842,10 +842,10 @@ function mergeChunkResults(chunkResults) {
 }
 
 // Top-level helper: probes duration, auto-splits if needed, transcribes, merges.
-async function autoTranscribeBuffer({ fileBuffer, mimeType, language, filename, provider }) {
+async function autoTranscribeBuffer({ fileBuffer, mimeType, language, filename, provider, onProgress }) {
   // Small files (< 1 MB) are almost always < 30s — skip probing overhead
   if (fileBuffer.length < 1024 * 1024) {
-    return sttService.transcribeAudio({ fileBuffer, mimeType, language, filename, provider });
+    return sttService.transcribeAudio({ fileBuffer, mimeType, language, filename, provider, onProgress });
   }
 
   // Write to tmp so ffprobe can read it
@@ -856,18 +856,21 @@ async function autoTranscribeBuffer({ fileBuffer, mimeType, language, filename, 
 
   let duration;
   try {
+    onProgress?.('探測音訊時長...');
     duration = await probeDurationFromPath(tmpPath);
+    if (duration) onProgress?.(`音訊時長：${Math.round(duration)}s`);
   } catch { /* ignore */ }
 
   if (!duration || duration <= CHUNK_SECS + OVERLAP_SECS) {
     // Short enough to transcribe in one shot
     require('fs').unlink(tmpPath, () => {});
-    return sttService.transcribeAudio({ fileBuffer, mimeType, language, filename, provider });
+    return sttService.transcribeAudio({ fileBuffer, mimeType, language, filename, provider, onProgress });
   }
 
   console.log(`[ct-transcribe] Long audio detected: ${Math.round(duration)}s — auto-segmenting`);
 
   const numChunks  = Math.ceil(duration / CHUNK_SECS);
+  onProgress?.(`長音訊（${Math.round(duration)}s）分成 ${numChunks} 個片段轉錄...`);
   const chunkResults = [];
   let   usedProvider = null;
 
@@ -879,6 +882,7 @@ async function autoTranscribeBuffer({ fileBuffer, mimeType, language, filename, 
       const innerStart = i === 0 ? 0 : OVERLAP_SECS;
       const innerEnd   = i === numChunks - 1 ? chunkDur : chunkDur - OVERLAP_SECS;
 
+      onProgress?.(`轉錄片段 ${i + 1} / ${numChunks}...`);
       const chunkBuf = await extractChunk(tmpPath, absStart, chunkDur);
       const result   = await sttService.transcribeAudio({
         fileBuffer: chunkBuf,
@@ -886,6 +890,7 @@ async function autoTranscribeBuffer({ fileBuffer, mimeType, language, filename, 
         language,
         filename:   `chunk${i + 1}.wav`,
         provider,
+        onProgress,
       });
       if (result.fallbackFrom) {
         console.warn(`[ct-transcribe] Chunk ${i + 1}: used ${result.provider} (fallback from ${result.fallbackFrom})`);
@@ -922,6 +927,17 @@ router.post('/transcribe', upload.single('audio'), async (req, res) => {
   const language = req.body.language || 'yue-Hant-HK';
   const provider = req.body.provider || 'auto';
 
+  // Stream NDJSON progress events back to the client
+  res.setHeader('Content-Type', 'application/x-ndjson');
+  res.setHeader('Cache-Control', 'no-cache');
+  res.setHeader('X-Accel-Buffering', 'no'); // disable nginx buffering
+  if (res.flushHeaders) res.flushHeaders();
+
+  const push = (obj) => { try { res.write(JSON.stringify(obj) + '\n'); } catch {} };
+  const onProgress = (message) => push({ type: 'log', message });
+
+  onProgress(`收到音訊（${(req.file.size / 1024 / 1024).toFixed(1)} MB，${mimeType}）`);
+
   try {
     const result = await autoTranscribeBuffer({
       fileBuffer: req.file.buffer,
@@ -929,6 +945,7 @@ router.post('/transcribe', upload.single('audio'), async (req, res) => {
       language,
       filename: req.file.originalname,
       provider,
+      onProgress,
     });
 
     if (result.fallbackFrom) {
@@ -938,11 +955,13 @@ router.post('/transcribe', upload.single('audio'), async (req, res) => {
       console.log(`[ct-transcribe] Merged ${result.segmentCount} segments → ${result.transcript?.length ?? 0} chars`);
     }
 
-    return res.json({ ok: true, ...result });
+    push({ type: 'done', ok: true, ...result });
+    return res.end();
   } catch (err) {
     if (err.name === 'TimeoutError' || err.name === 'AbortError') {
       console.error('[ct-transcribe] STT timed out');
-      return res.status(504).json({ ok: false, error_code: 'CT-018', error: '轉錄超時，請嘗試較短的音訊片段' });
+      push({ type: 'error', ok: false, error_code: 'CT-018', error: '轉錄超時，請嘗試較短的音訊片段' });
+      return res.end();
     }
     const errorCode = err.code || 'CT-013';
     const errorMsg  = db.ERROR_MESSAGES[errorCode] || err.message;
@@ -952,7 +971,8 @@ router.post('/transcribe', upload.single('audio'), async (req, res) => {
       errorMessage: errorMsg,
       context: { detail: err.message, provider, language, mime: mimeType },
     });
-    return res.status(502).json({ ok: false, error_code: errorCode, error: `${errorMsg}：${err.message}` });
+    push({ type: 'error', ok: false, error_code: errorCode, error: `${errorMsg}：${err.message}` });
+    return res.end();
   }
 });
 
