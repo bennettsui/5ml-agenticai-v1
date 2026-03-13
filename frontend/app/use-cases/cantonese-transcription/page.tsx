@@ -607,7 +607,7 @@ export default function CantoneseTranscriptionPage() {
     id: string; filename: string; size: number; format: ConvFormat;
     startTime: number; endTime: number; splitChunks: boolean; chunkLen: number;
     status: ConvStatus; error?: string; progress?: number;
-    result?: { single?: { dataUrl: string; filename: string }; chunks?: ConvChunk[] };
+    result?: { single?: { dataUrl: string; filename: string; blob?: Blob }; chunks?: ConvChunk[] };
     createdAt: number;
   }
   const [convFile, setConvFile]             = useState<File | null>(null);
@@ -929,9 +929,10 @@ export default function CantoneseTranscriptionPage() {
           // Single file — create object URL for download
           const blob = new Blob([buf], { type: contentType });
           const dataUrl = URL.createObjectURL(blob);
-          const filename = `converted.${convFormat}`;
+          const baseName = convFile.name.replace(/\.[^.]+$/, '');
+          const filename = `${baseName}.${convFormat}`;
           setConvJobs(prev => prev.map(j => j.id === jobId
-            ? { ...j, status: 'done', progress: 100, result: { single: { dataUrl, filename } } }
+            ? { ...j, status: 'done', progress: 100, result: { single: { dataUrl, filename, blob } } }
             : j));
         } else {
           // JSON response (chunks mode or error)
@@ -975,16 +976,18 @@ export default function CantoneseTranscriptionPage() {
     setConvActiveJob(null);
   }
 
-  function convSendToTranscribe(dataUrl: string, filename: string) {
-    // Convert data URL back to File and send to STT
+  function convSendToTranscribe(dataUrl: string, filename: string, blob?: Blob) {
+    const go = (b: Blob) => {
+      const file = new File([b], filename, { type: b.type });
+      setSttEngine('google-stt');
+      setPageTab('analyze');
+      setTimeout(() => handleSttUpload(file), 100);
+    };
+    if (blob) { go(blob); return; }
     fetch(dataUrl)
       .then(r => r.blob())
-      .then(blob => {
-        const file = new File([blob], filename, { type: blob.type });
-        setSttEngine('google-stt');
-        setPageTab('analyze');
-        setTimeout(() => handleSttUpload(file), 100);
-      });
+      .then(go)
+      .catch(err => console.error('[convSendToTranscribe]', err));
   }
 
   function cancelSttUpload() {
@@ -2190,7 +2193,7 @@ export default function CantoneseTranscriptionPage() {
                               className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-green-600/20 hover:bg-green-600/30 text-green-400 text-xs transition-colors border border-green-600/20"
                             ><Download className="w-3.5 h-3.5" />下載 .{job.format.toUpperCase()}</a>
                             <button
-                              onClick={() => convSendToTranscribe(job.result!.single!.dataUrl, job.result!.single!.filename)}
+                              onClick={() => convSendToTranscribe(job.result!.single!.dataUrl, job.result!.single!.filename, job.result!.single!.blob)}
                               className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-indigo-600/20 hover:bg-indigo-600/30 text-indigo-400 text-xs transition-colors border border-indigo-600/20"
                             ><Mic className="w-3.5 h-3.5" />轉錄</button>
                           </div>

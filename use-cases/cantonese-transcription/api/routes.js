@@ -993,6 +993,7 @@ router.post('/convert', uploadConvert.single('file'), async (req, res) => {
 
   const inPath     = req.file.path;  // already on disk via diskStorage
   const format     = ['wav', 'mp3', 'm4a'].includes(req.body.format) ? req.body.format : 'mp3';
+  const baseName   = (req.file.originalname || 'audio').replace(/\.[^.]+$/, '');
   const startTime  = parseFloat(req.body.startTime) || 0;
   const endTime    = parseFloat(req.body.endTime)   || 0;
   const splitChunks = req.body.splitChunks === 'true';
@@ -1015,7 +1016,7 @@ router.post('/convert', uploadConvert.single('file'), async (req, res) => {
       );
       const stat = fs.statSync(outPath);
       res.setHeader('Content-Type', FORMAT_MIME[format]);
-      res.setHeader('Content-Disposition', `attachment; filename="converted.${format}"`);
+      res.setHeader('Content-Disposition', `attachment; filename="${baseName}.${format}"`);
       res.setHeader('Content-Length', stat.size);
       fs.createReadStream(outPath).pipe(res).on('finish', cleanup).on('error', cleanup);
       return;
@@ -1045,7 +1046,7 @@ router.post('/convert', uploadConvert.single('file'), async (req, res) => {
       const buf = fs.readFileSync(outPath);
       chunks.push({
         index:    i + 1,
-        filename: `chunk${i + 1}.${format}`,
+        filename: `${baseName}-part${i + 1}.${format}`,
         start:    Math.round(cStart * 10) / 10,
         end:      Math.round((cStart + cLen) * 10) / 10,
         dataUrl:  `data:${FORMAT_MIME[format]};base64,${buf.toString('base64')}`,
