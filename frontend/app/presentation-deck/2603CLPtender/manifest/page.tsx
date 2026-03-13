@@ -127,12 +127,13 @@ export default function ManifestPage() {
 
   async function patchItem(id: string, patch: Partial<Pick<ManifestItem, 'status' | 'override_prompt' | 'priority' | 'notes'>>) {
     const prevItem = items.find(it => it.id === id);
-    const res = await fetch(`/api/presentation-deck/images/${id}`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(patch),
-    });
-    if (res.ok) {
+    try {
+      const res = await fetch(`/api/presentation-deck/images/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(patch),
+      });
+      if (!res.ok) return; // silently skip on server error
       const updated = await res.json();
       setItems(prev => prev.map(it => it.id === id ? { ...it, ...updated } : it));
       // Keep summary counts in sync so button counts update immediately
@@ -143,6 +144,8 @@ export default function ManifestPage() {
           [patch.status]: (prev[patch.status] || 0) + 1,
         }));
       }
+    } catch {
+      // Network error — skip silently, item stays unchanged
     }
   }
 
@@ -280,7 +283,7 @@ export default function ManifestPage() {
           <div className="space-y-1.5">
             <div className="text-xs text-slate-600 mb-3">{total} items</div>
             {items.map(item => {
-              const StatusIcon = STATUS_ICON[item.status];
+              const StatusIcon = STATUS_ICON[item.status] ?? Clock;
               const isExpanded = expandedId === item.id;
               const activePrompt = item.override_prompt || item.original_prompt;
 
