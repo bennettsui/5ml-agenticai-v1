@@ -9450,6 +9450,345 @@ app.post('/api/print-finance/allocate-overhead', async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
+// ─────────────────────────────────────────────────────────────────────────────
+// QR & Barcode Generator Module
+// ─────────────────────────────────────────────────────────────────────────────
+{
+  const QRCode = require('qrcode');
+  const bwipjs = require('bwip-js');
+  const bcrypt = require('bcryptjs');
+  const jwt = require('jsonwebtoken');
+  const sharp = require('sharp');
+
+  const QR_JWT_SECRET = process.env.QR_JWT_SECRET || process.env.JWT_SECRET || 'qr-generator-secret-change-in-prod';
+  const QR_FREE_DAILY_LIMIT = 10;
+
+  // ── Middleware ──────────────────────────────────────────────────────────────
+  function qrAuth(req, res, next) {
+    const auth = req.headers.authorization;
+    if (!auth || !auth.startsWith('Bearer ')) return res.status(401).json({ error: 'Unauthorised' });
+    try {
+      req.qrUser = jwt.verify(auth.slice(7), QR_JWT_SECRET);
+      next();
+    } catch {
+      res.status(401).json({ error: 'Invalid or expired token' });
+    }
+  }
+
+  function qrAuthOptional(req, res, next) {
+    const auth = req.headers.authorization;
+    if (auth && auth.startsWith('Bearer ')) {
+      try { req.qrUser = jwt.verify(auth.slice(7), QR_JWT_SECRET); } catch {}
+    }
+    next();
+  }
+
+  // ── DB init (called from server.listen) ────────────────────────────────────
+  async function initQrDb() {
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS qr_users (
+        id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        email       VARCHAR(255) UNIQUE NOT NULL,
+        password_hash VARCHAR(255) NOT NULL,
+        name        VARCHAR(255),
+        plan        VARCHAR(50) DEFAULT 'free',
+        credits     INTEGER DEFAULT 0,
+        free_gens_today INTEGER DEFAULT 0,
+        free_reset_date DATE DEFAULT CURRENT_DATE,
+        created_at  TIMESTAMPTZ DEFAULT NOW(),
+        updated_at  TIMESTAMPTZ DEFAULT NOW()
+      )
+    `);
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS qr_generations (
+        id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        user_id     UUID REFERENCES qr_users(id) ON DELETE SET NULL,
+        type        VARCHAR(50) NOT NULL,
+        content     TEXT NOT NULL,
+        options     JSONB DEFAULT '{}',
+        credits_used INTEGER DEFAULT 0,
+        created_at  TIMESTAMPTZ DEFAULT NOW()
+      )
+    `);
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS qr_topups (
+        id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        user_id     UUID REFERENCES qr_users(id) ON DELETE CASCADE,
+        credits     INTEGER NOT NULL,
+        amount_usd  DECIMAL(10,2) NOT NULL,
+        payment_ref VARCHAR(255),
+        status      VARCHAR(50) DEFAULT 'completed',
+        created_at  TIMESTAMPTZ DEFAULT NOW()
+      )
+    `);
+    console.log('✅ QR Generator tables ready');
+  }
+
+  // ── Helpers ─────────────────────────────────────────────────────────────────
+  async function getOrResetFreeGens(userId) {
+    const r = await pool.query(`SELECT free_gens_today, free_reset_date FROM qr_users WHERE id=$1`, [userId]);
+    if (!r.rows[0]) return 0;
+    const { free_gens_today, free_reset_date } = r.rows[0];
+    const today = new Date().toISOString().slice(0, 10);
+    if (free_reset_date < today) {
+      await pool.query(`UPDATE qr_users SET free_gens_today=0, free_reset_date=$1, updated_at=NOW() WHERE id=$2`, [today, userId]);
+      return 0;
+    }
+    return free_gens_today;
+  }
+
+  function calcCreditCost(opts) {
+    let cost = 0;
+    if (opts.logoData) cost += 2;
+    if (opts.format === 'svg') cost += 1;
+    if (opts.size > 500) cost += 1;
+    return cost;
+  }
+
+  async function generateQR(content, opts = {}) {
+    const { size = 300, fgColor = '#000000', bgColor = '#ffffff', errorLevel = 'M', format = 'png', logoData } = opts;
+    if (format === 'svg') {
+      const svg = await QRCode.toString(content, {
+        type: 'svg', width: size,
+        color: { dark: fgColor, light: bgColor },
+        errorCorrectionLevel: errorLevel,
+      });
+      return { data: Buffer.from(svg).toString('base64'), mimeType: 'image/svg+xml', ext: 'svg' };
+    }
+    let buf = await QRCode.toBuffer(content, {
+      width: size,
+      color: { dark: fgColor, light: bgColor },
+      errorCorrectionLevel: errorLevel,
+    });
+    if (logoData) {
+      const logoBase64 = logoData.includes(',') ? logoData.split(',')[1] : logoData;
+      const logoBuf = Buffer.from(logoBase64, 'base64');
+      const logoSize = Math.floor(size * 0.22);
+      const resizedLogo = await sharp(logoBuf).resize(logoSize, logoSize, { fit: 'contain', background: { r: 255, g: 255, b: 255, alpha: 1 } }).png().toBuffer();
+      buf = await sharp(buf).composite([{ input: resizedLogo, gravity: 'centre' }]).png().toBuffer();
+    }
+    return { data: buf.toString('base64'), mimeType: 'image/png', ext: 'png' };
+  }
+
+  const BWIP_TYPE_MAP = {
+    ean13: 'ean13', ean8: 'ean8', upca: 'upca', code128: 'code128',
+    code39: 'code39', qr: 'qrcode',
+  };
+
+  async function generateBarcode(type, content, opts = {}) {
+    const { height = 80, scale = 3, showText = true, fgColor = '#000000', bgColor = '#ffffff' } = opts;
+    const fg = fgColor.replace('#', '');
+    const bg = bgColor.replace('#', '');
+    const bcid = BWIP_TYPE_MAP[type] || 'code128';
+    const buf = await bwipjs.toBuffer({
+      bcid, text: content,
+      scale, height: Math.floor(height / 4),
+      includetext: showText,
+      textxalign: 'center',
+      barcolor: fg,
+      backgroundcolor: bg,
+    });
+    return { data: buf.toString('base64'), mimeType: 'image/png', ext: 'png' };
+  }
+
+  // ── Auth Endpoints ──────────────────────────────────────────────────────────
+  app.post('/api/qr/auth/register', async (req, res) => {
+    const { email, password, name } = req.body;
+    if (!email || !password) return res.status(400).json({ error: 'Email and password required' });
+    if (password.length < 8) return res.status(400).json({ error: 'Password must be at least 8 characters' });
+    try {
+      const hash = await bcrypt.hash(password, 12);
+      const r = await pool.query(
+        `INSERT INTO qr_users (email, password_hash, name) VALUES ($1,$2,$3) RETURNING id, email, name, plan, credits, free_gens_today`,
+        [email.toLowerCase().trim(), hash, name || '']
+      );
+      const user = r.rows[0];
+      const token = jwt.sign({ id: user.id, email: user.email }, QR_JWT_SECRET, { expiresIn: '30d' });
+      res.json({ token, user: { id: user.id, email: user.email, name: user.name, plan: user.plan, credits: user.credits, freeGensToday: user.free_gens_today } });
+    } catch (err) {
+      if (err.code === '23505') return res.status(409).json({ error: 'Email already registered' });
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.post('/api/qr/auth/login', async (req, res) => {
+    const { email, password } = req.body;
+    if (!email || !password) return res.status(400).json({ error: 'Email and password required' });
+    try {
+      const r = await pool.query(`SELECT * FROM qr_users WHERE email=$1`, [email.toLowerCase().trim()]);
+      const user = r.rows[0];
+      if (!user) return res.status(401).json({ error: 'Invalid email or password' });
+      const ok = await bcrypt.compare(password, user.password_hash);
+      if (!ok) return res.status(401).json({ error: 'Invalid email or password' });
+      const freeGens = await getOrResetFreeGens(user.id);
+      const token = jwt.sign({ id: user.id, email: user.email }, QR_JWT_SECRET, { expiresIn: '30d' });
+      res.json({ token, user: { id: user.id, email: user.email, name: user.name, plan: user.plan, credits: user.credits, freeGensToday: freeGens } });
+    } catch (err) { res.status(500).json({ error: err.message }); }
+  });
+
+  app.get('/api/qr/auth/me', qrAuth, async (req, res) => {
+    try {
+      const r = await pool.query(`SELECT id, email, name, plan, credits, free_gens_today, free_reset_date FROM qr_users WHERE id=$1`, [req.qrUser.id]);
+      if (!r.rows[0]) return res.status(404).json({ error: 'User not found' });
+      const user = r.rows[0];
+      const freeGens = await getOrResetFreeGens(user.id);
+      res.json({ id: user.id, email: user.email, name: user.name, plan: user.plan, credits: user.credits, freeGensToday: freeGens, freeLimit: QR_FREE_DAILY_LIMIT });
+    } catch (err) { res.status(500).json({ error: err.message }); }
+  });
+
+  // ── Generate Endpoint ───────────────────────────────────────────────────────
+  app.post('/api/qr/generate', qrAuthOptional, async (req, res) => {
+    const { type = 'qr', content, size = 300, fgColor = '#000000', bgColor = '#ffffff',
+            errorLevel = 'M', format = 'png', logoData, showText = true, height = 80 } = req.body;
+    if (!content || !content.trim()) return res.status(400).json({ error: 'Content is required' });
+
+    const isQR = type === 'qr';
+    const premiumCost = calcCreditCost({ logoData, format, size });
+    const isFreeGen = premiumCost === 0;
+
+    // Unauthenticated: only basic QR/barcode, max 300px, no logo
+    if (!req.qrUser) {
+      if (logoData) return res.status(402).json({ error: 'Logo embedding requires an account', code: 'LOGIN_REQUIRED' });
+      if (format === 'svg') return res.status(402).json({ error: 'SVG export requires an account', code: 'LOGIN_REQUIRED' });
+      const capSize = Math.min(size, 300);
+      try {
+        const result = isQR
+          ? await generateQR(content.trim(), { size: capSize, fgColor, bgColor, errorLevel, format: 'png' })
+          : await generateBarcode(type, content.trim(), { height, scale: 3, showText, fgColor, bgColor });
+        return res.json({ ...result, creditsUsed: 0, freeGen: true });
+      } catch (err) { return res.status(400).json({ error: err.message }); }
+    }
+
+    // Authenticated user
+    const freeGens = await getOrResetFreeGens(req.qrUser.id);
+    let creditsUsed = premiumCost;
+    let isFree = false;
+
+    if (isFreeGen && freeGens < QR_FREE_DAILY_LIMIT) {
+      // Use free allowance
+      isFree = true;
+      creditsUsed = 0;
+    } else if (creditsUsed > 0 || freeGens >= QR_FREE_DAILY_LIMIT) {
+      if (isFreeGen) creditsUsed = 1; // beyond free limit costs 1 credit
+      // Check credits
+      const ur = await pool.query(`SELECT credits FROM qr_users WHERE id=$1`, [req.qrUser.id]);
+      if (ur.rows[0].credits < creditsUsed) {
+        return res.status(402).json({ error: 'Insufficient credits', code: 'INSUFFICIENT_CREDITS', creditsNeeded: creditsUsed, creditsAvailable: ur.rows[0].credits });
+      }
+    }
+
+    try {
+      const result = isQR
+        ? await generateQR(content.trim(), { size, fgColor, bgColor, errorLevel, format, logoData })
+        : await generateBarcode(type, content.trim(), { height, scale: Math.max(2, Math.floor(size / 100)), showText, fgColor, bgColor });
+
+      // Deduct credits / increment free count
+      if (isFree) {
+        await pool.query(`UPDATE qr_users SET free_gens_today=free_gens_today+1, updated_at=NOW() WHERE id=$1`, [req.qrUser.id]);
+      } else {
+        await pool.query(`UPDATE qr_users SET credits=credits-$1, updated_at=NOW() WHERE id=$2`, [creditsUsed, req.qrUser.id]);
+      }
+
+      // Log generation
+      await pool.query(
+        `INSERT INTO qr_generations (user_id, type, content, options, credits_used) VALUES ($1,$2,$3,$4,$5)`,
+        [req.qrUser.id, type, content.trim(), JSON.stringify({ size, fgColor, bgColor, format, hasLogo: !!logoData }), creditsUsed]
+      );
+
+      const updatedUser = await pool.query(`SELECT credits, free_gens_today FROM qr_users WHERE id=$1`, [req.qrUser.id]);
+      res.json({ ...result, creditsUsed, freeGen: isFree, credits: updatedUser.rows[0].credits, freeGensToday: updatedUser.rows[0].free_gens_today });
+    } catch (err) { res.status(400).json({ error: err.message }); }
+  });
+
+  // ── Batch Generate ──────────────────────────────────────────────────────────
+  app.post('/api/qr/batch', qrAuth, async (req, res) => {
+    const { items, type = 'qr', size = 300, fgColor = '#000000', bgColor = '#ffffff',
+            errorLevel = 'M', showText = true, height = 80 } = req.body;
+    if (!Array.isArray(items) || items.length === 0) return res.status(400).json({ error: 'Items array required' });
+    if (items.length > 100) return res.status(400).json({ error: 'Max 100 items per batch' });
+
+    const creditsNeeded = items.length;
+    const ur = await pool.query(`SELECT credits FROM qr_users WHERE id=$1`, [req.qrUser.id]);
+    if (ur.rows[0].credits < creditsNeeded) {
+      return res.status(402).json({ error: 'Insufficient credits', code: 'INSUFFICIENT_CREDITS', creditsNeeded, creditsAvailable: ur.rows[0].credits });
+    }
+
+    const results = [];
+    for (const item of items) {
+      if (!item || !item.trim()) { results.push({ content: item, error: 'Empty content' }); continue; }
+      try {
+        const isQR = type === 'qr';
+        const result = isQR
+          ? await generateQR(item.trim(), { size, fgColor, bgColor, errorLevel })
+          : await generateBarcode(type, item.trim(), { height, scale: 3, showText, fgColor, bgColor });
+        results.push({ content: item, ...result });
+      } catch (err) {
+        results.push({ content: item, error: err.message });
+      }
+    }
+
+    const successCount = results.filter(r => !r.error).length;
+    await pool.query(`UPDATE qr_users SET credits=credits-$1, updated_at=NOW() WHERE id=$2`, [successCount, req.qrUser.id]);
+    await pool.query(
+      `INSERT INTO qr_generations (user_id, type, content, options, credits_used) VALUES ($1,$2,$3,$4,$5)`,
+      [req.qrUser.id, `batch_${type}`, `batch:${items.length}`, JSON.stringify({ size, fgColor, bgColor }), successCount]
+    );
+
+    const updatedUser = await pool.query(`SELECT credits FROM qr_users WHERE id=$1`, [req.qrUser.id]);
+    res.json({ results, creditsUsed: successCount, credits: updatedUser.rows[0].credits });
+  });
+
+  // ── History ─────────────────────────────────────────────────────────────────
+  app.get('/api/qr/history', qrAuth, async (req, res) => {
+    try {
+      const r = await pool.query(
+        `SELECT id, type, content, options, credits_used, created_at FROM qr_generations WHERE user_id=$1 ORDER BY created_at DESC LIMIT 50`,
+        [req.qrUser.id]
+      );
+      res.json({ history: r.rows });
+    } catch (err) { res.status(500).json({ error: err.message }); }
+  });
+
+  // ── Topup Packages ──────────────────────────────────────────────────────────
+  app.get('/api/qr/topup/packages', (req, res) => {
+    res.json({ packages: [
+      { id: 'starter', name: 'Starter', credits: 50,   price: 5.00,  popular: false, description: 'Great for personal use' },
+      { id: 'popular', name: 'Popular', credits: 200,  price: 15.00, popular: true,  description: 'Best value for small teams' },
+      { id: 'business',name: 'Business',credits: 500,  price: 30.00, popular: false, description: 'For growing businesses' },
+      { id: 'enterprise',name:'Enterprise',credits:2000,price: 99.00, popular: false, description: 'Unlimited scale' },
+    ]});
+  });
+
+  // ── Simulate Topup (replace with Stripe later) ─────────────────────────────
+  app.post('/api/qr/topup', qrAuth, async (req, res) => {
+    const PACKAGES = { starter: { credits: 50, price: 5.00 }, popular: { credits: 200, price: 15.00 }, business: { credits: 500, price: 30.00 }, enterprise: { credits: 2000, price: 99.00 } };
+    const { packageId } = req.body;
+    const pkg = PACKAGES[packageId];
+    if (!pkg) return res.status(400).json({ error: 'Invalid package' });
+    try {
+      const ref = `SIM-${Date.now()}`;
+      await pool.query(`INSERT INTO qr_topups (user_id, credits, amount_usd, payment_ref) VALUES ($1,$2,$3,$4)`, [req.qrUser.id, pkg.credits, pkg.price, ref]);
+      await pool.query(`UPDATE qr_users SET credits=credits+$1, updated_at=NOW() WHERE id=$2`, [pkg.credits, req.qrUser.id]);
+      const ur = await pool.query(`SELECT credits FROM qr_users WHERE id=$1`, [req.qrUser.id]);
+      res.json({ success: true, creditsAdded: pkg.credits, totalCredits: ur.rows[0].credits, ref });
+    } catch (err) { res.status(500).json({ error: err.message }); }
+  });
+
+  // Register DB init
+  const _origListen = server.listen.bind(server);
+  if (!global.__qrDbInitRegistered) {
+    global.__qrDbInitRegistered = true;
+    // Init tables on startup (attached to pool ready)
+    setImmediate(async () => {
+      if (process.env.DATABASE_URL) {
+        try { await initQrDb(); } catch (e) { console.error('⚠️ QR DB init failed:', e.message); }
+      }
+    });
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+
 const errorHandler = (err, req, res, next) => {
   const status = err.status || err.statusCode || 500;
   console.error('❌ Unhandled error:', err.message || err);
