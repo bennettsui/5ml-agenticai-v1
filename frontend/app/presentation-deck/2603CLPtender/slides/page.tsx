@@ -728,6 +728,8 @@ function SlidesPresenter() {
 
   useEffect(() => {
     const handleKey = (e: KeyboardEvent) => {
+      const tag = (e.target as HTMLElement)?.tagName;
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || (e.target as HTMLElement)?.isContentEditable) return;
       if (e.key === 'ArrowRight' || e.key === 'ArrowDown' || e.key === ' ') goTo(currentIndex + 1);
       if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') goTo(currentIndex - 1);
       if (e.key === 'Escape') { setShowThumbnails(false); setShowAI(false); }
