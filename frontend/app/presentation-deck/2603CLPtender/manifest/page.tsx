@@ -94,6 +94,11 @@ export default function ManifestPage() {
         setGenDone(newDone);
         setSummary(data.summary || {});
 
+        // Refresh item list every 3 polls (~12 s) so thumbnails appear live
+        if (pollCountRef.current % 3 === 0) {
+          fetchManifest();
+        }
+
         const allDone = approvedNow === 0 || pollCountRef.current >= 150;
         if (allDone) {
           clearInterval(id);
@@ -101,7 +106,7 @@ export default function ManifestPage() {
           setGenDone(genQueued);
           setGenState('ok');
           setGenMsg(`${newDone} image${newDone !== 1 ? 's' : ''} generated`);
-          fetchManifest();   // refresh list to show thumbnails + 'generated' badges
+          fetchManifest();   // final refresh to show all thumbnails
         }
       } catch { /* ignore transient network errors */ }
     }, 4000);
@@ -405,6 +410,17 @@ export default function ManifestPage() {
                       <p className="text-xs text-slate-500 line-clamp-1">{activePrompt}</p>
                     </div>
 
+                    {/* Generated thumbnail */}
+                    {item.status === 'generated' && item.image_url && (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        src={item.image_url}
+                        alt=""
+                        className="w-14 h-9 rounded object-cover border border-blue-500/30 shrink-0"
+                        onMouseDown={e => e.stopPropagation()}
+                      />
+                    )}
+
                     {/* Priority badge */}
                     {item.priority === 'high' && (
                       <span className="text-xs px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-400 border border-amber-500/20 shrink-0">
@@ -517,12 +533,24 @@ export default function ManifestPage() {
                           {/* Generated image preview */}
                           {item.image_url && item.status === 'generated' && (
                             <div>
-                              <label className="block text-xs text-slate-500 mb-1.5 font-medium">Generated Image</label>
+                              <div className="flex items-center justify-between mb-1.5">
+                                <label className="text-xs text-slate-500 font-medium">Generated Image</label>
+                                <a
+                                  href={item.image_url}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  className="text-[10px] text-blue-400 hover:text-blue-300 transition-colors"
+                                  onMouseDown={e => e.stopPropagation()}
+                                >
+                                  open full size ↗
+                                </a>
+                              </div>
                               {/* eslint-disable-next-line @next/next/no-img-element */}
                               <img
                                 src={item.image_url}
                                 alt={item.slide_title}
-                                className="rounded-lg border border-slate-700/50 max-h-40 object-cover w-full"
+                                className="rounded-lg border border-blue-500/20 w-full object-cover"
+                                style={{ maxHeight: '280px' }}
                               />
                             </div>
                           )}
