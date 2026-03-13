@@ -1,0 +1,398 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>EventFlow — Check-in Kiosk</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --bg: #0a0e1a; --surface: #111827; --surface2: #1e293b;
+    --border: rgba(255,255,255,0.08); --amber: #f59e0b;
+    --green: #22c55e; --red: #ef4444; --text: #f1f5f9;
+    --muted: #64748b; --sub: #94a3b8;
+  }
+  html, body { height: 100%; background: var(--bg); color: var(--text); font-family: -apple-system, 'Helvetica Neue', Arial, sans-serif; }
+  /* ── Login ── */
+  #login-screen { display:flex; align-items:center; justify-content:center; min-height:100vh; padding:24px; }
+  .login-card { background:var(--surface); border:1px solid var(--border); border-radius:20px; padding:48px 40px; width:100%; max-width:420px; text-align:center; }
+  .login-card h1 { font-size:28px; font-weight:800; letter-spacing:-0.5px; margin-bottom:8px; }
+  .login-card p { color:var(--sub); font-size:15px; margin-bottom:32px; }
+  .field { text-align:left; margin-bottom:16px; }
+  .field label { display:block; font-size:12px; font-weight:600; color:var(--muted); text-transform:uppercase; letter-spacing:0.5px; margin-bottom:6px; }
+  .field input, .field select { width:100%; padding:12px 16px; background:var(--surface2); border:1px solid var(--border); border-radius:10px; color:var(--text); font-size:15px; outline:none; transition:border .2s; }
+  .field input:focus, .field select:focus { border-color:var(--amber); }
+  .btn { width:100%; padding:14px; background:var(--amber); color:#0a0e1a; font-weight:700; font-size:15px; border:none; border-radius:10px; cursor:pointer; transition:opacity .2s; }
+  .btn:hover { opacity:.9; } .btn:disabled { opacity:.5; cursor:not-allowed; }
+  .error-msg { color:var(--red); font-size:13px; margin-top:12px; min-height:20px; }
+
+  /* ── Kiosk ── */
+  #kiosk-screen { display:none; height:100vh; display:none; flex-direction:column; }
+  .kiosk-header { display:flex; align-items:center; justify-content:space-between; padding:16px 24px; background:var(--surface); border-bottom:1px solid var(--border); }
+  .kiosk-event-name { font-size:18px; font-weight:700; }
+  .kiosk-stats { display:flex; gap:16px; font-size:13px; color:var(--sub); }
+  .kiosk-stat strong { color:var(--amber); font-size:16px; }
+  .kiosk-body { display:flex; flex:1; overflow:hidden; }
+
+  /* Left: camera + search */
+  .kiosk-left { flex:1; display:flex; flex-direction:column; padding:24px; gap:16px; min-width:0; }
+  .tabs { display:flex; gap:8px; }
+  .tab { padding:8px 20px; border-radius:8px; font-size:14px; font-weight:600; cursor:pointer; border:1px solid var(--border); color:var(--sub); transition:.2s; }
+  .tab.active { background:var(--amber); color:#0a0e1a; border-color:var(--amber); }
+  #camera-pane, #search-pane { display:none; flex:1; flex-direction:column; gap:12px; }
+  #camera-pane.active, #search-pane.active { display:flex; }
+  #video-wrap { position:relative; flex:1; background:#000; border-radius:16px; overflow:hidden; display:flex; align-items:center; justify-content:center; min-height:200px; }
+  #video { width:100%; height:100%; object-fit:cover; }
+  .scan-overlay { position:absolute; inset:0; display:flex; align-items:center; justify-content:center; pointer-events:none; }
+  .scan-frame { width:220px; height:220px; border:3px solid var(--amber); border-radius:20px; opacity:.8; box-shadow:0 0 0 9999px rgba(0,0,0,.5); }
+  .scan-line { position:absolute; width:200px; height:2px; background:var(--amber); animation:scanline 2s ease-in-out infinite; box-shadow:0 0 8px var(--amber); }
+  @keyframes scanline { 0%,100% { top:calc(50% - 110px); } 50% { top:calc(50% + 110px); } }
+  #camera-status { text-align:center; font-size:13px; color:var(--muted); }
+  #search-input { padding:14px 18px; background:var(--surface2); border:1px solid var(--border); border-radius:12px; color:var(--text); font-size:16px; outline:none; }
+  #search-input:focus { border-color:var(--amber); }
+  #search-results { flex:1; overflow-y:auto; display:flex; flex-direction:column; gap:8px; }
+  .result-card { background:var(--surface2); border:1px solid var(--border); border-radius:12px; padding:14px 16px; cursor:pointer; transition:.15s; display:flex; align-items:center; gap:12px; }
+  .result-card:hover { border-color:var(--amber); background:rgba(245,158,11,.05); }
+  .result-avatar { width:40px; height:40px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-weight:700; font-size:15px; flex-shrink:0; }
+  .result-info { flex:1; min-width:0; }
+  .result-name { font-weight:600; font-size:15px; }
+  .result-org { font-size:12px; color:var(--sub); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .result-tier { font-size:11px; font-weight:600; padding:2px 8px; border-radius:4px; }
+  .status-badge { font-size:11px; font-weight:600; padding:2px 8px; border-radius:20px; }
+  .status-checked_in { background:rgba(34,197,94,.2); color:#22c55e; }
+  .status-registered { background:rgba(245,158,11,.2); color:#f59e0b; }
+
+  /* Right: attendee card */
+  .kiosk-right { width:360px; border-left:1px solid var(--border); padding:24px; display:flex; flex-direction:column; gap:16px; background:var(--surface); }
+  #card-empty { flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:12px; color:var(--muted); font-size:14px; }
+  #card-empty .icon { font-size:48px; opacity:.3; }
+  #attendee-card { display:none; flex:1; flex-direction:column; gap:16px; }
+  .card-avatar { width:72px; height:72px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:28px; font-weight:700; margin:0 auto; }
+  .card-name { text-align:center; font-size:22px; font-weight:800; letter-spacing:-0.3px; }
+  .card-org { text-align:center; font-size:14px; color:var(--sub); }
+  .card-tier { text-align:center; }
+  .card-divider { height:1px; background:var(--border); }
+  .card-fields { display:flex; flex-direction:column; gap:8px; }
+  .card-field { display:flex; justify-content:space-between; align-items:center; font-size:13px; }
+  .card-field-label { color:var(--muted); }
+  .card-field-value { font-weight:600; }
+  .checkin-btn { padding:18px; background:var(--green); color:#fff; font-weight:800; font-size:17px; border:none; border-radius:14px; cursor:pointer; transition:.2s; }
+  .checkin-btn:hover { opacity:.9; }
+  .checkin-btn:disabled { opacity:.4; cursor:not-allowed; }
+  .already-badge { text-align:center; padding:14px; background:rgba(34,197,94,.15); color:var(--green); border-radius:12px; font-weight:700; }
+
+  /* Success flash */
+  .success-flash { position:fixed; inset:0; background:rgba(34,197,94,.15); display:flex; align-items:center; justify-content:center; z-index:100; opacity:0; pointer-events:none; transition:opacity .3s; }
+  .success-flash.show { opacity:1; }
+  .success-flash .inner { background:var(--green); border-radius:24px; padding:40px 60px; text-align:center; }
+  .success-flash .check { font-size:64px; }
+  .success-flash h2 { font-size:28px; font-weight:800; color:#fff; margin-top:12px; }
+  .success-flash p { color:rgba(255,255,255,.8); font-size:15px; margin-top:4px; }
+
+  .live-dot { width:8px; height:8px; border-radius:50%; background:var(--green); display:inline-block; animation:pulse 2s infinite; }
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.3} }
+  .feed-item { font-size:12px; color:var(--sub); padding:6px 0; border-bottom:1px solid var(--border); }
+  .feed-item strong { color:var(--text); }
+</style>
+</head>
+<body>
+
+<!-- LOGIN -->
+<div id="login-screen">
+  <div class="login-card">
+    <div style="font-size:36px;margin-bottom:12px;">🎟</div>
+    <h1>EventFlow</h1>
+    <p>Check-in Kiosk</p>
+    <div class="field">
+      <label>Event ID</label>
+      <input type="number" id="login-event-id" placeholder="Enter event ID" min="1">
+    </div>
+    <div class="field">
+      <label>Staff PIN</label>
+      <input type="password" id="login-pin" placeholder="4-digit PIN" maxlength="8">
+    </div>
+    <button class="btn" id="login-btn" onclick="doLogin()">Enter Kiosk</button>
+    <div class="error-msg" id="login-error"></div>
+  </div>
+</div>
+
+<!-- KIOSK -->
+<div id="kiosk-screen">
+  <div class="kiosk-header">
+    <div>
+      <div class="kiosk-event-name" id="kiosk-event-name">Event</div>
+      <div style="font-size:12px;color:var(--muted)" id="kiosk-event-date"></div>
+    </div>
+    <div class="kiosk-stats">
+      <div><strong id="stat-checkedin">0</strong> checked in</div>
+      <div><strong id="stat-total">0</strong> registered</div>
+      <div><span class="live-dot"></span> <span id="conn-status">connecting…</span></div>
+    </div>
+  </div>
+  <div class="kiosk-body">
+    <div class="kiosk-left">
+      <div class="tabs">
+        <div class="tab active" onclick="switchTab('camera')">📷 Scan QR</div>
+        <div class="tab" onclick="switchTab('search')">🔍 Search</div>
+      </div>
+      <!-- Camera -->
+      <div id="camera-pane" class="active">
+        <div id="video-wrap">
+          <video id="video" autoplay playsinline muted></video>
+          <canvas id="canvas" style="display:none;"></canvas>
+          <div class="scan-overlay"><div class="scan-frame"></div><div class="scan-line"></div></div>
+        </div>
+        <div id="camera-status">Starting camera…</div>
+      </div>
+      <!-- Search -->
+      <div id="search-pane">
+        <input type="search" id="search-input" placeholder="Search name or organization…" oninput="doSearch(this.value)" autocomplete="off">
+        <div id="search-results"></div>
+      </div>
+    </div>
+    <div class="kiosk-right">
+      <div style="font-size:13px;font-weight:600;color:var(--muted)">ATTENDEE</div>
+      <div id="card-empty">
+        <div class="icon">👤</div>
+        <span>Scan a QR or search by name</span>
+      </div>
+      <div id="attendee-card"></div>
+    </div>
+  </div>
+</div>
+
+<!-- SUCCESS FLASH -->
+<div class="success-flash" id="success-flash">
+  <div class="inner">
+    <div class="check">✓</div>
+    <h2 id="flash-name">Welcome!</h2>
+    <p id="flash-tier"></p>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js"></script>
+<script>
+const API = '/api/eventflow';
+let eventData = null;
+let currentAttendee = null;
+let scanCooldown = false;
+let eventSource = null;
+
+// ── Login ─────────────────────────────────────────────────────────────────
+async function doLogin() {
+  const eventId = document.getElementById('login-event-id').value.trim();
+  const pin     = document.getElementById('login-pin').value.trim();
+  const err     = document.getElementById('login-error');
+  const btn     = document.getElementById('login-btn');
+  err.textContent = '';
+  btn.disabled = true;
+  try {
+    const res  = await fetch(`${API}/checkin/auth`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ event_id: parseInt(eventId), pin }),
+    });
+    const data = await res.json();
+    if (!res.ok) { err.textContent = data.error || 'Login failed'; btn.disabled = false; return; }
+    eventData = data.event;
+    showKiosk();
+  } catch(e) { err.textContent = 'Connection error'; btn.disabled = false; }
+}
+document.getElementById('login-pin').addEventListener('keydown', (e) => { if (e.key === 'Enter') doLogin(); });
+
+function showKiosk() {
+  document.getElementById('login-screen').style.display = 'none';
+  const k = document.getElementById('kiosk-screen');
+  k.style.display = 'flex';
+  document.getElementById('kiosk-event-name').textContent = eventData.title;
+  document.getElementById('kiosk-event-date').textContent = new Date(eventData.start_at).toLocaleString('en-HK');
+  updateStats(eventData.stats);
+  startSSE();
+  startCamera();
+}
+
+// ── Stats ─────────────────────────────────────────────────────────────────
+function updateStats(stats) {
+  if (!stats) return;
+  document.getElementById('stat-checkedin').textContent = stats.checked_in ?? 0;
+  document.getElementById('stat-total').textContent = stats.total ?? 0;
+}
+
+async function refreshStats() {
+  try {
+    const res = await fetch(`${API}/checkin/events/${eventData.id}/stats`);
+    const { stats } = await res.json();
+    updateStats(stats);
+  } catch {}
+}
+
+// ── SSE ───────────────────────────────────────────────────────────────────
+function startSSE() {
+  if (eventSource) eventSource.close();
+  eventSource = new EventSource(`${API}/checkin/events/${eventData.id}/stream`);
+  eventSource.onopen = () => { document.getElementById('conn-status').textContent = 'live'; };
+  eventSource.onerror = () => { document.getElementById('conn-status').textContent = 'reconnecting…'; };
+  eventSource.onmessage = (e) => {
+    const msg = JSON.parse(e.data);
+    if (msg.type === 'attendee_checkedin') refreshStats();
+    if (msg.type === 'attendee_registered') refreshStats();
+  };
+}
+
+// ── Tabs ──────────────────────────────────────────────────────────────────
+function switchTab(t) {
+  document.querySelectorAll('.tab').forEach((el, i) => el.classList.toggle('active', (t==='camera'&&i===0)||(t==='search'&&i===1)));
+  document.getElementById('camera-pane').classList.toggle('active', t === 'camera');
+  document.getElementById('search-pane').classList.toggle('active', t === 'search');
+  if (t === 'camera') startCamera(); else stopCamera();
+}
+
+// ── Camera ────────────────────────────────────────────────────────────────
+let stream = null; let rafId = null;
+async function startCamera() {
+  try {
+    stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment', width: 1280, height: 720 } });
+    const video = document.getElementById('video');
+    video.srcObject = stream;
+    video.play();
+    document.getElementById('camera-status').textContent = 'Point camera at QR code';
+    scanLoop();
+  } catch (e) {
+    document.getElementById('camera-status').textContent = 'Camera unavailable — use search tab';
+  }
+}
+
+function stopCamera() {
+  if (rafId) { cancelAnimationFrame(rafId); rafId = null; }
+  if (stream) { stream.getTracks().forEach(t => t.stop()); stream = null; }
+}
+
+function scanLoop() {
+  const video = document.getElementById('video');
+  const canvas = document.getElementById('canvas');
+  if (!stream) return;
+  if (video.readyState === video.HAVE_ENOUGH_DATA) {
+    canvas.width = video.videoWidth; canvas.height = video.videoHeight;
+    const ctx = canvas.getContext('2d');
+    ctx.drawImage(video, 0, 0);
+    const img = ctx.getImageData(0, 0, canvas.width, canvas.height);
+    const code = jsQR(img.data, img.width, img.height, { inversionAttempts: 'dontInvert' });
+    if (code && !scanCooldown) {
+      const url = code.data;
+      // Extract code from URL
+      const match = url.match(/\/scan\/([a-f0-9-]{36})/);
+      if (match) handleScan(match[1]);
+    }
+  }
+  rafId = requestAnimationFrame(scanLoop);
+}
+
+// ── Scan / Check-in ───────────────────────────────────────────────────────
+async function handleScan(code) {
+  scanCooldown = true;
+  try {
+    const res = await fetch(`${API}/checkin/scan/${code}`, { method: 'POST' });
+    const data = await res.json();
+    if (!res.ok) { showCardError(data.error); return; }
+    showAttendeeCard(data.attendee);
+  } finally {
+    setTimeout(() => { scanCooldown = false; }, 3000);
+  }
+}
+
+let searchTimeout = null;
+function doSearch(q) {
+  clearTimeout(searchTimeout);
+  if (!q.trim()) { document.getElementById('search-results').innerHTML = ''; return; }
+  searchTimeout = setTimeout(async () => {
+    const res = await fetch(`${API}/checkin/events/${eventData.id}/search?q=${encodeURIComponent(q)}`);
+    const { attendees } = await res.json();
+    const el = document.getElementById('search-results');
+    el.innerHTML = attendees.length ? attendees.map(a => `
+      <div class="result-card" onclick="showAttendeeCard(${JSON.stringify(a).replace(/"/g,'&quot;')})">
+        <div class="result-avatar" style="background:${tierColor(a.tier_color)}22;color:${tierColor(a.tier_color)}">
+          ${(a.first_name||'?')[0]}${(a.last_name||'')[0]||''}
+        </div>
+        <div class="result-info">
+          <div class="result-name">${a.first_name} ${a.last_name}</div>
+          <div class="result-org">${a.organization||'—'}</div>
+        </div>
+        <div>
+          ${a.tier_name ? `<div class="result-tier" style="background:${tierColor(a.tier_color)}22;color:${tierColor(a.tier_color)}">${a.tier_name}</div>` : ''}
+          <div class="status-badge status-${a.status}" style="margin-top:4px;">${a.status === 'checked_in' ? 'Checked In' : 'Registered'}</div>
+        </div>
+      </div>
+    `).join('') : '<div style="text-align:center;color:var(--muted);font-size:14px;padding:24px;">No results</div>';
+  }, 200);
+}
+
+function tierColor(c) {
+  const map = { Blue:'#3b82f6', Red:'#ef4444', Green:'#22c55e', Purple:'#a855f7' };
+  return map[c] || '#f59e0b';
+}
+
+function showAttendeeCard(a) {
+  currentAttendee = a;
+  document.getElementById('card-empty').style.display = 'none';
+  const card = document.getElementById('attendee-card');
+  card.style.display = 'flex';
+  const color = tierColor(a.tier_color);
+  const initials = `${(a.first_name||'?')[0]}${(a.last_name||'')[0]||''}`;
+  const alreadyIn = a.status === 'checked_in';
+  card.innerHTML = `
+    <div class="card-avatar" style="background:${color}22;color:${color};font-size:24px">${initials}</div>
+    <div class="card-name">${a.first_name} ${a.last_name}</div>
+    <div class="card-org">${a.organization || '—'}</div>
+    ${a.tier_name ? `<div class="card-tier"><span class="result-tier" style="background:${color}22;color:${color}">${a.tier_name}</span></div>` : ''}
+    <div class="card-divider"></div>
+    <div class="card-fields">
+      <div class="card-field"><span class="card-field-label">Status</span><span class="status-badge status-${a.status}">${alreadyIn ? '✓ Checked In' : 'Registered'}</span></div>
+    </div>
+    ${alreadyIn
+      ? '<div class="already-badge">✓ Already Checked In</div>'
+      : `<button class="checkin-btn" onclick="doCheckIn(${a.id}, '${a.first_name} ${a.last_name}', '${a.tier_name||''}')">✓ Check In</button>`
+    }
+    <button onclick="clearCard()" style="padding:10px;background:transparent;border:1px solid var(--border);border-radius:10px;color:var(--sub);cursor:pointer;font-size:13px;">Clear ✕</button>
+  `;
+}
+
+function showCardError(msg) {
+  currentAttendee = null;
+  document.getElementById('card-empty').style.display = 'flex';
+  document.getElementById('card-empty').innerHTML = `<div class="icon" style="color:var(--red)">✗</div><span>${msg}</span>`;
+  document.getElementById('attendee-card').style.display = 'none';
+  setTimeout(() => {
+    document.getElementById('card-empty').innerHTML = '<div class="icon">👤</div><span>Scan a QR or search by name</span>';
+  }, 3000);
+}
+
+function clearCard() {
+  currentAttendee = null;
+  document.getElementById('card-empty').style.display = 'flex';
+  document.getElementById('card-empty').innerHTML = '<div class="icon">👤</div><span>Scan a QR or search by name</span>';
+  document.getElementById('attendee-card').style.display = 'none';
+}
+
+async function doCheckIn(id, name, tier) {
+  const btn = document.querySelector('.checkin-btn');
+  if (btn) btn.disabled = true;
+  try {
+    const res = await fetch(`${API}/checkin/checkin/${id}`, { method: 'POST' });
+    const data = await res.json();
+    if (!res.ok) { alert(data.error); if(btn) btn.disabled = false; return; }
+    showSuccess(name, tier);
+    refreshStats();
+    clearCard();
+  } catch(e) { alert('Check-in failed'); if(btn) btn.disabled = false; }
+}
+
+function showSuccess(name, tier) {
+  const f = document.getElementById('success-flash');
+  document.getElementById('flash-name').textContent = `Welcome, ${name.split(' ')[0]}!`;
+  document.getElementById('flash-tier').textContent = tier || '';
+  f.classList.add('show');
+  setTimeout(() => f.classList.remove('show'), 2000);
+}
+</script>
+</body>
+</html>

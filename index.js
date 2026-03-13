@@ -3921,6 +3921,20 @@ try {
   console.warn('⚠️ Event Check-in routes not loaded:', error.message);
 }
 
+// EventFlow — Event Management SaaS
+try {
+  const eventflowRoutes = require('./use-cases/eventflow/api/routes');
+  app.use('/api/eventflow', eventflowRoutes);
+  // Kiosk HTML (vanilla, not Next.js)
+  app.get('/eventflow/checkin', (req, res) =>
+    res.sendFile(path.join(__dirname, 'use-cases', 'eventflow', 'public', 'checkin.html'))
+  );
+  app.use('/eventflow/static', express.static(path.join(__dirname, 'use-cases', 'eventflow', 'public')));
+  console.log('✅ EventFlow routes loaded: /api/eventflow, /eventflow/checkin');
+} catch (error) {
+  console.warn('⚠️ EventFlow routes not loaded:', error.message);
+}
+
 // Scheduler Service
 const scheduler = require('./services/scheduler');
 const scheduleRegistry = require('./services/schedule-registry');
