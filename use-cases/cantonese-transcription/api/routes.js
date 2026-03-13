@@ -882,7 +882,7 @@ async function autoTranscribeBuffer({ fileBuffer, mimeType, language, filename, 
       const innerStart = i === 0 ? 0 : OVERLAP_SECS;
       const innerEnd   = i === numChunks - 1 ? chunkDur : chunkDur - OVERLAP_SECS;
 
-      onProgress?.(`轉錄片段 ${i + 1} / ${numChunks}...`);
+      onProgress?.(`轉錄片段 ${i + 1} / ${numChunks}...`, 20 + Math.round((i / numChunks) * 70));
       const chunkBuf = await extractChunk(tmpPath, absStart, chunkDur);
       const result   = await sttService.transcribeAudio({
         fileBuffer: chunkBuf,
@@ -934,9 +934,12 @@ router.post('/transcribe', upload.single('audio'), async (req, res) => {
   if (res.flushHeaders) res.flushHeaders();
 
   const push = (obj) => { try { res.write(JSON.stringify(obj) + '\n'); } catch {} };
-  const onProgress = (message) => push({ type: 'log', message });
+  const onProgress = (message, pct) => {
+    push({ type: 'log', message });
+    if (pct !== undefined) push({ type: 'progress', value: pct });
+  };
 
-  onProgress(`收到音訊（${(req.file.size / 1024 / 1024).toFixed(1)} MB，${mimeType}）`);
+  onProgress(`收到音訊（${(req.file.size / 1024 / 1024).toFixed(1)} MB，${mimeType}）`, 5);
 
   try {
     const result = await autoTranscribeBuffer({
@@ -953,6 +956,28 @@ router.post('/transcribe', upload.single('audio'), async (req, res) => {
     }
     if (result.autoSegmented) {
       console.log(`[ct-transcribe] Merged ${result.segmentCount} segments → ${result.transcript?.length ?? 0} chars`);
+    }
+
+    // ── Optional speaker diarization via pyannote-audio ─────────────────────
+    if (process.env.DIARIZATION_SERVICE_URL && result.segments?.length) {
+      try {
+        onProgress('正在識別說話者（pyannote-audio）...', 90);
+        const diarSegments = await sttService.diarizeAudio({
+          fileBuffer: req.file.buffer,
+          mimeType,
+          filename:   req.file.originalname,
+        });
+        if (diarSegments?.length) {
+          result.segments = sttService.assignSpeakers(result.segments, diarSegments);
+          result.diarized  = true;
+          const speakerCount = new Set(diarSegments.map(d => d.speaker)).size;
+          onProgress(`已識別 ${speakerCount} 位說話者`, 96);
+          console.log(`[ct-transcribe] Diarization: ${speakerCount} speakers, ${diarSegments.length} turns`);
+        }
+      } catch (diarErr) {
+        // Diarization is best-effort — never fail the whole transcription
+        console.warn('[ct-transcribe] Diarization failed (non-fatal):', diarErr.message);
+      }
     }
 
     push({ type: 'done', ok: true, ...result });
@@ -973,6 +998,97 @@ router.post('/transcribe', upload.single('audio'), async (req, res) => {
     });
     push({ type: 'error', ok: false, error_code: errorCode, error: `${errorMsg}：${err.message}` });
     return res.end();
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// POST /refine  — use Gemini to clean up & paragraph-break a raw transcript
+// Streams NDJSON: { type:'chunk', text } … { type:'done', ok:true, refined }
+// ─────────────────────────────────────────────────────────────────────────────
+router.post('/refine', express.json({ limit: '1mb' }), async (req, res) => {
+  const { transcript, language } = req.body || {};
+  const apiKey = process.env.GEMINI_API_KEY;
+
+  if (!apiKey)      return res.status(503).json({ ok: false, error: 'GEMINI_API_KEY 未設定' });
+  if (!transcript)  return res.status(400).json({ ok: false, error: '未提供逐字稿' });
+
+  const isCantonese = !language || language === 'yue-Hant-HK';
+  const prompt = isCantonese
+    ? `以下是粵語語音識別的原始逐字稿。請按以下要求處理：
+1. 修正明顯的識別錯誤，使句子通順自然
+2. 按照內容意思分成段落（每段之間加空行）
+3. 加入適當標點符號（逗號、句號、問號、感嘆號等）
+4. 保持原意，不要改寫、刪減或加入原文沒有的內容
+
+只輸出處理後的文字，不要加任何說明、標題或格式標記。
+
+原始逐字稿：
+${transcript}`
+    : `The following is a raw speech recognition transcript. Please:
+1. Fix recognition errors to make sentences natural
+2. Divide into paragraphs by content (blank line between paragraphs)
+3. Add appropriate punctuation
+4. Preserve meaning exactly — do not add or remove content
+
+Output only the processed text, no headings or explanations.
+
+Raw transcript:
+${transcript}`;
+
+  res.setHeader('Content-Type', 'application/x-ndjson');
+  res.setHeader('Cache-Control', 'no-cache');
+  res.setHeader('X-Accel-Buffering', 'no');
+  if (res.flushHeaders) res.flushHeaders();
+
+  const push = (obj) => { try { res.write(JSON.stringify(obj) + '\n'); } catch {} };
+
+  try {
+    const BASE = 'https://generativelanguage.googleapis.com';
+    const url  = `${BASE}/v1beta/models/gemini-2.0-flash:streamGenerateContent?alt=sse&key=${apiKey}`;
+
+    const resp = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        contents: [{ parts: [{ text: prompt }] }],
+        generationConfig: { temperature: 0.2 },
+      }),
+    });
+
+    if (!resp.ok) {
+      let msg = `HTTP ${resp.status}`;
+      try { msg = (await resp.json())?.error?.message || msg; } catch {}
+      push({ type: 'error', ok: false, error: msg });
+      return res.end();
+    }
+
+    const reader  = resp.body.getReader();
+    const decoder = new TextDecoder();
+    let buf = '';
+    let full = '';
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buf += decoder.decode(value, { stream: true });
+      const lines = buf.split('\n');
+      buf = lines.pop() || '';
+      for (const line of lines) {
+        if (!line.startsWith('data: ')) continue;
+        const raw = line.slice(6).trim();
+        if (raw === '[DONE]') continue;
+        try {
+          const chunk = JSON.parse(raw)?.candidates?.[0]?.content?.parts?.[0]?.text || '';
+          if (chunk) { full += chunk; push({ type: 'chunk', text: chunk }); }
+        } catch {}
+      }
+    }
+
+    push({ type: 'done', ok: true, refined: full.trim() });
+    res.end();
+  } catch (err) {
+    push({ type: 'error', ok: false, error: err.message });
+    res.end();
   }
 });
 
