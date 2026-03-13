@@ -1,6 +1,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
-// Cantonese Transcription & Analysis — Express API Routes
-// Base path: /api/cantonese-transcription
+// Transcription & Analysis — Express API Routes
+// Base path: /api/transcription
+// Supports Cantonese (primary), Mandarin, English, and other languages.
 // ─────────────────────────────────────────────────────────────────────────────
 
 const express    = require('express');
@@ -32,14 +33,16 @@ const router = express.Router();
 const VALID_TASKS = ['clean_transcript', 'meeting_minutes', 'summary_zh', 'summary_en', 'action_items'];
 
 // ── System prompt ────────────────────────────────────────────────────────────
-const CANTONESE_SYSTEM_PROMPT = `You are an expert Cantonese speech transcription and analysis assistant.
+const CANTONESE_SYSTEM_PROMPT = `You are an expert speech transcription and analysis assistant.
+
+Language support:
+- Primary specialisation: Cantonese (粵語), including colloquial speech, 粵語口語字（例：「佢哋」、「冇」、「嗰啲」、「噉」）, and Chinese-English code-switching.
+- Also supported: Mandarin Chinese, English, and other languages produced by the upstream ASR model.
+- Detect the dominant language from the transcript and respond in that language by default.
 
 Context:
-- Upstream, a Whisper v3 Cantonese ASR model (khleeloo/whisper-large-v3-cantonese) converts raw audio into text.
-- The ASR output may contain:
-  - Colloquial Cantonese, 粵語口語字（例：「佢哋」、「冇」、「嗰啲」、「噉」）
-  - Mixed Chinese-English code-switching
-  - Minor recognition errors, duplicated words, or incomplete sentences
+- Upstream, a speech-to-text (STT) model converts raw audio into text (e.g. Whisper v3 for Cantonese, Google STT for other languages).
+- The ASR output may contain minor recognition errors, duplicated words, or incomplete sentences.
 - You never have access to raw audio, only to the ASR transcript and optional word/segment timestamps.
 
 Your jobs:
@@ -47,12 +50,11 @@ Your jobs:
    - Treat the ASR transcript as the only ground truth of what was said.
    - You may fix obvious ASR glitches (repeated characters, broken words), but you must not invent new content.
 
-2. Preserve Cantonese style unless explicitly asked to "標準書面中文" or "English".
-   - Default: keep spoken Cantonese tone, but correct very obvious recognition mistakes.
-   - When user asks for:
-     - 「轉做書面中文」: rewrite into formal written Chinese, keep meaning intact.
-     - 「英文摘要」: produce a concise English summary, not a literal translation.
-     - 「逐字稿」: keep as close to original wording as possible, only clean glitches.
+2. Preserve the original language style unless explicitly asked to change it.
+   - For Cantonese: keep spoken Cantonese tone; correct very obvious recognition mistakes.
+   - When user asks for 「轉做書面中文」: rewrite into formal written Chinese, keep meaning intact.
+   - When user asks for 「英文摘要」 or "English summary": produce a concise English summary.
+   - When user asks for 「逐字稿」 or "verbatim": keep as close to original wording as possible, only clean glitches.
 
 3. Robustness to code-switching:
    - Keep English terms as-is if they are business / technical jargon.
@@ -69,7 +71,7 @@ Your jobs:
 
 Output style:
 - Be concise and information‑dense.
-- When the user works in Cantonese, respond mainly in written Chinese (Traditional) and keep some Cantonese flavour when appropriate.
+- Match the output language to the transcript language, unless the user requests a specific output language.
 - When the user requests English, respond in clear, professional English.
 
 You must:
@@ -98,7 +100,7 @@ function emit(res, data) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// POST /api/cantonese-transcription/analyze  (SSE streaming)
+// POST /api/transcription/analyze  (SSE streaming)
 // ─────────────────────────────────────────────────────────────────────────────
 router.post('/analyze', async (req, res) => {
   const startTime = Date.now();
@@ -501,7 +503,7 @@ async function classifyTranscript(transcript) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// POST /api/cantonese-transcription/orchestrate  (SSE streaming)
+// POST /api/transcription/orchestrate  (SSE streaming)
 // Classifies transcript → routes to type-specific prompt → streams result
 // ─────────────────────────────────────────────────────────────────────────────
 router.post('/orchestrate', async (req, res) => {
@@ -690,7 +692,7 @@ router.post('/orchestrate', async (req, res) => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-// GET /api/cantonese-transcription/jobs
+// GET /api/transcription/jobs
 // ─────────────────────────────────────────────────────────────────────────────
 router.get('/jobs', async (req, res) => {
   try {
@@ -705,7 +707,7 @@ router.get('/jobs', async (req, res) => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-// GET /api/cantonese-transcription/jobs/:jobId
+// GET /api/transcription/jobs/:jobId
 // ─────────────────────────────────────────────────────────────────────────────
 router.get('/jobs/:jobId', async (req, res) => {
   try {
@@ -719,7 +721,7 @@ router.get('/jobs/:jobId', async (req, res) => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-// GET /api/cantonese-transcription/errors
+// GET /api/transcription/errors
 // ─────────────────────────────────────────────────────────────────────────────
 router.get('/errors', async (req, res) => {
   try {
@@ -734,7 +736,7 @@ router.get('/errors', async (req, res) => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-// GET /api/cantonese-transcription/stats
+// GET /api/transcription/stats
 // ─────────────────────────────────────────────────────────────────────────────
 router.get('/stats', async (req, res) => {
   try {
@@ -747,7 +749,7 @@ router.get('/stats', async (req, res) => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-// GET /api/cantonese-transcription/error-codes
+// GET /api/transcription/error-codes
 // ─────────────────────────────────────────────────────────────────────────────
 router.get('/error-codes', (_req, res) => {
   const table = Object.entries(db.ERROR_MESSAGES).map(([code, message]) => ({ code, message }));
@@ -755,7 +757,7 @@ router.get('/error-codes', (_req, res) => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-// GET /api/cantonese-transcription/providers
+// GET /api/transcription/providers
 // Returns available STT providers and the current default.
 // ─────────────────────────────────────────────────────────────────────────────
 router.get('/providers', (_req, res) => {
@@ -765,7 +767,7 @@ router.get('/providers', (_req, res) => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-// POST /api/cantonese-transcription/transcribe
+// POST /api/transcription/transcribe
 // Audio file → STT provider → { provider, transcript, segments, language,
 //                               confidence?, fallbackFrom?, autoSegmented?, segmentCount? }
 //

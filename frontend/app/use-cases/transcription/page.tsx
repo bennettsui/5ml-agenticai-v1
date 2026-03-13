@@ -795,7 +795,7 @@ export default function CantoneseTranscriptionPage() {
     abortRef.current = new AbortController();
 
     try {
-      const response = await fetch('/api/cantonese-transcription/analyze', {
+      const response = await fetch('/api/transcription/analyze', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -903,7 +903,7 @@ export default function CantoneseTranscriptionPage() {
     }
 
     try {
-      const resp = await fetch('/api/cantonese-transcription/orchestrate', {
+      const resp = await fetch('/api/transcription/orchestrate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ transcript: transcript.trim(), model, extra_instructions: extraInstructions.trim() || undefined }),
@@ -1062,7 +1062,7 @@ export default function CantoneseTranscriptionPage() {
       convXhrRef.current = null;
       setConvJobs(prev => prev.map(j => j.id === jobId ? { ...j, status: 'error', error: '已取消' } : j));
     };
-    xhr.open('POST', '/api/cantonese-transcription/convert');
+    xhr.open('POST', '/api/transcription/convert');
     xhr.responseType = 'arraybuffer';
     xhr.send(form);
   }
@@ -1196,7 +1196,7 @@ export default function CantoneseTranscriptionPage() {
       setSttLoading(false);
       setSttProgress(null);
     };
-    xhr.open('POST', '/api/cantonese-transcription/transcribe');
+    xhr.open('POST', '/api/transcription/transcribe');
     xhr.send(form);
   }
 
@@ -1211,7 +1211,7 @@ export default function CantoneseTranscriptionPage() {
   const loadJobs = useCallback(async () => {
     setJobsLoading(true);
     try {
-      const res  = await fetch('/api/cantonese-transcription/jobs?limit=50');
+      const res  = await fetch('/api/transcription/jobs?limit=50');
       const data = await res.json();
       if (data.ok) setJobs(data.jobs);
     } catch { /* ignore */ } finally { setJobsLoading(false); }
@@ -1220,7 +1220,7 @@ export default function CantoneseTranscriptionPage() {
   const loadErrors = useCallback(async () => {
     setErrorsLoading(true);
     try {
-      const res  = await fetch('/api/cantonese-transcription/errors?limit=100');
+      const res  = await fetch('/api/transcription/errors?limit=100');
       const data = await res.json();
       if (data.ok) setErrorLogs(data.logs);
     } catch { /* ignore */ } finally { setErrorsLoading(false); }
@@ -1228,7 +1228,7 @@ export default function CantoneseTranscriptionPage() {
 
   const loadStats = useCallback(async () => {
     try {
-      const res  = await fetch('/api/cantonese-transcription/stats');
+      const res  = await fetch('/api/transcription/stats');
       const data = await res.json();
       if (data.ok) setStats(data.stats);
     } catch { /* ignore */ }
@@ -1236,7 +1236,7 @@ export default function CantoneseTranscriptionPage() {
 
   const loadErrorCodes = useCallback(async () => {
     try {
-      const res  = await fetch('/api/cantonese-transcription/error-codes');
+      const res  = await fetch('/api/transcription/error-codes');
       const data = await res.json();
       if (data.ok) setErrorCodes(data.error_codes);
     } catch { /* ignore */ }
@@ -1249,7 +1249,7 @@ export default function CantoneseTranscriptionPage() {
 
   // Fetch available STT providers once on mount
   useEffect(() => {
-    fetch('/api/cantonese-transcription/providers')
+    fetch('/api/transcription/providers')
       .then(r => r.json())
       .then(d => { if (d.ok) setSttProviders(d.available ?? []); })
       .catch(() => {});
@@ -1269,13 +1269,15 @@ export default function CantoneseTranscriptionPage() {
       <header className="border-b border-slate-800/60 bg-slate-950/80 backdrop-blur sticky top-0 z-10">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 h-14 flex items-center gap-4">
           <Link href="/dashboard" className="flex items-center gap-1.5 text-slate-400 hover:text-white text-xs transition-colors">
-            <ChevronLeft className="w-3.5 h-3.5" /> Dashboard
+            <ChevronLeft className="w-3.5 h-3.5" /> Use Cases
           </Link>
+          <span className="text-slate-700">/</span>
+          <span className="text-slate-600">ExpLab</span>
           <span className="text-slate-700">/</span>
           <div className="flex items-center gap-2">
             <Mic className="w-4 h-4 text-indigo-400" />
-            <span className="text-sm font-semibold text-white">粵語逐字稿分析</span>
-            <span className="text-[10px] text-slate-500">Cantonese Transcription</span>
+            <span className="text-sm font-semibold text-white">Transcription</span>
+            <span className="text-[10px] text-slate-500">逐字稿分析</span>
           </div>
           <div className="ml-auto">
             <span className="text-[10px] text-slate-500 border border-slate-700/50 rounded px-1.5 py-0.5">
@@ -1547,7 +1549,7 @@ export default function CantoneseTranscriptionPage() {
                             setRefineError(null);
                             setRefineDone(false);
                             try {
-                              const resp = await fetch('/api/cantonese-transcription/refine', {
+                              const resp = await fetch('/api/transcription/refine', {
                                 method: 'POST',
                                 headers: { 'Content-Type': 'application/json' },
                                 body: JSON.stringify({ transcript, language: 'yue-Hant-HK' }),
@@ -2163,7 +2165,7 @@ export default function CantoneseTranscriptionPage() {
                     </p>
                     <audio
                       controls
-                      src={`/api/cantonese-transcription/audio/${expandedJob.job_id}`}
+                      src={`/api/transcription/audio/${expandedJob.job_id}`}
                       className="w-full h-8 rounded"
                       style={{ colorScheme: 'dark' }}
                     />

@@ -1,7 +1,7 @@
 'use strict';
 
 /**
- * db.js — Cantonese Transcription Database Layer (PostgreSQL / Fly Postgres)
+ * db.js — Transcription Database Layer (PostgreSQL / Fly Postgres)
  *
  * Tables:
  *   ct_jobs        — one row per user submission (input + status)

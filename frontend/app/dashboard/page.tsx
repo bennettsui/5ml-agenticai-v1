@@ -30,7 +30,7 @@ import {
   type ChatSession, type ChatType, type ChatMessage as StoredMessage,
 } from '@/lib/chat-history';
 
-type Tab = 'control' | 'overview' | 'architecture' | 'analytics' | 'scheduling' | 'knowledge' | 'costs' | 'workflows' | 'chat' | 'security' | 'adaptive' | 'transcription';
+type Tab = 'control' | 'overview' | 'architecture' | 'analytics' | 'scheduling' | 'knowledge' | 'costs' | 'workflows' | 'chat' | 'security' | 'adaptive';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -375,7 +375,7 @@ export default function Dashboard() {
   const getInitialTab = (): Tab => {
     if (typeof window === 'undefined') return 'control';
     const p = new URLSearchParams(window.location.search).get('tab') as Tab | null;
-    const valid: Tab[] = ['control','overview','architecture','analytics','scheduling','knowledge','costs','workflows','chat','security','adaptive','transcription'];
+    const valid: Tab[] = ['control','overview','architecture','analytics','scheduling','knowledge','costs','workflows','chat','security','adaptive'];
     return p && valid.includes(p) ? p : 'control';
   };
   const [activeTab, setActiveTab] = useState<Tab>(getInitialTab);
