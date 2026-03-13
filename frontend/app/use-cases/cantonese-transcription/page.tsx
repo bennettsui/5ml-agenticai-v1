@@ -302,12 +302,18 @@ function ErrorRow({ log }: { log: ErrorLog }) {
 
 interface Segment { start: number; end: number; text: string; }
 
-function CassetteVisualizer({ transcript, segments }: { transcript: string; segments: Segment[] }) {
+function CassetteVisualizer({ transcript, segments, audioUrl }: { transcript: string; segments: Segment[]; audioUrl?: string | null }) {
   const [playing, setPlaying]         = useState(false);
   const [progress, setProgress]       = useState(0); // 0–1
   const [activeWordIdx, setActiveWord] = useState(-1);
+  const [liveBars, setLiveBars]       = useState<number[] | null>(null);
   const tickRef                        = useRef<ReturnType<typeof setInterval> | null>(null);
   const trackRef                       = useRef<HTMLDivElement>(null);
+  const audioRef                       = useRef<HTMLAudioElement | null>(null);
+  const audioCtxRef                    = useRef<AudioContext | null>(null);
+  const analyserRef                    = useRef<AnalyserNode | null>(null);
+  const sourceRef                      = useRef<MediaElementAudioSourceNode | null>(null);
+  const animRef                        = useRef<number | null>(null);
 
   // Split transcript into words for the track
   const words = useMemo(() => transcript.trim().split(/\s+/).filter(Boolean), [transcript]);
@@ -340,19 +346,53 @@ function CassetteVisualizer({ transcript, segments }: { transcript: string; segm
     return Math.min(Math.floor(p * words.length), words.length - 1);
   }
 
-  function startPlay() {
+  // ── Audio + Web Audio API setup ──────────────────────────────────────────
+  function initAudioCtx() {
+    if (audioCtxRef.current || !audioRef.current) return;
+    const ctx      = new AudioContext();
+    const analyser = ctx.createAnalyser();
+    analyser.fftSize = 256;
+    const source   = ctx.createMediaElementSource(audioRef.current);
+    source.connect(analyser);
+    analyser.connect(ctx.destination);
+    audioCtxRef.current = ctx;
+    analyserRef.current  = analyser;
+    sourceRef.current    = source;
+  }
+
+  function startVisualization() {
+    const bufLen  = analyserRef.current!.frequencyBinCount; // 128
+    const data    = new Uint8Array(bufLen);
+    const N       = 80;
+    const step    = Math.max(1, Math.floor(bufLen / N));
+
+    function frame() {
+      animRef.current = requestAnimationFrame(frame);
+      analyserRef.current!.getByteFrequencyData(data);
+      const bars = Array.from({ length: N }, (_, i) => Math.round((data[Math.min(i * step, bufLen - 1)] / 255) * 100));
+      setLiveBars(bars);
+      const audio = audioRef.current!;
+      const p = audio.duration ? audio.currentTime / audio.duration : 0;
+      setProgress(p);
+      setActiveWord(wordAtProgress(p));
+    }
+    frame();
+  }
+
+  function stopVisualization() {
+    if (animRef.current) { cancelAnimationFrame(animRef.current); animRef.current = null; }
+    setLiveBars(null);
+  }
+
+  // Fallback timer-based playback when no audio URL
+  function startTimerPlay() {
     if (tickRef.current) clearInterval(tickRef.current);
-    const step = 0.016; // ~60fps
+    const step = 0.016;
     const inc  = step / totalDuration;
     tickRef.current = setInterval(() => {
       setProgress(prev => {
         const next = prev + inc;
-        if (next >= 1) {
-          clearInterval(tickRef.current!);
-          setPlaying(false);
-          setActiveWord(words.length - 1);
-          return 1;
-        }
+        if (next >= 1) { clearInterval(tickRef.current!); setPlaying(false); setActiveWord(words.length - 1); return 1; }
         setActiveWord(wordAtProgress(next));
         return next;
       });
@@ -360,18 +400,30 @@ function CassetteVisualizer({ transcript, segments }: { transcript: string; segm
   }
 
   function handlePlayPause() {
-    if (playing) {
-      clearInterval(tickRef.current!);
-      setPlaying(false);
+    if (audioUrl && audioRef.current) {
+      if (audioCtxRef.current?.state === 'suspended') audioCtxRef.current.resume();
+      if (playing) {
+        audioRef.current.pause();
+        stopVisualization();
+        setPlaying(false);
+      } else {
+        if (progress >= 1) { audioRef.current.currentTime = 0; setProgress(0); setActiveWord(-1); }
+        initAudioCtx();
+        audioRef.current.play().catch(() => {});
+        startVisualization();
+        setPlaying(true);
+      }
     } else {
-      if (progress >= 1) { setProgress(0); setActiveWord(-1); }
-      setPlaying(true);
-      startPlay();
+      // Fallback: simulate playback without audio
+      if (playing) { clearInterval(tickRef.current!); setPlaying(false); }
+      else { if (progress >= 1) { setProgress(0); setActiveWord(-1); } setPlaying(true); startTimerPlay(); }
     }
   }
 
   function handleReset() {
+    if (audioRef.current) { audioRef.current.pause(); audioRef.current.currentTime = 0; }
     clearInterval(tickRef.current!);
+    stopVisualization();
     setPlaying(false);
     setProgress(0);
     setActiveWord(-1);
@@ -384,7 +436,20 @@ function CassetteVisualizer({ transcript, segments }: { transcript: string; segm
     el?.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
   }, [activeWordIdx]);
 
-  useEffect(() => () => { if (tickRef.current) clearInterval(tickRef.current); }, []);
+  // Audio ended
+  useEffect(() => {
+    const audio = audioRef.current;
+    if (!audio) return;
+    const onEnded = () => { stopVisualization(); setPlaying(false); setProgress(1); };
+    audio.addEventListener('ended', onEnded);
+    return () => audio.removeEventListener('ended', onEnded);
+  }, [audioUrl]);
+
+  useEffect(() => () => {
+    if (tickRef.current) clearInterval(tickRef.current);
+    if (animRef.current) cancelAnimationFrame(animRef.current);
+    audioCtxRef.current?.close();
+  }, []);
 
   const reelAngle = progress * 360 * 8; // 8 full rotations over whole tape
   const leftFill  = Math.max(0.15, 1 - progress * 0.7);  // left reel shrinks
@@ -404,6 +469,17 @@ function CassetteVisualizer({ transcript, segments }: { transcript: string; segm
 
   return (
     <div className="space-y-6">
+      {/* Hidden audio element */}
+      {audioUrl && (
+        <audio
+          ref={audioRef}
+          src={audioUrl}
+          preload="metadata"
+          className="hidden"
+          onEnded={() => { stopVisualization(); setPlaying(false); setProgress(1); }}
+        />
+      )}
+
       {/* Cassette body */}
       <div className="relative mx-auto max-w-lg">
         <div
@@ -507,21 +583,26 @@ function CassetteVisualizer({ transcript, segments }: { transcript: string; segm
       <div className="bg-slate-900/80 rounded-xl border border-slate-700/50 overflow-hidden">
         <div className="px-4 py-2 border-b border-slate-700/30 flex items-center gap-2">
           <span className="text-[10px] text-slate-500 font-medium uppercase tracking-widest">Audio Track</span>
-          {segments.length > 0 && (
+          {liveBars && <span className="text-[9px] text-green-500/70 animate-pulse">● LIVE</span>}
+          {!liveBars && segments.length > 0 && (
             <span className="text-[9px] text-slate-600">{segments.length} segments</span>
           )}
         </div>
         {/* Waveform bars with playhead */}
         <div className="relative h-20 px-3 flex items-center">
           <div className="absolute inset-x-3 inset-y-0 flex items-center gap-px">
-            {waveformBars.map((h, i) => {
-              const barX   = (i / waveformBars.length) * 100;
+            {(liveBars ?? waveformBars).map((h, i) => {
+              const barX   = (i / 80) * 100;
               const isPast = barX <= playheadX;
               return (
                 <div
                   key={i}
-                  className={`flex-1 rounded-sm transition-colors ${isPast ? 'bg-indigo-500/70' : 'bg-slate-700/60'}`}
-                  style={{ height: `${h}%` }}
+                  className={`flex-1 rounded-sm ${liveBars ? '' : 'transition-colors'} ${
+                    liveBars
+                      ? isPast ? 'bg-indigo-400' : 'bg-slate-600/50'
+                      : isPast ? 'bg-indigo-500/70' : 'bg-slate-700/60'
+                  }`}
+                  style={{ height: `${Math.max(3, h)}%` }}
                 />
               );
             })}
@@ -597,6 +678,14 @@ export default function CantoneseTranscriptionPage() {
   const [sttFileName, setSttFileName]       = useState<string | null>(null);
   const [sttFileSize, setSttFileSize]       = useState<number | null>(null);
   const [sttLog, setSttLog]                 = useState<string[]>([]);
+  const [sttProcessProgress, setSttProcessProgress] = useState<number | null>(null);
+  const [sttAudioUrl, setSttAudioUrl]       = useState<string | null>(null);
+
+  // Refinement state
+  const [refineLoading, setRefineLoading]   = useState(false);
+  const [refineText, setRefineText]         = useState('');
+  const [refineError, setRefineError]       = useState<string | null>(null);
+  const [refineDone, setRefineDone]         = useState(false);
   const audioInputRef                        = useRef<HTMLInputElement>(null);
   const sttXhrRef                            = useRef<XMLHttpRequest | null>(null);
 
@@ -1008,6 +1097,13 @@ export default function CantoneseTranscriptionPage() {
     setSttFileName(file.name);
     setSttFileSize(file.size);
     setSttLog([]);
+    setSttProcessProgress(null);
+    setRefineText('');
+    setRefineError(null);
+    setRefineDone(false);
+    // Keep blob URL for cassette player
+    if (sttAudioUrl) URL.revokeObjectURL(sttAudioUrl);
+    setSttAudioUrl(URL.createObjectURL(file));
 
     const form = new FormData();
     form.append('audio', file);
@@ -1029,14 +1125,17 @@ export default function CantoneseTranscriptionPage() {
       parsedUpTo = xhr.responseText.length;
       const lines = newText.split('\n');
       const logLines: string[] = [];
+      const progressValues: number[] = [];
       for (const line of lines) {
         if (!line.trim()) continue;
         try {
           const obj = JSON.parse(line) as Record<string, unknown>;
           if (obj.type === 'log') logLines.push(obj.message as string);
-        } catch { /* incomplete line, will retry on next progress */ }
+          if (obj.type === 'progress') progressValues.push(obj.value as number);
+        } catch { /* incomplete line, will retry on next event */ }
       }
       if (logLines.length) setSttLog(prev => [...prev, ...logLines]);
+      if (progressValues.length) setSttProcessProgress(progressValues[progressValues.length - 1]);
     };
 
     xhr.onload = () => {
@@ -1323,6 +1422,30 @@ export default function CantoneseTranscriptionPage() {
                           <>
                             <Loader2 className={`w-6 h-6 animate-spin ${sttEngine === 'whisper' ? 'text-violet-400' : 'text-blue-400'}`} />
                             <span className="text-xs text-slate-400">轉錄中，請稍候…</span>
+                            {/* Processing progress bar */}
+                            <div className="w-full px-2 space-y-1">
+                              <div className="relative h-1.5 bg-slate-700/80 rounded-full overflow-hidden">
+                                {sttProcessProgress !== null ? (
+                                  <>
+                                    <div
+                                      className={`absolute inset-y-0 left-0 rounded-full transition-all duration-500 ${sttEngine === 'whisper' ? 'bg-violet-500' : 'bg-blue-500'}`}
+                                      style={{ width: `${sttProcessProgress}%` }}
+                                    />
+                                    {/* shimmer overlay while waiting for AI response */}
+                                    {sttProcessProgress >= 40 && sttProcessProgress < 100 && (
+                                      <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent animate-[shimmer_1.5s_ease-in-out_infinite]" style={{ backgroundSize: '200% 100%' }} />
+                                    )}
+                                  </>
+                                ) : (
+                                  <div className={`absolute inset-y-0 left-0 w-1/3 rounded-full animate-pulse ${sttEngine === 'whisper' ? 'bg-violet-500/50' : 'bg-blue-500/50'}`} />
+                                )}
+                              </div>
+                              {sttProcessProgress !== null && (
+                                <div className="flex justify-end">
+                                  <span className="text-[9px] text-slate-600 font-mono">{sttProcessProgress}%</span>
+                                </div>
+                              )}
+                            </div>
                             {sttLog.length > 0 && (
                               <div className="w-full max-h-28 overflow-y-auto space-y-0.5 px-2">
                                 {sttLog.map((msg, i) => (
@@ -1400,6 +1523,100 @@ export default function CantoneseTranscriptionPage() {
                     className="w-full bg-transparent px-4 py-3 text-sm text-slate-200 placeholder-slate-600 resize-none focus:outline-none font-mono leading-relaxed disabled:opacity-50"
                   />
                 </div>
+
+                {/* ── Refine next-step ──────────────────────────── */}
+                {transcript.trim() && !sttLoading && (
+                  <div className="bg-slate-800/60 rounded-xl border border-slate-700/50 overflow-hidden">
+                    <div className="px-4 py-2.5 border-b border-slate-700/50 flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <Wand2 className="w-3.5 h-3.5 text-indigo-400" />
+                        <span className="text-xs font-medium text-slate-300">精修逐字稿</span>
+                        <span className="text-[10px] text-slate-500">— 修正錯誤 · 分段 · 加標點</span>
+                      </div>
+                      {!refineLoading && !refineText && (
+                        <button
+                          onClick={async () => {
+                            setRefineLoading(true);
+                            setRefineText('');
+                            setRefineError(null);
+                            setRefineDone(false);
+                            try {
+                              const resp = await fetch('/api/cantonese-transcription/refine', {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ transcript, language: 'yue-Hant-HK' }),
+                              });
+                              if (!resp.ok || !resp.body) { setRefineError(`HTTP ${resp.status}`); setRefineLoading(false); return; }
+                              const reader = resp.body.getReader();
+                              const dec = new TextDecoder();
+                              let buf = '';
+                              while (true) {
+                                const { done, value } = await reader.read();
+                                if (done) break;
+                                buf += dec.decode(value, { stream: true });
+                                const parts = buf.split('\n');
+                                buf = parts.pop() || '';
+                                for (const part of parts) {
+                                  if (!part.trim()) continue;
+                                  try {
+                                    const obj = JSON.parse(part) as Record<string, unknown>;
+                                    if (obj.type === 'chunk') setRefineText(t => t + (obj.text as string));
+                                    if (obj.type === 'done') setRefineDone(true);
+                                    if (obj.type === 'error') setRefineError(obj.error as string);
+                                  } catch {}
+                                }
+                              }
+                            } catch (e: unknown) {
+                              setRefineError(e instanceof Error ? e.message : '網絡錯誤');
+                            } finally {
+                              setRefineLoading(false);
+                            }
+                          }}
+                          className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-indigo-600/20 hover:bg-indigo-600/30 text-indigo-400 text-xs transition-colors border border-indigo-600/20"
+                        >
+                          <Wand2 className="w-3 h-3" />精修
+                        </button>
+                      )}
+                      {refineText && !refineLoading && (
+                        <div className="flex gap-1.5">
+                          <button
+                            onClick={() => { setTranscript(refineText); setRefineText(''); setRefineDone(false); }}
+                            className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-green-600/20 hover:bg-green-600/30 text-green-400 text-xs transition-colors border border-green-600/20"
+                          ><CheckCircle className="w-3 h-3" />採用</button>
+                          <button
+                            onClick={() => { setRefineText(''); setRefineDone(false); setRefineError(null); }}
+                            className="px-2.5 py-1 rounded-lg text-slate-500 hover:text-slate-300 text-xs transition-colors"
+                          >捨棄</button>
+                        </div>
+                      )}
+                    </div>
+                    {refineLoading && !refineText && (
+                      <div className="flex items-center gap-2 px-4 py-3">
+                        <Loader2 className="w-3.5 h-3.5 animate-spin text-indigo-400 shrink-0" />
+                        <span className="text-xs text-slate-400">Gemini 正在分析並精修逐字稿…</span>
+                      </div>
+                    )}
+                    {refineError && (
+                      <div className="flex items-center gap-2 px-4 py-3">
+                        <AlertCircle className="w-3.5 h-3.5 text-red-400 shrink-0" />
+                        <span className="text-xs text-red-300">{refineError}</span>
+                      </div>
+                    )}
+                    {refineText && (
+                      <div className="relative">
+                        <textarea
+                          readOnly
+                          value={refineText}
+                          rows={8}
+                          className="w-full bg-transparent px-4 py-3 text-sm text-slate-200 resize-none focus:outline-none font-mono leading-relaxed"
+                        />
+                        {(refineLoading || !refineDone) && (
+                          <span className="inline-block w-1.5 h-4 bg-indigo-400 animate-pulse ml-0.5 align-middle" />
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )}
 
                 <div className="bg-slate-800/60 rounded-xl border border-slate-700/50 overflow-hidden">
                   <div className="px-4 py-2.5 border-b border-slate-700/50">
@@ -1863,7 +2080,7 @@ export default function CantoneseTranscriptionPage() {
                 className="w-full bg-transparent px-4 py-3 text-xs text-slate-300 placeholder-slate-600 resize-none focus:outline-none font-mono"
               />
             </div>
-            <CassetteVisualizer transcript={transcript} segments={segments} />
+            <CassetteVisualizer transcript={transcript} segments={segments} audioUrl={sttAudioUrl} />
           </div>
         )}
 

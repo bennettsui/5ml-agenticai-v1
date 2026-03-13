@@ -104,11 +104,11 @@ async function transcribeWithGoogle({ fileBuffer, mimeType, language, onProgress
 
   if (fileBuffer.length <= INLINE_LIMIT) {
     // Inline base64
-    onProgress?.(`準備音訊（${(fileBuffer.length / 1024 / 1024).toFixed(1)} MB）...`);
+    onProgress?.(`準備音訊（${(fileBuffer.length / 1024 / 1024).toFixed(1)} MB）...`, 20);
     audioPart = { inline_data: { mime_type: mimeType, data: fileBuffer.toString('base64') } };
   } else {
     // Upload via Files API
-    onProgress?.(`上傳音訊至 Gemini Files API（${(fileBuffer.length / 1024 / 1024).toFixed(1)} MB）...`);
+    onProgress?.(`上傳音訊至 Gemini Files API（${(fileBuffer.length / 1024 / 1024).toFixed(1)} MB）...`, 15);
     const initResp = await fetch(`${BASE}/upload/v1beta/files?key=${apiKey}`, {
       method: 'POST',
       headers: {
@@ -141,11 +141,11 @@ async function transcribeWithGoogle({ fileBuffer, mimeType, language, onProgress
       throw err;
     }
     const fileData = await uploadResp.json();
-    onProgress?.('音訊上傳完成，正在轉錄...');
+    onProgress?.('音訊上傳完成，正在轉錄...', 35);
     audioPart = { file_data: { mime_type: mimeType, file_uri: fileData.file.uri } };
   }
 
-  onProgress?.('正在呼叫 Gemini 2.0 Flash...');
+  onProgress?.('正在呼叫 Gemini 2.0 Flash...', 40);
   const genUrl = `${BASE}/v1beta/models/${MODEL}:generateContent?key=${apiKey}`;
   const resp = await fetch(genUrl, {
     method: 'POST',
@@ -170,7 +170,7 @@ async function transcribeWithGoogle({ fileBuffer, mimeType, language, onProgress
 
   const data = await resp.json();
   const transcript = (data.candidates?.[0]?.content?.parts?.[0]?.text || '').trim();
-  onProgress?.(`轉錄完成（${transcript.length} 字元）`);
+  onProgress?.(`轉錄完成（${transcript.length} 字元）`, 100);
   return { provider: 'google-stt', language, transcript, segments: [] };
 }
 
@@ -263,7 +263,7 @@ async function transcribeAudio({ fileBuffer, mimeType, language, filename, provi
       // If Google STT is available, fall back silently
       if (process.env.GEMINI_API_KEY && resolved !== 'whisper') {
         console.warn('[stt-service] Whisper failed, falling back to Google STT:', err.message);
-        onProgress?.('Whisper 失敗，切換至 Gemini...');
+        onProgress?.('Whisper 失敗，切換至 Gemini...', 15);
         const result = await transcribeWithGoogle({ fileBuffer, mimeType, language, onProgress });
         return { ...result, fallbackFrom: 'whisper' };
       }
