@@ -290,4 +290,79 @@ function defaultProvider() {
   return null;
 }
 
-module.exports = { transcribeAudio, availableProviders, defaultProvider };
+// ── Speaker diarization via pyannote-audio microservice ───────────────────────
+// Calls the Python diarization service at DIARIZATION_SERVICE_URL.
+// Returns: [{ speaker: 'SPEAKER_00', start: 0.0, end: 2.5 }, ...] or null.
+//
+// Required env:
+//   DIARIZATION_SERVICE_URL — base URL of the Python diarization service
+//                             (e.g. http://localhost:8001)
+//
+// Optional params:
+//   numSpeakers  — exact number of speakers (skips auto-detection)
+//   minSpeakers  — lower bound hint
+//   maxSpeakers  — upper bound hint
+// ─────────────────────────────────────────────────────────────────────────────
+async function diarizeAudio({ fileBuffer, mimeType, filename, numSpeakers, minSpeakers, maxSpeakers } = {}) {
+  const serviceUrl = process.env.DIARIZATION_SERVICE_URL;
+  if (!serviceUrl) return null;
+
+  const form = new FormData();
+  form.append('file', fileBuffer, {
+    filename: filename || `audio.${(mimeType || 'audio/wav').split('/')[1] || 'wav'}`,
+    contentType: mimeType || 'audio/wav',
+  });
+  if (numSpeakers != null) form.append('num_speakers', String(numSpeakers));
+  if (minSpeakers  != null) form.append('min_speakers',  String(minSpeakers));
+  if (maxSpeakers  != null) form.append('max_speakers',  String(maxSpeakers));
+
+  const endpoint = serviceUrl.replace(/\/$/, '') + '/diarize';
+  let resp;
+  try {
+    resp = await fetch(endpoint, {
+      method:  'POST',
+      body:    form,
+      headers: form.getHeaders(),
+      signal:  AbortSignal.timeout(120_000),
+    });
+  } catch (err) {
+    console.warn('[stt-service] Diarization service unreachable:', err.message);
+    return null;
+  }
+
+  if (!resp.ok) {
+    console.warn('[stt-service] Diarization service error:', resp.status);
+    return null;
+  }
+
+  const data = await resp.json();
+  return data.ok ? (data.segments || null) : null;
+}
+
+// ── Speaker assignment ────────────────────────────────────────────────────────
+// Assigns a speaker label to each transcript segment by max-overlap matching
+// against pyannote diarization output.
+//
+// transcriptSegments:  [{ start, end, text, ... }]
+// diarizationSegments: [{ speaker, start, end }]
+// Returns the same array with an added `speaker` field on each segment.
+// ─────────────────────────────────────────────────────────────────────────────
+function assignSpeakers(transcriptSegments, diarizationSegments) {
+  if (!diarizationSegments?.length || !transcriptSegments?.length) {
+    return transcriptSegments;
+  }
+  return transcriptSegments.map(seg => {
+    let bestSpeaker = null;
+    let bestOverlap = 0;
+    for (const d of diarizationSegments) {
+      const overlap = Math.min(seg.end, d.end) - Math.max(seg.start, d.start);
+      if (overlap > bestOverlap) {
+        bestOverlap = overlap;
+        bestSpeaker = d.speaker;
+      }
+    }
+    return bestSpeaker ? { ...seg, speaker: bestSpeaker } : seg;
+  });
+}
+
+module.exports = { transcribeAudio, availableProviders, defaultProvider, diarizeAudio, assignSpeakers };

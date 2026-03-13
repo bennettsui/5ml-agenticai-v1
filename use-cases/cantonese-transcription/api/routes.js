@@ -958,6 +958,28 @@ router.post('/transcribe', upload.single('audio'), async (req, res) => {
       console.log(`[ct-transcribe] Merged ${result.segmentCount} segments → ${result.transcript?.length ?? 0} chars`);
     }
 
+    // ── Optional speaker diarization via pyannote-audio ─────────────────────
+    if (process.env.DIARIZATION_SERVICE_URL && result.segments?.length) {
+      try {
+        onProgress('正在識別說話者（pyannote-audio）...', 90);
+        const diarSegments = await sttService.diarizeAudio({
+          fileBuffer: req.file.buffer,
+          mimeType,
+          filename:   req.file.originalname,
+        });
+        if (diarSegments?.length) {
+          result.segments = sttService.assignSpeakers(result.segments, diarSegments);
+          result.diarized  = true;
+          const speakerCount = new Set(diarSegments.map(d => d.speaker)).size;
+          onProgress(`已識別 ${speakerCount} 位說話者`, 96);
+          console.log(`[ct-transcribe] Diarization: ${speakerCount} speakers, ${diarSegments.length} turns`);
+        }
+      } catch (diarErr) {
+        // Diarization is best-effort — never fail the whole transcription
+        console.warn('[ct-transcribe] Diarization failed (non-fatal):', diarErr.message);
+      }
+    }
+
     push({ type: 'done', ok: true, ...result });
     return res.end();
   } catch (err) {
