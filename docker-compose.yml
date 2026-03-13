@@ -4,8 +4,8 @@ services:
     image: 773182953886.dkr.ecr.ap-southeast-1.amazonaws.com/5ml-agenticai-v1:latest
     build: .
     container_name: 5ml-agenticai-app
-    ports:
-      - "80:8080"
+    expose:
+      - "8080"
     env_file:
       - .env
     environment:
@@ -13,6 +13,21 @@ services:
     depends_on:
       - postgres
     restart: unless-stopped
+
+  caddy:
+    image: caddy:2-alpine
+    container_name: 5ml-agenticai-caddy
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./infra/caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - app
+    restart: unless-stopped
+
   postgres:
     image: pgvector/pgvector:pg16
     container_name: local-postgres
@@ -27,3 +42,5 @@ services:
 
 volumes:
   local_pgdata:
+  caddy_data:
+  caddy_config:

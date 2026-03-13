@@ -1,0 +1,8 @@
+agenticai.recruitai.studio {
+    encode gzip zstd
+    reverse_proxy app:8080
+}
+
+www.agenticai.recruitai.studio {
+    redir https://agenticai.recruitai.studio{uri} 301
+}

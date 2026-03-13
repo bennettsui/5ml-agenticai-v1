@@ -189,9 +189,15 @@ jobs:
 
             chmod 600 .env
 
+            # Free ports 80/443 if host-level nginx is running
+            if command -v systemctl >/dev/null 2>&1 && systemctl is-active --quiet nginx; then
+              sudo systemctl stop nginx || true
+              sudo systemctl disable nginx || true
+            fi
+
             aws ecr get-login-password --region "$AWS_REGION" | docker login --username AWS --password-stdin "$ECR_REGISTRY"
             docker pull "$ECR_REGISTRY/5ml-agenticai-v1:latest"
-            DATABASE_URL="$DATABASE_URL" docker compose up -d --no-build --force-recreate app
+            DATABASE_URL="$DATABASE_URL" docker compose up -d --no-build --force-recreate app caddy
 
             if ! docker compose exec -T app sh -lc 'test -n "$DATABASE_URL"'; then
               echo "DATABASE_URL is still empty inside app container after deploy."
