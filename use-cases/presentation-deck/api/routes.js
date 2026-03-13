@@ -55,6 +55,38 @@ const { pool } = require('../../../db');
       ALTER TABLE slide_assets ADD COLUMN IF NOT EXISTS deck_slug    VARCHAR(100);
       ALTER TABLE slide_assets ADD COLUMN IF NOT EXISTS prompt_index INTEGER;
       ALTER TABLE slide_assets ADD COLUMN IF NOT EXISTS prompt_used  TEXT;
+
+      -- image manifest tables (needed for build-manifest / generate-approved)
+      CREATE TABLE IF NOT EXISTS presentation_settings (
+        presentation_slug VARCHAR(100) PRIMARY KEY REFERENCES presentation_decks(slug) ON DELETE CASCADE,
+        theme             TEXT DEFAULT 'dark',
+        font_primary      TEXT DEFAULT 'Inter',
+        font_secondary    TEXT DEFAULT 'Crimson Pro',
+        color_primary     TEXT DEFAULT '#ef4444',
+        color_secondary   TEXT DEFAULT '#1e293b',
+        updated_at        TIMESTAMPTZ DEFAULT NOW()
+      );
+      CREATE TABLE IF NOT EXISTS image_manifests (
+        id                UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        presentation_slug VARCHAR(100) NOT NULL REFERENCES presentation_decks(slug) ON DELETE CASCADE,
+        slide_id          INTEGER REFERENCES presentation_slides(id) ON DELETE CASCADE,
+        slide_number      INTEGER NOT NULL,
+        section           TEXT,
+        slide_title       TEXT,
+        usage             TEXT,
+        layout_type       TEXT,
+        original_prompt   TEXT NOT NULL,
+        override_prompt   TEXT,
+        status            TEXT NOT NULL DEFAULT 'pending',
+        priority          TEXT NOT NULL DEFAULT 'normal',
+        notes             TEXT,
+        asset_id          INTEGER REFERENCES slide_assets(id) ON DELETE SET NULL,
+        created_at        TIMESTAMPTZ DEFAULT NOW(),
+        updated_at        TIMESTAMPTZ DEFAULT NOW()
+      );
+      CREATE INDEX IF NOT EXISTS idx_image_manifest_slug   ON image_manifests(presentation_slug);
+      CREATE INDEX IF NOT EXISTS idx_image_manifest_status ON image_manifests(status);
+      CREATE INDEX IF NOT EXISTS idx_image_manifest_slide  ON image_manifests(slide_id);
     `);
     console.log('✅ [presentation-deck] schema guard OK');
   } catch (e) {
