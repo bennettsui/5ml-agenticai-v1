@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback, Suspense } from 'react';
+import { useState, useEffect, useCallback, useRef, Suspense } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { presentationData } from '../data';
@@ -257,6 +257,14 @@ function SlideContent({ slide }: { slide: AnySlide & { content: unknown } }) {
 
 // ─── AI Panel ────────────────────────────────────────────────────────────────
 
+interface ChatMessage {
+  id?: number;
+  role: 'user' | 'assistant';
+  content: string;
+  model?: string;
+  created_at: string;
+}
+
 interface AIPanelProps {
   slide: AnySlide & { content: unknown; slide_number: number };
   totalSlides: number;
@@ -267,75 +275,178 @@ interface AIPanelProps {
 
 function AIPanel({ slide, totalSlides, hasOverride, onApplied, onClose }: AIPanelProps) {
   const [tab, setTab] = useState<'review' | 'history'>('review');
+
+  // Persistent chat messages
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [chatLoading, setChatLoading] = useState(true);
+
+  // User instruction textarea
+  const [userComment, setUserComment] = useState('');
+
+  // AI analysis state
   const [aiState, setAiState] = useState<'idle' | 'loading' | 'done' | 'error'>('idle');
-  const [aiReview, setAiReview] = useState<AIReview | null>(null);
+  const [latestReview, setLatestReview] = useState<AIReview | null>(null);
+  const [latestModel, setLatestModel] = useState('');
+
+  // Apply state
   const [applyState, setApplyState] = useState<'idle' | 'loading' | 'done' | 'error'>('idle');
+  const [applyError, setApplyError] = useState('');
+
+  // Version history
   const [history, setHistory] = useState<VersionEntry[]>([]);
   const [historyLoading, setHistoryLoading] = useState(false);
 
-  // Reset when slide changes (parent re-mounts panel, but just in case)
+  const chatBottomRef = useRef<HTMLDivElement>(null);
+
+  // Load chat history when panel opens or slide changes
   useEffect(() => {
-    setAiReview(null);
+    setChatLoading(true);
+    setMessages([]);
+    setLatestReview(null);
     setAiState('idle');
     setApplyState('idle');
+    setApplyError('');
+    fetch(`/api/presentation-deck/${SLUG}/slides/${slide.slide_number}/chat`)
+      .then(r => r.ok ? r.json() : { messages: [] })
+      .then(d => {
+        const msgs: ChatMessage[] = d.messages || [];
+        setMessages(msgs);
+        // Restore latest AI review from last assistant message
+        const lastAI = [...msgs].reverse().find(m => m.role === 'assistant');
+        if (lastAI) {
+          try {
+            setLatestReview(JSON.parse(lastAI.content));
+            setLatestModel(lastAI.model || 'deepseek-chat');
+            setAiState('done');
+          } catch { /* not JSON, ignore */ }
+        }
+      })
+      .catch(() => {})
+      .finally(() => setChatLoading(false));
   }, [slide.slide_number]);
 
+  // Load version history when history tab is opened
   useEffect(() => {
     if (tab !== 'history') return;
     setHistoryLoading(true);
     fetch(`/api/presentation-deck/${SLUG}/slides/${slide.slide_number}/history`)
-      .then(r => r.json())
+      .then(r => r.ok ? r.json() : { history: [] })
       .then(d => setHistory(d.history || []))
       .catch(() => {})
       .finally(() => setHistoryLoading(false));
   }, [tab, slide.slide_number]);
 
-  async function handleReview() {
+  // Auto-scroll chat to bottom
+  useEffect(() => {
+    chatBottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [messages]);
+
+  async function handleAnalyse() {
+    const instruction = userComment.trim() || 'Analyse this slide and suggest improvements.';
     setAiState('loading');
-    setAiReview(null);
+    setLatestReview(null);
+    setUserComment('');
+
+    // Optimistically add user message
+    const userMsg: ChatMessage = { role: 'user', content: instruction, created_at: new Date().toISOString() };
+    setMessages(prev => [...prev, userMsg]);
+
     try {
       const res = await fetch(`/api/presentation-deck/${SLUG}/slides/${slide.slide_number}/ai-review`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ slide: { ...slide, total: totalSlides } }),
+        body: JSON.stringify({
+          slide: { ...slide, total: totalSlides },
+          userComment: instruction,
+          chatHistory: messages.slice(-6).map(m => ({ role: m.role, content: m.content })),
+        }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Review failed');
-      setAiReview(data.review);
+
+      const review: AIReview = data.review;
+      const model: string = data.model || 'deepseek-chat';
+      setLatestReview(review);
+      setLatestModel(model);
       setAiState('done');
-    } catch { setAiState('error'); }
+
+      // Add AI response to local chat
+      const aiMsg: ChatMessage = { role: 'assistant', content: JSON.stringify(review), model, created_at: new Date().toISOString() };
+      setMessages(prev => [...prev, aiMsg]);
+
+      // Persist both messages (non-blocking)
+      fetch(`/api/presentation-deck/${SLUG}/slides/${slide.slide_number}/chat/messages`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ messages: [userMsg, aiMsg] }),
+      }).catch(() => {});
+    } catch (e: unknown) {
+      setAiState('error');
+      // Remove optimistic user message
+      setMessages(prev => prev.filter(m => m !== userMsg));
+    }
   }
 
   async function handleApply() {
-    if (!aiReview) return;
+    if (!latestReview) return;
     setApplyState('loading');
+    setApplyError('');
     try {
       const res = await fetch(`/api/presentation-deck/${SLUG}/slides/${slide.slide_number}/content`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           title: slide.title, subtitle: slide.subtitle,
-          content: aiReview.updated_content, notes: slide.notes,
-          change_summary: aiReview.change_summary,
-          changed_by: 'ai', ai_comment: aiReview.overall,
+          content: latestReview.updated_content,
+          notes: slide.notes,
+          change_summary: latestReview.change_summary,
+          changed_by: 'ai',
+          ai_comment: latestReview.overall,
         }),
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error);
-      onApplied(aiReview.updated_content);
+      if (!res.ok) throw new Error(data.error || 'Save failed');
+      onApplied(latestReview.updated_content);
       setApplyState('done');
-    } catch { setApplyState('error'); }
+      setTimeout(() => setApplyState('idle'), 3000);
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : 'Unknown error';
+      setApplyError(msg);
+      setApplyState('error');
+    }
   }
 
   async function handleRestore(v: VersionEntry) {
     if (!confirm(`Restore slide to v${v.version_number}?`)) return;
     try {
-      await fetch(`/api/presentation-deck/${SLUG}/slides/${slide.slide_number}/restore/${v.id}`, { method: 'POST' });
+      const res = await fetch(
+        `/api/presentation-deck/${SLUG}/slides/${slide.slide_number}/restore/${v.id}`,
+        { method: 'POST' }
+      );
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({ error: 'Restore failed' }));
+        throw new Error(d.error || 'Restore failed');
+      }
       onApplied(v.content);
       setTab('review');
       setHistory([]);
-    } catch {}
+    } catch (e: unknown) {
+      alert(`Restore failed: ${e instanceof Error ? e.message : 'Unknown error'}`);
+    }
   }
+
+  async function handleNewChat() {
+    if (!confirm('Clear conversation history for this slide?')) return;
+    await fetch(`/api/presentation-deck/${SLUG}/slides/${slide.slide_number}/chat`, { method: 'DELETE' }).catch(() => {});
+    setMessages([]);
+    setLatestReview(null);
+    setAiState('idle');
+    setApplyState('idle');
+    setApplyError('');
+  }
+
+  const hasConversation = messages.length > 0;
+  const showNewChat = messages.length >= 4;
 
   return (
     <div className="w-80 flex-shrink-0 border-l border-slate-800/60 bg-slate-900/70 flex flex-col overflow-hidden">
@@ -354,105 +465,170 @@ function AIPanel({ slide, totalSlides, hasOverride, onApplied, onClose }: AIPane
       {/* Tabs */}
       <div className="flex border-b border-slate-800/60 flex-shrink-0">
         {(['review', 'history'] as const).map(t => (
-          <button
-            key={t}
-            onClick={() => setTab(t)}
-            className={`flex-1 py-2 text-xs font-medium transition-colors ${
-              tab === t ? 'text-purple-400 border-b-2 border-purple-400' : 'text-slate-500 hover:text-slate-300'
-            }`}
-          >
-            {t === 'review' ? 'Review' : 'History'}
+          <button key={t} onClick={() => setTab(t)}
+            className={`flex-1 py-2 text-xs font-medium transition-colors ${tab === t ? 'text-purple-400 border-b-2 border-purple-400' : 'text-slate-500 hover:text-slate-300'}`}>
+            {t === 'review' ? 'Review' : 'Version History'}
           </button>
         ))}
       </div>
 
-      {/* Review tab */}
+      {/* ── Review tab ─────────────────────────────────────────────────────────── */}
       {tab === 'review' && (
-        <div className="flex-1 overflow-y-auto p-4 space-y-4">
-          <button
-            onClick={handleReview}
-            disabled={aiState === 'loading'}
-            className="w-full flex items-center justify-center gap-2 py-2.5 px-4 rounded-lg bg-purple-600 hover:bg-purple-500 text-white text-xs font-medium disabled:opacity-50 transition-colors"
-          >
-            {aiState === 'loading' ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <BrainCircuit className="w-3.5 h-3.5" />}
-            {aiState === 'loading' ? 'Analysing slide…' : 'Analyse This Slide'}
-          </button>
+        <div className="flex-1 flex flex-col overflow-hidden">
 
-          {aiState === 'error' && (
-            <p className="text-xs text-red-400 text-center">Review failed. Check DeepSeek API key.</p>
-          )}
-
-          {aiReview && (
-            <div className="space-y-3">
-              {/* Assessment */}
-              <div className="bg-white/[0.03] border border-slate-700/30 rounded-lg p-3">
-                <div className="text-[10px] font-semibold text-slate-500 uppercase tracking-wide mb-1.5">Assessment</div>
-                <p className="text-xs text-slate-300 leading-relaxed">{aiReview.overall}</p>
-              </div>
-
-              {/* Issues */}
-              {aiReview.issues.length > 0 && (
-                <div>
-                  <div className="text-[10px] font-semibold text-red-400/80 uppercase tracking-wide mb-1.5">Issues</div>
-                  <ul className="space-y-1">
-                    {aiReview.issues.map((issue, i) => (
-                      <li key={i} className="text-xs text-slate-400 flex gap-2">
-                        <span className="text-red-500 shrink-0 mt-0.5">·</span>{issue}
-                      </li>
-                    ))}
-                  </ul>
+          {/* Chat history area */}
+          <div className="flex-1 overflow-y-auto p-3 space-y-2">
+            {chatLoading ? (
+              <div className="flex justify-center py-6"><Loader2 className="w-4 h-4 animate-spin text-slate-600" /></div>
+            ) : !hasConversation ? (
+              <p className="text-xs text-slate-600 text-center py-6 leading-relaxed">
+                Type your instructions below, or just click Analyse to let AI review this slide.
+              </p>
+            ) : (
+              messages.map((msg, i) => {
+                if (msg.role === 'user') {
+                  return (
+                    <div key={i} className="flex justify-end">
+                      <div className="max-w-[85%] bg-slate-700/60 border border-slate-600/40 rounded-lg rounded-br-sm px-3 py-2">
+                        <p className="text-xs text-slate-200 leading-relaxed">{msg.content}</p>
+                        <p className="text-[10px] text-slate-600 mt-1 text-right">
+                          {new Date(msg.created_at).toLocaleString('en-HK', { hour: '2-digit', minute: '2-digit' })}
+                        </p>
+                      </div>
+                    </div>
+                  );
+                }
+                // AI message — parse and show compact review
+                let review: AIReview | null = null;
+                try { review = JSON.parse(msg.content); } catch {}
+                const isLatest = i === messages.length - 1;
+                return (
+                  <div key={i} className="flex justify-start">
+                    <div className="max-w-[92%] bg-white/[0.03] border border-purple-500/15 rounded-lg rounded-bl-sm px-3 py-2.5 space-y-1.5">
+                      <div className="flex items-center gap-1.5 mb-1">
+                        <BrainCircuit className="w-3 h-3 text-purple-400" />
+                        <span className="text-[10px] text-purple-400 font-medium">AI</span>
+                        {msg.model && <span className="text-[9px] text-slate-600">{msg.model}</span>}
+                      </div>
+                      {review ? (
+                        <>
+                          <p className="text-[11px] text-slate-300 leading-relaxed">{review.overall}</p>
+                          {review.issues?.length > 0 && (
+                            <ul className="space-y-0.5">
+                              {review.issues.map((issue, j) => (
+                                <li key={j} className="text-[10px] text-slate-500 flex gap-1.5">
+                                  <span className="text-red-500 shrink-0">·</span>{issue}
+                                </li>
+                              ))}
+                            </ul>
+                          )}
+                          {review.suggestions?.length > 0 && (
+                            <ul className="space-y-0.5">
+                              {review.suggestions.map((s, j) => (
+                                <li key={j} className="text-[10px] text-slate-500 flex gap-1.5">
+                                  <span className="text-emerald-500 shrink-0">✓</span>{s}
+                                </li>
+                              ))}
+                            </ul>
+                          )}
+                          {isLatest && (
+                            <div className="pt-1">
+                              <button
+                                onClick={handleApply}
+                                disabled={applyState === 'loading'}
+                                className={`w-full flex items-center justify-center gap-1.5 py-1.5 px-3 rounded-md text-[11px] font-medium transition-colors ${
+                                  applyState === 'done'
+                                    ? 'bg-emerald-600/30 text-emerald-400 border border-emerald-500/30'
+                                    : 'bg-emerald-600 hover:bg-emerald-500 text-white'
+                                } disabled:opacity-50`}
+                              >
+                                {applyState === 'loading' ? <Loader2 className="w-3 h-3 animate-spin" /> :
+                                  applyState === 'done' ? <CheckCircle2 className="w-3 h-3" /> :
+                                  <Zap className="w-3 h-3" />}
+                                {applyState === 'done' ? 'Applied!' :
+                                  applyState === 'loading' ? 'Applying…' : 'Apply to Slide'}
+                              </button>
+                              {applyState === 'error' && (
+                                <p className="text-[10px] text-red-400 mt-1">{applyError || 'Save failed'}</p>
+                              )}
+                            </div>
+                          )}
+                        </>
+                      ) : (
+                        <p className="text-[11px] text-slate-400">{msg.content}</p>
+                      )}
+                      <p className="text-[9px] text-slate-700">
+                        {new Date(msg.created_at).toLocaleString('en-HK', { hour: '2-digit', minute: '2-digit' })}
+                      </p>
+                    </div>
+                  </div>
+                );
+              })
+            )}
+            {/* Loading indicator for in-progress AI response */}
+            {aiState === 'loading' && (
+              <div className="flex justify-start">
+                <div className="bg-white/[0.03] border border-purple-500/15 rounded-lg px-3 py-2.5">
+                  <div className="flex items-center gap-2">
+                    <Loader2 className="w-3 h-3 animate-spin text-purple-400" />
+                    <span className="text-[11px] text-slate-500">Analysing slide…</span>
+                  </div>
                 </div>
-              )}
-
-              {/* Suggestions */}
-              {aiReview.suggestions.length > 0 && (
-                <div>
-                  <div className="text-[10px] font-semibold text-emerald-400/80 uppercase tracking-wide mb-1.5">Suggestions</div>
-                  <ul className="space-y-1">
-                    {aiReview.suggestions.map((s, i) => (
-                      <li key={i} className="text-xs text-slate-400 flex gap-2">
-                        <span className="text-emerald-500 shrink-0 mt-0.5">✓</span>{s}
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-
-              <div className="text-[10px] text-slate-600 italic border-t border-slate-800/60 pt-2">
-                {aiReview.change_summary}
               </div>
+            )}
+            {aiState === 'error' && (
+              <div className="flex justify-start">
+                <div className="bg-red-500/5 border border-red-500/20 rounded-lg px-3 py-2">
+                  <p className="text-[11px] text-red-400">Analysis failed. Check DeepSeek API key.</p>
+                </div>
+              </div>
+            )}
+            <div ref={chatBottomRef} />
+          </div>
 
-              {/* Apply button */}
+          {/* Input area */}
+          <div className="flex-shrink-0 border-t border-slate-800/60 p-3 space-y-2">
+            <textarea
+              value={userComment}
+              onChange={e => setUserComment(e.target.value)}
+              onKeyDown={e => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) handleAnalyse(); }}
+              placeholder="Your instructions, e.g. 'Make it more concise' or 'Focus on ROI'…"
+              rows={2}
+              className="w-full bg-white/[0.04] border border-slate-700/50 rounded-lg px-3 py-2 text-xs text-slate-300 placeholder-slate-600 focus:outline-none focus:border-purple-500/50 resize-none leading-relaxed"
+            />
+            <div className="flex items-center gap-2">
               <button
-                onClick={handleApply}
-                disabled={applyState === 'loading' || applyState === 'done'}
-                className="w-full flex items-center justify-center gap-2 py-2 px-4 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-medium disabled:opacity-50 transition-colors"
+                onClick={handleAnalyse}
+                disabled={aiState === 'loading'}
+                className="flex-1 flex items-center justify-center gap-1.5 py-2 px-3 rounded-lg bg-purple-600 hover:bg-purple-500 text-white text-xs font-medium disabled:opacity-50 transition-colors"
               >
-                {applyState === 'loading' ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> :
-                  applyState === 'done' ? <CheckCircle2 className="w-3.5 h-3.5" /> :
-                  <Zap className="w-3.5 h-3.5" />}
-                {applyState === 'done' ? 'Applied to slide!' :
-                  applyState === 'loading' ? 'Saving…' : 'Apply Changes to Slide'}
+                {aiState === 'loading' ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <BrainCircuit className="w-3.5 h-3.5" />}
+                {aiState === 'loading' ? 'Analysing…' : 'Analyse'}
               </button>
-              {applyState === 'error' && <p className="text-xs text-red-400 text-center">Save failed.</p>}
+              {showNewChat && (
+                <button
+                  onClick={handleNewChat}
+                  className="flex items-center gap-1 py-2 px-2.5 rounded-lg border border-slate-700/60 text-slate-500 hover:text-slate-300 hover:border-slate-600 text-xs transition-colors"
+                  title="Clear conversation"
+                >
+                  <RotateCcw className="w-3 h-3" />New chat
+                </button>
+              )}
             </div>
-          )}
-
-          {aiState === 'idle' && !aiReview && (
-            <p className="text-xs text-slate-600 text-center leading-relaxed">
-              Click "Analyse This Slide" to get AI-powered feedback and suggested improvements using DeepSeek.
-            </p>
-          )}
+            {latestModel && aiState !== 'idle' && (
+              <p className="text-[10px] text-slate-700 text-center">Model: {latestModel}</p>
+            )}
+          </div>
         </div>
       )}
 
-      {/* History tab */}
+      {/* ── History tab ─────────────────────────────────────────────────────────── */}
       {tab === 'history' && (
-        <div className="flex-1 overflow-y-auto p-4">
+        <div className="flex-1 overflow-y-auto p-3">
           {historyLoading ? (
             <div className="flex justify-center py-8"><Loader2 className="w-4 h-4 animate-spin text-slate-500" /></div>
           ) : history.length === 0 ? (
-            <p className="text-xs text-slate-600 text-center py-8">No version history yet.<br />Apply an AI review to create the first version.</p>
+            <p className="text-xs text-slate-600 text-center py-8 leading-relaxed">No version history yet.<br />Apply an AI review to create the first version.</p>
           ) : (
             <div className="space-y-2">
               {history.map(v => (
@@ -460,21 +636,16 @@ function AIPanel({ slide, totalSlides, hasOverride, onApplied, onClose }: AIPane
                   <div className="flex items-center justify-between mb-1">
                     <span className="text-xs font-semibold text-slate-300">v{v.version_number}</span>
                     <span className={`text-[10px] px-1.5 py-0.5 rounded border ${
-                      v.changed_by === 'ai'
-                        ? 'bg-purple-500/10 text-purple-400 border-purple-500/20'
-                        : v.changed_by === 'restore'
-                          ? 'bg-blue-500/10 text-blue-400 border-blue-500/20'
-                          : 'bg-slate-700/60 text-slate-400 border-slate-600/50'
-                    }`}>
+                      v.changed_by === 'ai' ? 'bg-purple-500/10 text-purple-400 border-purple-500/20' :
+                      v.changed_by === 'restore' ? 'bg-blue-500/10 text-blue-400 border-blue-500/20' :
+                      'bg-slate-700/60 text-slate-400 border-slate-600/50'}`}>
                       {v.changed_by}
                     </span>
                   </div>
                   <p className="text-[10px] text-slate-400 mb-1">{v.change_summary}</p>
-                  {v.ai_comment && (
-                    <p className="text-[10px] text-slate-600 italic mb-2 line-clamp-2">{v.ai_comment}</p>
-                  )}
+                  {v.ai_comment && <p className="text-[10px] text-slate-600 italic mb-2 line-clamp-2">{v.ai_comment}</p>}
                   <div className="flex items-center justify-between">
-                    <span className="text-[10px] text-slate-700">
+                    <span className="text-[9px] text-slate-700">
                       {new Date(v.created_at).toLocaleString('en-HK', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
                     </span>
                     <button
@@ -509,6 +680,7 @@ function SlidesPresenter() {
   const [showAI, setShowAI] = useState(false);
   const [showBgImage, setShowBgImage] = useState(true);
   const [downloading, setDownloading] = useState(false);
+  const [slideFlash, setSlideFlash] = useState(false);
 
   // Content overrides from DB (AI/user edits)
   const [overrides, setOverrides] = useState<Record<number, SlideOverride>>({});
@@ -592,6 +764,9 @@ function SlidesPresenter() {
         updated_at: new Date().toISOString(),
       },
     }));
+    // Flash the slide to confirm the change
+    setSlideFlash(true);
+    setTimeout(() => setSlideFlash(false), 1200);
   }
 
   const bgImageUrl = genImages[rawSlide.slide_number]?.[0];
@@ -696,7 +871,7 @@ function SlidesPresenter() {
           )}
 
           {/* Slide content (with generated image as background) */}
-          <div className="flex-1 overflow-y-auto relative">
+          <div className={`flex-1 overflow-y-auto relative transition-all duration-300 ${slideFlash ? 'ring-2 ring-inset ring-purple-500/50' : ''}`}>
             {showBgImage && bgImageUrl && (
               <div
                 className="absolute inset-0 z-0 bg-cover bg-center"
