@@ -9,6 +9,8 @@ import {
   Image, MessageSquare,
 } from 'lucide-react';
 
+const SLUG = '2603CLPtender';
+
 const SECTION_LABELS: Record<string, string> = {
   opening: 'Opening',
   understanding: 'Understanding',
@@ -94,6 +96,61 @@ function ContentSlide({ content }: { content: { blocks: { heading: string; body:
           </div>
         ))}
       </div>
+    </div>
+  );
+}
+
+function VisualHeavySlide({ content }: { content: Record<string, unknown> }) {
+  const colorStrategy = content.color_strategy as Record<string, string> | undefined;
+  const characterDesign = content.character_design as Record<string, string> | undefined;
+  const sceneStyle = content.scene_style as string | undefined;
+  const blocks = content.blocks as { heading: string; body: string }[] | undefined;
+
+  if (blocks) {
+    return (
+      <div className="h-full flex flex-col justify-center px-16 max-w-4xl mx-auto w-full">
+        <div className="space-y-7">
+          {blocks.map((block, i) => (
+            <div key={i} className="flex gap-6">
+              <div className="w-8 h-8 rounded-lg bg-white/[0.04] border border-white/[0.06] flex items-center justify-center flex-shrink-0 mt-0.5">
+                <span className="text-xs font-mono text-slate-500">{String(i + 1).padStart(2, '0')}</span>
+              </div>
+              <div>
+                <h3 className="text-base font-semibold text-white mb-1.5">{block.heading}</h3>
+                <p className="text-slate-400 text-sm leading-relaxed">{block.body}</p>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="h-full flex flex-col justify-center px-16 max-w-4xl mx-auto w-full gap-6">
+      {colorStrategy && (
+        <div className="grid grid-cols-3 gap-4">
+          {Object.entries(colorStrategy).map(([k, v]) => (
+            <div key={k} className="bg-white/[0.03] border border-white/[0.06] rounded-xl p-4">
+              <div className="text-xs font-medium text-slate-500 mb-2 capitalize">{k.replace('_', ' ')}</div>
+              <p className="text-xs text-slate-300 leading-relaxed">{v}</p>
+            </div>
+          ))}
+        </div>
+      )}
+      {characterDesign && (
+        <div className="grid grid-cols-2 gap-4">
+          {Object.entries(characterDesign).map(([k, v]) => (
+            <div key={k} className="bg-white/[0.03] border border-white/[0.06] rounded-xl p-4">
+              <div className="text-xs font-medium text-amber-400/80 mb-2 capitalize">{k.replace('_', ' ')}</div>
+              <p className="text-xs text-slate-300 leading-relaxed">{v}</p>
+            </div>
+          ))}
+        </div>
+      )}
+      {sceneStyle && (
+        <p className="text-sm text-slate-400 leading-relaxed italic border-l-2 border-slate-700 pl-4">{sceneStyle}</p>
+      )}
     </div>
   );
 }
@@ -247,6 +304,8 @@ function SlideContent({ slide }: { slide: (typeof presentationData.presentation.
           content={content as { left: { title: string; items: string[] }; right: { title: string; items: string[] } }}
         />
       );
+    case 'visual-heavy':
+      return <VisualHeavySlide content={content as Record<string, unknown>} />;
     default:
       return <ContentSlide content={content as { blocks: { heading: string; body: string }[] }} />;
   }
@@ -267,6 +326,29 @@ function SlidesPresenter() {
   const [showNotes, setShowNotes] = useState(false);
   const [showVisuals, setShowVisuals] = useState(false);
   const [showThumbnails, setShowThumbnails] = useState(false);
+
+  // Generated images indexed by slide_number
+  const [genImages, setGenImages] = useState<Record<number, string[]>>({});
+  const [genImagesLoaded, setGenImagesLoaded] = useState(false);
+
+  useEffect(() => {
+    if (!showVisuals || genImagesLoaded) return;
+    (async () => {
+      try {
+        const res = await fetch(`/api/presentation-deck/${SLUG}/images?status=generated&limit=500`);
+        if (!res.ok) return;
+        const data = await res.json();
+        const bySlide: Record<number, string[]> = {};
+        for (const img of (data.images || [])) {
+          if (!img.image_url) continue;
+          if (!bySlide[img.slide_number]) bySlide[img.slide_number] = [];
+          bySlide[img.slide_number].push(img.image_url);
+        }
+        setGenImages(bySlide);
+        setGenImagesLoaded(true);
+      } catch { /* ignore */ }
+    })();
+  }, [showVisuals, genImagesLoaded]);
 
   const slide = slides[currentIndex];
   const accent = SECTION_ACCENT[slide.section] || '#E60000';
@@ -367,24 +449,52 @@ function SlidesPresenter() {
 
           {/* Notes / Visuals panel */}
           {(showNotes || showVisuals) && (
-            <div className="border-t border-slate-800/60 bg-slate-900/40 flex-shrink-0 max-h-44 overflow-y-auto">
+            <div className="border-t border-slate-800/60 bg-slate-900/40 flex-shrink-0 max-h-64 overflow-y-auto">
               {showNotes && slide.notes && (
                 <div className="px-6 py-3">
                   <div className="text-xs font-medium text-amber-400 mb-1">Speaker notes</div>
                   <p className="text-sm text-slate-400 leading-relaxed">{slide.notes}</p>
                 </div>
               )}
-              {showVisuals && slide.visual_prompts.length > 0 && (
-                <div className="px-6 py-3">
-                  <div className="text-xs font-medium text-blue-400 mb-2">Visual prompts</div>
-                  <div className="space-y-1.5">
-                    {slide.visual_prompts.map((vp, i) => (
-                      <div key={i} className="flex items-start gap-2">
-                        <span className="text-xs font-mono text-slate-600 flex-shrink-0">{i + 1}.</span>
-                        <p className="text-xs text-slate-400 leading-relaxed">{vp}</p>
+              {showVisuals && (
+                <div className="px-6 py-3 space-y-4">
+                  {/* Generated images for this slide */}
+                  {(genImages[slide.slide_number] || []).length > 0 && (
+                    <div>
+                      <div className="text-xs font-medium text-emerald-400 mb-2">Generated images</div>
+                      <div className="flex gap-3 flex-wrap">
+                        {(genImages[slide.slide_number] || []).map((url, i) => (
+                          <a key={i} href={url} target="_blank" rel="noreferrer">
+                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                            <img
+                              src={url}
+                              alt={`Generated image ${i + 1}`}
+                              className="h-32 w-auto rounded-lg border border-emerald-500/20 object-cover hover:border-emerald-400/50 transition-colors"
+                            />
+                          </a>
+                        ))}
                       </div>
-                    ))}
-                  </div>
+                    </div>
+                  )}
+
+                  {/* Visual prompts */}
+                  {(slide.visual_prompts?.length ?? 0) > 0 && (
+                    <div>
+                      <div className="text-xs font-medium text-blue-400 mb-2">Visual prompts</div>
+                      <div className="space-y-1.5">
+                        {(slide.visual_prompts || []).map((vp, i) => (
+                          <div key={i} className="flex items-start gap-2">
+                            <span className="text-xs font-mono text-slate-600 flex-shrink-0">{i + 1}.</span>
+                            <p className="text-xs text-slate-400 leading-relaxed">{vp}</p>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {(genImages[slide.slide_number] || []).length === 0 && (slide.visual_prompts?.length ?? 0) === 0 && (
+                    <p className="text-xs text-slate-600">No visuals for this slide.</p>
+                  )}
                 </div>
               )}
             </div>
