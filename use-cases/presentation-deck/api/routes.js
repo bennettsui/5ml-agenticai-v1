@@ -117,6 +117,18 @@ const { pool } = require('../../../db');
         created_at     TIMESTAMPTZ DEFAULT NOW()
       );
       CREATE INDEX IF NOT EXISTS idx_slide_version_slug_num ON slide_version_history(deck_slug, slide_number);
+
+      -- chat conversation history per slide
+      CREATE TABLE IF NOT EXISTS slide_chat_messages (
+        id           SERIAL PRIMARY KEY,
+        deck_slug    VARCHAR(100) NOT NULL,
+        slide_number INTEGER NOT NULL,
+        role         VARCHAR(20) NOT NULL,
+        content      TEXT NOT NULL,
+        model        VARCHAR(50),
+        created_at   TIMESTAMPTZ DEFAULT NOW()
+      );
+      CREATE INDEX IF NOT EXISTS idx_slide_chat ON slide_chat_messages(deck_slug, slide_number, created_at);
     `);
     console.log('✅ [presentation-deck] schema guard OK');
   } catch (e) {
@@ -871,38 +883,44 @@ router.get('/:slug/slide-overrides', async (req, res) => {
 router.post('/:slug/slides/:slideNum/ai-review', async (req, res) => {
   const { slug, slideNum } = req.params;
   const slideNumber = parseInt(slideNum, 10);
-  const { slide } = req.body;
+  const { slide, userComment, chatHistory = [] } = req.body;
   const apiKey = process.env.DEEPSEEK_API_KEY;
   if (!apiKey) return res.status(503).json({ error: 'DEEPSEEK_API_KEY not configured' });
 
   try {
     const axios = require('axios');
-    const prompt = `You are a senior presentation consultant reviewing slide ${slideNumber} of ${slide.total || '?'} for a corporate tender by 5 Miles Lab for CLP Power Hong Kong (electricity company).
+    const MODEL = 'deepseek-chat';
 
-Slide context:
-- Section: "${slide.section}"
-- Layout type: "${slide.layout_type}"
-- Title: ${slide.title || '(none)'}
-- Subtitle: ${slide.subtitle || '(none)'}
-- Presenter notes: ${slide.notes || '(none)'}
+    const systemContent = `You are a senior presentation consultant reviewing slides for a CLP Power Hong Kong tender proposal by 5 Miles Lab.
 
-Current content JSON:
-${JSON.stringify(slide.content, null, 2)}
-
-Analyse this slide and return ONLY valid JSON (no markdown fences) matching this exact schema:
+Always respond with ONLY valid JSON (no markdown fences) matching this schema exactly:
 {
   "overall": "2–3 sentence overall assessment",
   "issues": ["specific issue 1", "specific issue 2"],
   "suggestions": ["improvement 1", "improvement 2"],
   "change_summary": "one-line summary of what changed",
-  "updated_content": { /* improved content using the EXACT SAME JSON structure and keys */ }
+  "updated_content": { /* improved content using the EXACT SAME JSON keys as the current content */ }
 }
 
-Rules: keep the same JSON structure/keys in updated_content. Be concise, persuasive, professional. Focus on impact for a CLP Power tender.`;
+Slide context for this session:
+- Slide ${slideNumber} of ${slide.total || '?'} · Section: "${slide.section}" · Layout: "${slide.layout_type}"
+- Title: ${slide.title || '(none)'}
+- Subtitle: ${slide.subtitle || '(none)'}
+- Presenter notes: ${slide.notes || '(none)'}
+
+Current content:
+${JSON.stringify(slide.content, null, 2)}`;
+
+    // Build conversation: system + prior turns (max 6) + current user message
+    const messages = [{ role: 'system', content: systemContent }];
+    for (const msg of chatHistory.slice(-6)) {
+      messages.push({ role: msg.role === 'assistant' ? 'assistant' : 'user', content: msg.content });
+    }
+    messages.push({ role: 'user', content: userComment || 'Please analyse this slide and suggest improvements.' });
 
     const response = await axios.post(
       'https://api.deepseek.com/chat/completions',
-      { model: 'deepseek-chat', messages: [{ role: 'user', content: prompt }], max_tokens: 3000, temperature: 0.7 },
+      { model: MODEL, messages, max_tokens: 3000, temperature: 0.7 },
       { headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' }, timeout: 90000 }
     );
 
@@ -913,11 +931,53 @@ Rules: keep the same JSON structure/keys in updated_content. Be concise, persuas
     } catch {
       review = { overall: raw, issues: [], suggestions: [], change_summary: 'AI review', updated_content: slide.content };
     }
-    res.json({ review, usage: response.data.usage });
+    res.json({ review, model: response.data.model || MODEL, usage: response.data.usage });
   } catch (err) {
     console.error('[presentation-deck] ai-review error', err.message);
     res.status(500).json({ error: err.message });
   }
+});
+
+// ─── GET /api/presentation-deck/:slug/slides/:slideNum/chat ──────────────────
+router.get('/:slug/slides/:slideNum/chat', async (req, res) => {
+  const { slug, slideNum } = req.params;
+  const slideNumber = parseInt(slideNum, 10);
+  try {
+    const { rows } = await pool.query(
+      `SELECT id, role, content, model, created_at
+       FROM slide_chat_messages
+       WHERE deck_slug=$1 AND slide_number=$2
+       ORDER BY created_at ASC LIMIT 40`,
+      [slug, slideNumber]
+    );
+    res.json({ messages: rows });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// ─── POST /api/presentation-deck/:slug/slides/:slideNum/chat/messages ────────
+router.post('/:slug/slides/:slideNum/chat/messages', async (req, res) => {
+  const { slug, slideNum } = req.params;
+  const slideNumber = parseInt(slideNum, 10);
+  const { messages } = req.body;
+  try {
+    for (const msg of (messages || [])) {
+      await pool.query(
+        `INSERT INTO slide_chat_messages (deck_slug, slide_number, role, content, model) VALUES ($1,$2,$3,$4,$5)`,
+        [slug, slideNumber, msg.role, msg.content, msg.model || null]
+      );
+    }
+    res.json({ ok: true });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// ─── DELETE /api/presentation-deck/:slug/slides/:slideNum/chat ───────────────
+router.delete('/:slug/slides/:slideNum/chat', async (req, res) => {
+  const { slug, slideNum } = req.params;
+  const slideNumber = parseInt(slideNum, 10);
+  try {
+    await pool.query(`DELETE FROM slide_chat_messages WHERE deck_slug=$1 AND slide_number=$2`, [slug, slideNumber]);
+    res.json({ ok: true });
+  } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
 // ─── PUT /api/presentation-deck/:slug/slides/:slideNum/content ────────────────
@@ -989,7 +1049,7 @@ router.post('/:slug/slides/:slideNum/restore/:versionId', async (req, res) => {
       `SELECT * FROM slide_version_history WHERE id=$1 AND deck_slug=$2 AND slide_number=$3`,
       [parseInt(versionId, 10), slug, slideNumber]
     );
-    if (!vRows.length) return res.status(404).json({ error: 'Version not found' });
+    if (!vRows.length) return res.status(404).json({ error: `Version ${versionId} not found for slide ${slideNumber}` });
     const v = vRows[0];
 
     const { rows: cRows } = await pool.query(
