@@ -1017,6 +1017,188 @@ router.post('/:slug/slides/:slideNum/restore/:versionId', async (req, res) => {
   }
 });
 
+// ─── PPTX Export ─────────────────────────────────────────────────────────────
+
+const PPTX_BG      = '0F172A';
+const PPTX_WHITE   = 'F8FAFC';
+const PPTX_GRAY300 = 'CBD5E1';
+const PPTX_GRAY400 = '94A3B8';
+const PPTX_GRAY500 = '64748B';
+const PPTX_ACCENT  = { opening: 'E60000', understanding: '0057A8', approach: 'F4A742', logistics: '22C55E', lettershop: 'A855F7', hsse: 'F97316', team: '14B8A6', closing: 'F43F5E' };
+const PPTX_SECTION = { opening: 'Opening', understanding: 'Understanding', approach: 'Design & Production', logistics: 'Logistics', lettershop: 'Lettershop', hsse: 'HSSE', team: 'Team', closing: 'Closing' };
+
+function pptxAddSlideHeader(sl, pptx, s) {
+  const accent = PPTX_ACCENT[s.section] || 'E60000';
+  sl.addShape(pptx.ShapeType.rect, { x: 0.5, y: 0.28, w: 0.28, h: 0.05, fill: { color: accent }, line: { color: accent } });
+  sl.addText((PPTX_SECTION[s.section] || s.section).toUpperCase(), { x: 0.88, y: 0.18, w: 6, h: 0.28, color: PPTX_GRAY500, fontSize: 7.5, charSpacing: 1.5 });
+  sl.addText(s.title || '', { x: 0.5, y: 0.58, w: 12.33, h: 0.65, color: PPTX_WHITE, fontSize: 21, bold: true });
+  if (s.subtitle) sl.addText(s.subtitle, { x: 0.5, y: 1.26, w: 12.33, h: 0.3, color: PPTX_GRAY400, fontSize: 11 });
+  sl.addShape(pptx.ShapeType.rect, { x: 0.5, y: 1.62, w: 12.33, h: 0.007, fill: { color: '1E293B' }, line: { color: '1E293B' } });
+}
+
+router.get('/:slug/export/pptx', async (req, res) => {
+  const { slug } = req.params;
+  try {
+    const { rows: dbSlides } = await pool.query(
+      `SELECT ps.slide_number, ps.section, ps.layout_type,
+              COALESCE(sco.title,    ps.title)    AS title,
+              COALESCE(sco.subtitle, ps.subtitle) AS subtitle,
+              COALESCE(sco.content,  ps.content)  AS content,
+              COALESCE(sco.notes,    ps.notes)    AS notes
+       FROM presentation_slides ps
+       LEFT JOIN slide_content_overrides sco
+         ON sco.deck_slug = ps.deck_slug AND sco.slide_number = ps.slide_number
+       WHERE ps.deck_slug = $1 ORDER BY ps.slide_number`,
+      [slug]
+    );
+    if (!dbSlides.length) return res.status(404).json({ error: 'No slides found. Seed the presentation first.' });
+
+    // First generated image URL per slide
+    const { rows: imgRows } = await pool.query(
+      `SELECT im.slide_number, sa.public_url
+       FROM image_manifests im
+       JOIN slide_assets sa ON sa.id = im.asset_id
+       WHERE im.presentation_slug=$1 AND im.status='generated' AND sa.public_url IS NOT NULL
+       ORDER BY im.slide_number, im.created_at ASC`,
+      [slug]
+    );
+    const slideImages = {};
+    for (const r of imgRows) { if (!slideImages[r.slide_number]) slideImages[r.slide_number] = r.public_url; }
+
+    const PptxGenJS = require('pptxgenjs');
+    const pptx = new PptxGenJS();
+    pptx.layout = 'WIDE';
+    pptx.title = 'CLP Power — 5 Miles Lab Tender Proposal';
+    pptx.company = '5 Miles Lab';
+
+    for (const row of dbSlides) {
+      const s = { ...row, content: row.content || {} };
+      const sl = pptx.addSlide();
+      sl.background = { color: PPTX_BG };
+      const c = s.content;
+      const accent = PPTX_ACCENT[s.section] || 'E60000';
+
+      // Semi-transparent generated image background
+      if (slideImages[s.slide_number]) {
+        sl.addImage({ path: slideImages[s.slide_number], x: 0, y: 0, w: 13.33, h: 7.5, transparency: 78 });
+      }
+
+      // ── Cover ──────────────────────────────────────────────────────────────
+      if (s.layout_type === 'cover') {
+        sl.addText('CLP POWER  ·  5 MILES LAB', { x: 0, y: 1.5, w: 13.33, h: 0.35, align: 'center', color: accent, fontSize: 9, bold: true, charSpacing: 3 });
+        sl.addText(c.main_title || s.title || '', { x: 1, y: 2.05, w: 11.33, h: 1.85, align: 'center', color: PPTX_WHITE, fontSize: 34, bold: true });
+        sl.addText(c.subtitle_cn || s.subtitle || '', { x: 1, y: 4.0, w: 11.33, h: 0.65, align: 'center', color: PPTX_GRAY300, fontSize: 19 });
+        sl.addShape(pptx.ShapeType.rect, { x: 5.67, y: 4.85, w: 2, h: 0.04, fill: { color: accent }, line: { color: accent } });
+        if (c.project_name) sl.addText(c.project_name, { x: 1, y: 5.15, w: 11.33, h: 0.35, align: 'center', color: PPTX_GRAY500, fontSize: 10 });
+        if (c.date) sl.addText(c.date, { x: 1, y: 6.55, w: 11.33, h: 0.35, align: 'center', color: PPTX_GRAY500, fontSize: 9 });
+      }
+
+      // ── Section divider ────────────────────────────────────────────────────
+      else if (s.layout_type === 'section-divider') {
+        sl.addShape(pptx.ShapeType.rect, { x: 5.67, y: 2.52, w: 2, h: 0.05, fill: { color: accent }, line: { color: accent } });
+        sl.addText(c.section_title || s.title || '', { x: 0.5, y: 2.88, w: 12.33, h: 1.3, align: 'center', color: PPTX_WHITE, fontSize: 38, bold: true });
+        sl.addText(c.section_subtitle || s.subtitle || '', { x: 1.5, y: 4.28, w: 10.33, h: 0.7, align: 'center', color: PPTX_GRAY400, fontSize: 16 });
+      }
+
+      // ── Statement ──────────────────────────────────────────────────────────
+      else if (s.layout_type === 'statement') {
+        pptxAddSlideHeader(sl, pptx, s);
+        const y0 = 1.78;
+        if (c.problem) sl.addText(c.problem, { x: 0.5, y: y0, w: 12.33, h: 0.65, color: PPTX_GRAY400, fontSize: 13 });
+        if (c.our_difference) sl.addText(c.our_difference, { x: 0.5, y: y0 + 0.8, w: 12.33, h: 1.4, color: PPTX_WHITE, fontSize: 19, bold: true });
+        (Array.isArray(c.supporting_points) ? c.supporting_points : []).forEach((pt, i) => {
+          sl.addShape(pptx.ShapeType.ellipse, { x: 0.5, y: y0 + 2.48 + i * 0.52, w: 0.14, h: 0.14, fill: { color: accent + '55' }, line: { color: accent } });
+          sl.addText(String(pt), { x: 0.76, y: y0 + 2.41 + i * 0.52, w: 11.57, h: 0.36, color: PPTX_GRAY300, fontSize: 12 });
+        });
+      }
+
+      // ── Content (numbered blocks) ──────────────────────────────────────────
+      else if (s.layout_type === 'content') {
+        pptxAddSlideHeader(sl, pptx, s);
+        const blocks = Array.isArray(c.blocks) ? c.blocks : [];
+        const gap = blocks.length > 4 ? 1.1 : 1.3;
+        blocks.slice(0, 6).forEach((block, i) => {
+          const y = 1.78 + i * gap;
+          sl.addText(String(i + 1).padStart(2, '0'), { x: 0.5, y, w: 0.55, h: 0.35, color: PPTX_GRAY500, fontSize: 9, fontFace: 'Courier New' });
+          sl.addText(block.heading || '', { x: 1.15, y, w: 11.5, h: 0.38, color: PPTX_WHITE, fontSize: 13, bold: true });
+          sl.addText(block.body || '', { x: 1.15, y: y + 0.42, w: 11.5, h: 0.58, color: PPTX_GRAY400, fontSize: 11 });
+        });
+      }
+
+      // ── Two-column ─────────────────────────────────────────────────────────
+      else if (s.layout_type === 'two-column') {
+        pptxAddSlideHeader(sl, pptx, s);
+        [c.left, c.right].forEach((col, ci) => {
+          if (!col) return;
+          const x = ci === 0 ? 0.5 : 7.1;
+          sl.addText(col.title || '', { x, y: 1.82, w: 5.8, h: 0.38, color: PPTX_WHITE, fontSize: 13, bold: true });
+          sl.addShape(pptx.ShapeType.rect, { x, y: 2.24, w: 5.8, h: 0.006, fill: { color: '1E293B' }, line: { color: '1E293B' } });
+          (Array.isArray(col.items) ? col.items : []).forEach((item, j) => {
+            sl.addText(`›  ${item}`, { x, y: 2.38 + j * 0.52, w: 5.8, h: 0.44, color: PPTX_GRAY300, fontSize: 11 });
+          });
+        });
+      }
+
+      // ── Timeline ───────────────────────────────────────────────────────────
+      else if (s.layout_type === 'timeline') {
+        pptxAddSlideHeader(sl, pptx, s);
+        const phases = Array.isArray(c.phases) ? c.phases : [];
+        phases.slice(0, 4).forEach((phase, i) => {
+          const x = 0.4 + i * 3.25;
+          sl.addShape(pptx.ShapeType.roundRect, { x, y: 1.75, w: 3.0, h: 5.45, fill: { color: '0D1B2E' }, line: { color: '1E3A5F', pt: 0.6 }, rectRadius: 0.07 });
+          sl.addText(phase.label || `Phase ${i + 1}`, { x: x + 0.2, y: 1.92, w: 2.6, h: 0.28, color: PPTX_GRAY500, fontSize: 8.5, fontFace: 'Courier New' });
+          sl.addText(phase.title || '', { x: x + 0.2, y: 2.24, w: 2.6, h: 0.58, color: PPTX_WHITE, fontSize: 11, bold: true });
+          (Array.isArray(phase.activities) ? phase.activities : []).slice(0, 5).forEach((act, j) => {
+            sl.addShape(pptx.ShapeType.ellipse, { x: x + 0.22, y: 3.04 + j * 0.47, w: 0.07, h: 0.07, fill: { color: PPTX_GRAY500 }, line: { color: PPTX_GRAY500 } });
+            sl.addText(act, { x: x + 0.35, y: 2.97 + j * 0.47, w: 2.45, h: 0.38, color: PPTX_GRAY400, fontSize: 9.5 });
+          });
+          if (phase.client_role) sl.addText(phase.client_role, { x: x + 0.2, y: 6.5, w: 2.6, h: 0.38, color: PPTX_GRAY500, fontSize: 8.5, italic: true });
+        });
+      }
+
+      // ── Visual-heavy / split-metrics / fallback ────────────────────────────
+      else {
+        pptxAddSlideHeader(sl, pptx, s);
+        const y0 = 1.78;
+        const blocks = Array.isArray(c.blocks) ? c.blocks : null;
+        if (blocks) {
+          blocks.slice(0, 6).forEach((block, i) => {
+            const x = i % 2 === 0 ? 0.5 : 6.9;
+            const y = y0 + Math.floor(i / 2) * 1.28;
+            sl.addShape(pptx.ShapeType.roundRect, { x, y, w: 5.85, h: 1.14, fill: { color: '0D1B2E' }, line: { color: '1E3A5F', pt: 0.5 }, rectRadius: 0.06 });
+            sl.addText(block.heading || '', { x: x + 0.2, y: y + 0.1, w: 5.45, h: 0.36, color: PPTX_WHITE, fontSize: 12, bold: true });
+            sl.addText(block.body || '', { x: x + 0.2, y: y + 0.5, w: 5.45, h: 0.54, color: PPTX_GRAY400, fontSize: 10.5 });
+          });
+        } else if (c.left && c.right) {
+          [c.left, c.right].forEach((col, ci) => {
+            const x = ci === 0 ? 0.5 : 7.1;
+            sl.addShape(pptx.ShapeType.roundRect, { x, y: y0, w: 5.8, h: 5.0, fill: { color: '0D1B2E' }, line: { color: '1E3A5F', pt: 0.5 }, rectRadius: 0.08 });
+            sl.addText(col.title || '', { x: x + 0.25, y: y0 + 0.2, w: 5.3, h: 0.38, color: PPTX_WHITE, fontSize: 12, bold: true });
+            (Array.isArray(col.items) ? col.items : []).forEach((item, j) => {
+              sl.addText(`·  ${item}`, { x: x + 0.25, y: y0 + 0.72 + j * 0.52, w: 5.3, h: 0.44, color: PPTX_GRAY300, fontSize: 11 });
+            });
+          });
+        } else {
+          sl.addText(JSON.stringify(c, null, 2), { x: 0.5, y: y0, w: 12.33, h: 5.2, color: PPTX_GRAY500, fontSize: 9, fontFace: 'Courier New' });
+        }
+      }
+
+      if (s.notes) sl.addNotes(s.notes);
+    }
+
+    const buf = await pptx.write({ outputType: 'nodebuffer' });
+    res.set({
+      'Content-Type': 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+      'Content-Disposition': `attachment; filename="5ML-CLP-Tender-${slug}.pptx"`,
+      'Content-Length': buf.length,
+    });
+    res.send(buf);
+  } catch (err) {
+    console.error('[presentation-deck] PPTX export error', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ─── Gemini image generation ─────────────────────────────────────────────────
 
 async function generateImageWithGemini(prompt) {

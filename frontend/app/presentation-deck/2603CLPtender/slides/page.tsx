@@ -7,7 +7,7 @@ import { presentationData } from '../data';
 import {
   ChevronLeft, ChevronRight, Grid3X3, Image, MessageSquare,
   BrainCircuit, History, RotateCcw, Loader2, CheckCircle2,
-  Zap, Eye, EyeOff, X,
+  Zap, Eye, EyeOff, X, Download,
 } from 'lucide-react';
 
 const SLUG = '2603CLPtender';
@@ -508,6 +508,7 @@ function SlidesPresenter() {
   const [showThumbnails, setShowThumbnails] = useState(false);
   const [showAI, setShowAI] = useState(false);
   const [showBgImage, setShowBgImage] = useState(true);
+  const [downloading, setDownloading] = useState(false);
 
   // Content overrides from DB (AI/user edits)
   const [overrides, setOverrides] = useState<Record<number, SlideOverride>>({});
@@ -562,6 +563,25 @@ function SlidesPresenter() {
     window.addEventListener('keydown', handleKey);
     return () => window.removeEventListener('keydown', handleKey);
   }, [currentIndex, goTo]);
+
+  async function handleDownloadPptx() {
+    setDownloading(true);
+    try {
+      const res = await fetch(`/api/presentation-deck/${SLUG}/export/pptx`);
+      if (!res.ok) { const d = await res.json(); throw new Error(d.error || 'Export failed'); }
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `5ML-CLP-Tender-${SLUG}.pptx`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (e: unknown) {
+      alert(`PPTX export failed: ${e instanceof Error ? e.message : 'Unknown error'}`);
+    } finally {
+      setDownloading(false);
+    }
+  }
 
   function handleAIApplied(updatedContent: Record<string, unknown>) {
     setOverrides(prev => ({
@@ -634,6 +654,17 @@ function SlidesPresenter() {
             title="AI Assistant"
           >
             <BrainCircuit className="w-4 h-4" />
+          </button>
+          <div className="h-4 w-px bg-slate-800 mx-0.5" />
+          {/* Download PPTX */}
+          <button
+            onClick={handleDownloadPptx}
+            disabled={downloading}
+            className="flex items-center gap-1.5 px-2.5 py-1 rounded text-xs font-medium bg-slate-800/80 hover:bg-slate-700/80 text-slate-300 hover:text-white disabled:opacity-50 transition-colors border border-slate-700/60"
+            title="Download as PPTX"
+          >
+            {downloading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Download className="w-3.5 h-3.5" />}
+            {downloading ? 'Exporting…' : 'PPTX'}
           </button>
           <div className="h-4 w-px bg-slate-800 mx-0.5" />
           <span className="text-xs text-slate-500 tabular-nums">
