@@ -106,16 +106,24 @@ async function init() {
     CREATE INDEX IF NOT EXISTS idx_ct_results_job_id  ON ct_results(job_id);
     CREATE INDEX IF NOT EXISTS idx_ct_error_logs_created_at ON ct_error_logs(created_at DESC);
   `);
+
+  // Migrations: add audio file columns if they don't exist
+  await pool.query(`
+    ALTER TABLE ct_jobs
+      ADD COLUMN IF NOT EXISTS audio_filename TEXT,
+      ADD COLUMN IF NOT EXISTS audio_size     INTEGER,
+      ADD COLUMN IF NOT EXISTS audio_duration_s FLOAT;
+  `);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Jobs
 // ─────────────────────────────────────────────────────────────────────────────
 
-async function createJob({ transcript, segments, task, model, extra_instructions }) {
+async function createJob({ transcript, segments, task, model, extra_instructions, audio_filename, audio_size, audio_duration_s }) {
   const { rows } = await pool.query(
-    `INSERT INTO ct_jobs (transcript, segments, task, model, extra_instructions, status, char_count)
-     VALUES ($1, $2, $3, $4, $5, 'processing', $6)
+    `INSERT INTO ct_jobs (transcript, segments, task, model, extra_instructions, status, char_count, audio_filename, audio_size, audio_duration_s)
+     VALUES ($1, $2, $3, $4, $5, 'processing', $6, $7, $8, $9)
      RETURNING *`,
     [
       transcript,
@@ -124,6 +132,9 @@ async function createJob({ transcript, segments, task, model, extra_instructions
       model,
       extra_instructions || null,
       transcript.length,
+      audio_filename || null,
+      audio_size || null,
+      audio_duration_s || null,
     ]
   );
   return rows[0];

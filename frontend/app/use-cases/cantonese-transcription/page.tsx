@@ -17,7 +17,7 @@ import {
 
 type Task     = 'clean_transcript' | 'meeting_minutes' | 'summary_zh' | 'summary_en' | 'action_items';
 type Model    = 'haiku' | 'sonnet' | 'deepseek' | 'gemini';
-type PageTab  = 'analyze' | 'orchestrate' | 'visualizer' | 'history' | 'errors' | 'error-codes' | 'convert';
+type PageTab  = 'analyze' | 'orchestrate' | 'visualizer' | 'history' | 'convert' | 'system';
 
 interface VideoType {
   type: string; label: string; emoji: string; confidence: number; reason: string;
@@ -43,6 +43,9 @@ interface JobRecord {
   model_used?:       string;
   duration_ms?:      number;
   created_at:        string;
+  audio_filename?:   string;
+  audio_size?:       number;
+  audio_duration_s?: number;
 }
 
 interface ErrorLog {
@@ -250,6 +253,7 @@ function JobRow({ job, onExpand }: { job: JobRecord; onExpand: (j: JobRecord) =>
           }`}>{job.status === 'done' ? '完成' : job.status === 'error' ? '失敗' : '處理中'}</span>
         </div>
         <p className="text-[11px] text-slate-500 truncate mt-0.5">
+          {job.audio_filename && <Volume2 className="w-2.5 h-2.5 inline mr-1 text-indigo-400/70" />}
           {job.transcript.slice(0, 80)}{job.transcript.length > 80 ? '…' : ''}
         </p>
       </div>
@@ -680,6 +684,7 @@ export default function CantoneseTranscriptionPage() {
   const [sttLog, setSttLog]                 = useState<string[]>([]);
   const [sttProcessProgress, setSttProcessProgress] = useState<number | null>(null);
   const [sttAudioUrl, setSttAudioUrl]       = useState<string | null>(null);
+  const [sttSavedFilename, setSttSavedFilename] = useState<string | null>(null);
 
   // Refinement state
   const [refineLoading, setRefineLoading]   = useState(false);
@@ -798,6 +803,8 @@ export default function CantoneseTranscriptionPage() {
           task: selectedTask,
           extra_instructions: extraInstructions.trim() || undefined,
           model,
+          audio_filename: sttSavedFilename || undefined,
+          audio_size: sttFileSize || undefined,
         }),
         signal: abortRef.current.signal,
       });
@@ -1160,6 +1167,7 @@ export default function CantoneseTranscriptionPage() {
         if ((data.segments as unknown[])?.length) setSegments(data.segments as Segment[]);
         setSttLastProvider((data.provider as string) ?? null);
         setSttFallbackFrom((data.fallbackFrom as string) ?? null);
+        setSttSavedFilename((data.savedFilename as string) ?? null);
         setSttEngine('paste');
       }
       setSttLoading(false);
@@ -1235,9 +1243,8 @@ export default function CantoneseTranscriptionPage() {
   }, []);
 
   useEffect(() => {
-    if (pageTab === 'history')     { loadJobs(); loadStats(); }
-    if (pageTab === 'errors')      { loadErrors(); }
-    if (pageTab === 'error-codes') { loadErrorCodes(); }
+    if (pageTab === 'history') { loadJobs(); loadStats(); }
+    if (pageTab === 'system')  { loadErrors(); loadErrorCodes(); }
   }, [pageTab, loadJobs, loadErrors, loadStats, loadErrorCodes]);
 
   // Fetch available STT providers once on mount
@@ -1284,9 +1291,8 @@ export default function CantoneseTranscriptionPage() {
             { id: 'orchestrate', label: '智能分析', icon: Wand2 },
             { id: 'visualizer',  label: '視覺化',   icon: Mic },
             { id: 'history',     label: '歷史記錄', icon: History },
-            { id: 'errors',      label: '錯誤日誌', icon: AlertTriangle },
-            { id: 'error-codes', label: '錯誤代碼', icon: Info },
             { id: 'convert',     label: '格式轉換', icon: Scissors },
+            { id: 'system',      label: '系統',     icon: Info },
           ] as { id: PageTab; label: string; icon: typeof Zap }[]).map(tab => {
             const Icon   = tab.icon;
             const active = pageTab === tab.id;
@@ -1458,7 +1464,7 @@ export default function CantoneseTranscriptionPage() {
                           <>
                             <Upload className={`w-6 h-6 ${sttDragging ? (sttEngine === 'whisper' ? 'text-violet-400' : 'text-blue-400') : 'text-slate-500'}`} />
                             <span className="text-xs text-slate-400">{sttDragging ? '放開以上傳' : '上傳音訊檔案'}</span>
-                            <span className="text-[10px] text-slate-600">WAV · MP3 · OGG · FLAC · M4A · WebM · 最大 100MB</span>
+                            <span className="text-[10px] text-slate-600">WAV · MP3 · OGG · FLAC · M4A · WebM · 最大 200MB</span>
                           </>
                         )}
                       </button>
@@ -2131,8 +2137,38 @@ export default function CantoneseTranscriptionPage() {
                     <Hash className="w-3.5 h-3.5 text-indigo-400" />
                     <span className="text-xs font-mono text-slate-300">{expandedJob.job_id}</span>
                   </div>
-                  <button onClick={() => setExpandedJob(null)} className="text-[11px] text-slate-400 hover:text-white">關閉</button>
+                  <div className="flex items-center gap-3">
+                    <button
+                      onClick={() => {
+                        setTranscript(expandedJob.transcript);
+                        setSttSavedFilename(expandedJob.audio_filename ?? null);
+                        setSttFileSize(expandedJob.audio_size ?? null);
+                        setPageTab('analyze');
+                      }}
+                      className="flex items-center gap-1 text-[11px] text-indigo-400 hover:text-indigo-300"
+                    >
+                      <RefreshCw className="w-3 h-3" />載入逐字稿
+                    </button>
+                    <button onClick={() => setExpandedJob(null)} className="text-[11px] text-slate-400 hover:text-white">關閉</button>
+                  </div>
                 </div>
+                {/* Audio player */}
+                {expandedJob.audio_filename && (
+                  <div className="px-4 pt-3">
+                    <p className="text-[10px] text-slate-500 mb-1.5 flex items-center gap-1.5">
+                      <Volume2 className="w-3 h-3" />原始音訊
+                      {expandedJob.audio_size && (
+                        <span className="text-slate-600">· {(expandedJob.audio_size / 1024 / 1024).toFixed(1)} MB</span>
+                      )}
+                    </p>
+                    <audio
+                      controls
+                      src={`/api/cantonese-transcription/audio/${expandedJob.job_id}`}
+                      className="w-full h-8 rounded"
+                      style={{ colorScheme: 'dark' }}
+                    />
+                  </div>
+                )}
                 <div className="px-4 pt-3 pb-0 flex flex-wrap gap-3">
                   {[
                     { label: '任務', value: taskDef(expandedJob.task).label },
@@ -2164,10 +2200,11 @@ export default function CantoneseTranscriptionPage() {
         )}
 
         {/* ================================================================ */}
-        {/* ERRORS TAB                                                        */}
+        {/* SYSTEM TAB (errors + error codes combined)                        */}
         {/* ================================================================ */}
-        {pageTab === 'errors' && (
-          <div className="space-y-4">
+        {pageTab === 'system' && (
+          <div className="space-y-5">
+            {/* Error logs */}
             <div className="bg-slate-800/60 rounded-xl border border-slate-700/50 overflow-hidden">
               <div className="flex items-center justify-between px-4 py-3 border-b border-slate-700/50">
                 <div className="flex items-center gap-2">
@@ -2191,14 +2228,8 @@ export default function CantoneseTranscriptionPage() {
                 <div>{errorLogs.map(log => <ErrorRow key={log.id} log={log} />)}</div>
               )}
             </div>
-          </div>
-        )}
 
-        {/* ================================================================ */}
-        {/* ERROR CODES TAB                                                   */}
-        {/* ================================================================ */}
-        {pageTab === 'error-codes' && (
-          <div className="space-y-4">
+            {/* Error codes reference */}
             <div className="bg-slate-800/60 rounded-xl border border-slate-700/50 overflow-hidden">
               <div className="px-4 py-3 border-b border-slate-700/50">
                 <div className="flex items-center gap-2">
@@ -2232,6 +2263,7 @@ export default function CantoneseTranscriptionPage() {
               </div>
             </div>
 
+            {/* DB schema */}
             <div className="bg-white/[0.02] border border-slate-700/30 rounded-xl p-4 space-y-3">
               <div className="flex items-center gap-2">
                 <Database className="w-3.5 h-3.5 text-slate-400" />
@@ -2239,7 +2271,7 @@ export default function CantoneseTranscriptionPage() {
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 {[
-                  { table: 'ct_jobs',       desc: '每次分析任務',  fields: ['job_id (UUID)', 'transcript', 'task', 'model', 'status', 'char_count', 'created_at'] },
+                  { table: 'ct_jobs',       desc: '每次分析任務',  fields: ['job_id (UUID)', 'transcript', 'task', 'model', 'status', 'char_count', 'audio_filename', 'created_at'] },
                   { table: 'ct_results',    desc: '已完成結果',    fields: ['job_id (FK)', 'result_text', 'model_used', 'duration_ms', 'created_at'] },
                   { table: 'ct_error_logs', desc: '結構化錯誤日誌', fields: ['job_id (nullable FK)', 'error_code', 'error_message', 'context (JSONB)', 'created_at'] },
                 ].map(t => (

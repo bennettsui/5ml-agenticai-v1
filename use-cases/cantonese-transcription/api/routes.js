@@ -6,12 +6,26 @@
 const express    = require('express');
 const Anthropic  = require('@anthropic-ai/sdk');
 const multer     = require('multer');
+const path       = require('path');
+const fs         = require('fs');
+const { v4: uuidv4 } = require('uuid');
 const deepseekService = require('../../../services/deepseekService');
 const db         = require('./db');
 const sttService = require('./stt-service');
 
-// multer: memory storage so we can forward audio bytes to Google STT
-const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 100 * 1024 * 1024 } });
+// Audio storage directory
+const AUDIO_DIR = path.join(__dirname, '../../../uploads/cantonese-audio');
+if (!fs.existsSync(AUDIO_DIR)) fs.mkdirSync(AUDIO_DIR, { recursive: true });
+
+// multer: disk storage to persist audio files for history review
+const audioStorage = multer.diskStorage({
+  destination: (_req, _file, cb) => cb(null, AUDIO_DIR),
+  filename: (_req, file, cb) => {
+    const ext = path.extname(file.originalname) || '.audio';
+    cb(null, `${uuidv4()}${ext}`);
+  },
+});
+const upload = multer({ storage: audioStorage, limits: { fileSize: 200 * 1024 * 1024 } });
 
 const router = express.Router();
 
@@ -102,6 +116,9 @@ router.post('/analyze', async (req, res) => {
     task = 'clean_transcript',
     extra_instructions = '',
     model = 'haiku',
+    audio_filename,
+    audio_size,
+    audio_duration_s,
   } = req.body;
 
   // ── Step 1: validate input ─────────────────────────────────────────────
@@ -145,6 +162,9 @@ router.post('/analyze', async (req, res) => {
       task,
       model,
       extra_instructions: extra_instructions.trim() || null,
+      audio_filename: audio_filename || null,
+      audio_size: audio_size || null,
+      audio_duration_s: audio_duration_s || null,
     });
     emit(res, { type: 'job_created', job_id: job.job_id });
   } catch (err) {
@@ -920,12 +940,15 @@ router.post('/transcribe', upload.single('audio'), async (req, res) => {
   }
 
   if (!sttService.defaultProvider()) {
+    // Clean up saved file if no STT provider
+    fs.unlink(req.file.path, () => {});
     return res.status(503).json({ ok: false, error_code: 'CT-016', error: db.ERROR_MESSAGES['CT-016'] });
   }
 
   const mimeType = req.file.mimetype || 'audio/webm';
   const language = req.body.language || 'yue-Hant-HK';
   const provider = req.body.provider || 'auto';
+  const savedFilename = req.file.filename; // UUID-based filename saved to disk
 
   // Stream NDJSON progress events back to the client
   res.setHeader('Content-Type', 'application/x-ndjson');
@@ -941,9 +964,18 @@ router.post('/transcribe', upload.single('audio'), async (req, res) => {
 
   onProgress(`收到音訊（${(req.file.size / 1024 / 1024).toFixed(1)} MB，${mimeType}）`, 5);
 
+  // Read file from disk into buffer for STT processing
+  let fileBuffer;
+  try {
+    fileBuffer = fs.readFileSync(req.file.path);
+  } catch (readErr) {
+    push({ type: 'error', ok: false, error_code: 'CT-013', error: '無法讀取音訊檔案' });
+    return res.end();
+  }
+
   try {
     const result = await autoTranscribeBuffer({
-      fileBuffer: req.file.buffer,
+      fileBuffer,
       mimeType,
       language,
       filename: req.file.originalname,
@@ -963,7 +995,7 @@ router.post('/transcribe', upload.single('audio'), async (req, res) => {
       try {
         onProgress('正在識別說話者（pyannote-audio）...', 90);
         const diarSegments = await sttService.diarizeAudio({
-          fileBuffer: req.file.buffer,
+          fileBuffer,
           mimeType,
           filename:   req.file.originalname,
         });
@@ -980,7 +1012,7 @@ router.post('/transcribe', upload.single('audio'), async (req, res) => {
       }
     }
 
-    push({ type: 'done', ok: true, ...result });
+    push({ type: 'done', ok: true, savedFilename, originalFilename: req.file.originalname, fileSize: req.file.size, ...result });
     return res.end();
   } catch (err) {
     if (err.name === 'TimeoutError' || err.name === 'AbortError') {
@@ -1093,12 +1125,34 @@ ${transcript}`;
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
+// GET /audio/:job_id  — stream saved audio file for a job
+// ─────────────────────────────────────────────────────────────────────────────
+router.get('/audio/:job_id', async (req, res) => {
+  try {
+    const job = await db.getJob(req.params.job_id);
+    if (!job || !job.audio_filename) {
+      return res.status(404).json({ ok: false, error: '找不到音訊檔案' });
+    }
+    const filePath = path.join(AUDIO_DIR, job.audio_filename);
+    if (!fs.existsSync(filePath)) {
+      return res.status(404).json({ ok: false, error: '音訊檔案已刪除' });
+    }
+    const ext = path.extname(job.audio_filename).toLowerCase();
+    const mimeMap = { '.mp3': 'audio/mpeg', '.wav': 'audio/wav', '.m4a': 'audio/mp4', '.ogg': 'audio/ogg', '.webm': 'audio/webm', '.flac': 'audio/flac' };
+    res.setHeader('Content-Type', mimeMap[ext] || 'audio/octet-stream');
+    res.setHeader('Content-Disposition', `inline; filename="${job.audio_filename}"`);
+    fs.createReadStream(filePath).pipe(res);
+  } catch (err) {
+    console.error('[ct-audio] serve error:', err.message);
+    res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
 // POST /convert  — convert / trim / split audio or video file
 // ─────────────────────────────────────────────────────────────────────────────
 const ffmpeg = require('fluent-ffmpeg');
 const os     = require('os');
-const path   = require('path');
-const fs     = require('fs');
 
 const FORMAT_MIME = { wav: 'audio/wav', mp3: 'audio/mpeg', m4a: 'audio/mp4' };
 
