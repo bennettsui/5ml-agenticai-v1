@@ -1,11 +1,11 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import Link from 'next/link';
 import {
   ArrowLeft, CheckCircle2, XCircle, Clock, ImageIcon,
   Loader2, ChevronDown, ChevronUp, Zap, AlertCircle,
-  RefreshCw, Filter,
+  RefreshCw, Filter, Sparkles,
 } from 'lucide-react';
 
 const SLUG = '2603CLPtender';
@@ -72,6 +72,44 @@ export default function ManifestPage() {
   const [genMsg, setGenMsg] = useState('');
   const [expandedId, setExpandedId] = useState<string | null>(null);
 
+  // Generation progress tracking
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [genQueued, setGenQueued] = useState(0);
+  const [genDone, setGenDone] = useState(0);
+  const pollCountRef = useRef(0);  // safety timeout: stop after 150 polls (10 min)
+
+  // Poll manifest-status every 4 s while generating
+  useEffect(() => {
+    if (!isGenerating) return;
+    pollCountRef.current = 0;
+
+    const id = setInterval(async () => {
+      pollCountRef.current += 1;
+      try {
+        const res = await fetch(`/api/presentation-deck/${SLUG}/manifest-status`);
+        if (!res.ok) return;
+        const data = await res.json();
+        const approvedNow: number = data.summary?.approved || 0;
+        const newDone = Math.max(0, genQueued - approvedNow);
+        setGenDone(newDone);
+        setSummary(data.summary || {});
+
+        const allDone = approvedNow === 0 || pollCountRef.current >= 150;
+        if (allDone) {
+          clearInterval(id);
+          setIsGenerating(false);
+          setGenDone(genQueued);
+          setGenState('ok');
+          setGenMsg(`${newDone} image${newDone !== 1 ? 's' : ''} generated`);
+          fetchManifest();   // refresh list to show thumbnails + 'generated' badges
+        }
+      } catch { /* ignore transient network errors */ }
+    }, 4000);
+
+    return () => clearInterval(id);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isGenerating, genQueued]);
+
   const fetchManifest = useCallback(async () => {
     setLoading(true);
     try {
@@ -117,8 +155,14 @@ export default function ManifestPage() {
       const res = await fetch(`/api/presentation-deck/${SLUG}/generate-approved`, { method: 'POST' });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Failed');
-      setGenState('ok');
-      setGenMsg(`Queued ${data.queued} images`);
+      if (data.queued > 0) {
+        setGenQueued(data.queued);
+        setGenDone(0);
+        setIsGenerating(true);   // triggers polling useEffect
+      } else {
+        setGenState('ok');
+        setGenMsg('No approved images to generate');
+      }
     } catch (e: unknown) {
       setGenState('error');
       setGenMsg(e instanceof Error ? e.message : 'Unknown error');
@@ -206,13 +250,19 @@ export default function ManifestPage() {
             </button>
             <button
               onClick={handleGenerateApproved}
-              disabled={genState === 'loading' || approvedCount === 0}
+              disabled={genState === 'loading' || isGenerating || approvedCount === 0}
               className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white disabled:opacity-50 transition-colors font-medium"
             >
-              {genState === 'loading' ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Zap className="w-3.5 h-3.5" />}
-              Generate Approved ({approvedCount})
+              {isGenerating
+                ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                : genState === 'loading'
+                  ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  : <Zap className="w-3.5 h-3.5" />}
+              {isGenerating
+                ? `Generating… ${genDone}/${genQueued}`
+                : `Generate Approved (${approvedCount})`}
             </button>
-            {genMsg && (
+            {genMsg && !isGenerating && (
               <span className={`text-xs ${genState === 'ok' ? 'text-emerald-400' : 'text-red-400'}`}>
                 {genMsg}
               </span>
@@ -220,6 +270,37 @@ export default function ManifestPage() {
           </div>
         </div>
       </div>
+
+      {/* Generation progress banner */}
+      {isGenerating && (
+        <div className="border-b border-emerald-500/20 bg-emerald-500/[0.04]">
+          <div className="max-w-7xl mx-auto px-6 py-3">
+            <div className="flex items-center gap-4">
+              <Sparkles className="w-4 h-4 text-emerald-400 shrink-0 animate-pulse" />
+              <div className="flex-1">
+                <div className="flex items-center justify-between text-xs mb-1.5">
+                  <span className="text-emerald-300 font-medium">
+                    Generating images… each takes ~30 s
+                  </span>
+                  <span className="text-emerald-400 font-mono tabular-nums">
+                    {genDone} / {genQueued}
+                  </span>
+                </div>
+                <div className="h-1.5 bg-slate-800 rounded-full overflow-hidden">
+                  <div
+                    className="h-full bg-emerald-500 rounded-full transition-all duration-700 ease-out"
+                    style={{ width: `${genQueued > 0 ? Math.round((genDone / genQueued) * 100) : 0}%` }}
+                  />
+                </div>
+                <div className="flex justify-between text-[10px] text-slate-600 mt-1">
+                  <span>High-priority items generated first</span>
+                  <span>{genQueued > 0 ? Math.round((genDone / genQueued) * 100) : 0}%</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       <div className="max-w-7xl mx-auto px-6 py-6">
         {/* Summary chips */}
