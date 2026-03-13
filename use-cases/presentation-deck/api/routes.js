@@ -1067,7 +1067,9 @@ router.get('/:slug/export/pptx', async (req, res) => {
 
     const PptxGenJS = require('pptxgenjs');
     const pptx = new PptxGenJS();
-    pptx.layout = 'WIDE';
+    // pptxgenjs v3 uses 'LAYOUT_WIDE'; define custom to be version-safe
+    pptx.defineLayout({ name: 'WIDESCREEN', width: 13.33, height: 7.5 });
+    pptx.layout = 'WIDESCREEN';
     pptx.title = 'CLP Power — 5 Miles Lab Tender Proposal';
     pptx.company = '5 Miles Lab';
 
