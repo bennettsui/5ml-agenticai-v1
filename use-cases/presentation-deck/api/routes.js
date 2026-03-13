@@ -87,6 +87,36 @@ const { pool } = require('../../../db');
       CREATE INDEX IF NOT EXISTS idx_image_manifest_slug   ON image_manifests(presentation_slug);
       CREATE INDEX IF NOT EXISTS idx_image_manifest_status ON image_manifests(status);
       CREATE INDEX IF NOT EXISTS idx_image_manifest_slide  ON image_manifests(slide_id);
+
+      -- slide content overrides (AI + user edits applied on the web)
+      CREATE TABLE IF NOT EXISTS slide_content_overrides (
+        id           SERIAL PRIMARY KEY,
+        deck_slug    VARCHAR(100) NOT NULL,
+        slide_number INTEGER NOT NULL,
+        title        TEXT,
+        subtitle     TEXT,
+        content      JSONB NOT NULL DEFAULT '{}',
+        notes        TEXT,
+        updated_at   TIMESTAMPTZ DEFAULT NOW(),
+        UNIQUE(deck_slug, slide_number)
+      );
+
+      -- full version history for every slide change
+      CREATE TABLE IF NOT EXISTS slide_version_history (
+        id             SERIAL PRIMARY KEY,
+        deck_slug      VARCHAR(100) NOT NULL,
+        slide_number   INTEGER NOT NULL,
+        version_number INTEGER NOT NULL,
+        title          TEXT,
+        subtitle       TEXT,
+        content        JSONB NOT NULL DEFAULT '{}',
+        notes          TEXT,
+        change_summary TEXT,
+        changed_by     VARCHAR(20) DEFAULT 'ai',
+        ai_comment     TEXT,
+        created_at     TIMESTAMPTZ DEFAULT NOW()
+      );
+      CREATE INDEX IF NOT EXISTS idx_slide_version_slug_num ON slide_version_history(deck_slug, slide_number);
     `);
     console.log('✅ [presentation-deck] schema guard OK');
   } catch (e) {
@@ -811,6 +841,177 @@ router.get('/:slug/manifest-status', async (req, res) => {
       summary,
       percent: total > 0 ? Math.round((generated / total) * 100) : 0,
     });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ─── GET /api/presentation-deck/:slug/slide-overrides ────────────────────────
+// Returns all content overrides indexed by slide_number
+
+router.get('/:slug/slide-overrides', async (req, res) => {
+  const { slug } = req.params;
+  try {
+    const { rows } = await pool.query(
+      `SELECT slide_number, title, subtitle, content, notes, updated_at
+       FROM slide_content_overrides WHERE deck_slug = $1 ORDER BY slide_number`,
+      [slug]
+    );
+    const overrides = {};
+    for (const row of rows) overrides[row.slide_number] = row;
+    res.json({ overrides });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ─── POST /api/presentation-deck/:slug/slides/:slideNum/ai-review ────────────
+// DeepSeek AI review with suggested content improvements
+
+router.post('/:slug/slides/:slideNum/ai-review', async (req, res) => {
+  const { slug, slideNum } = req.params;
+  const slideNumber = parseInt(slideNum, 10);
+  const { slide } = req.body;
+  const apiKey = process.env.DEEPSEEK_API_KEY;
+  if (!apiKey) return res.status(503).json({ error: 'DEEPSEEK_API_KEY not configured' });
+
+  try {
+    const axios = require('axios');
+    const prompt = `You are a senior presentation consultant reviewing slide ${slideNumber} of ${slide.total || '?'} for a corporate tender by 5 Miles Lab for CLP Power Hong Kong (electricity company).
+
+Slide context:
+- Section: "${slide.section}"
+- Layout type: "${slide.layout_type}"
+- Title: ${slide.title || '(none)'}
+- Subtitle: ${slide.subtitle || '(none)'}
+- Presenter notes: ${slide.notes || '(none)'}
+
+Current content JSON:
+${JSON.stringify(slide.content, null, 2)}
+
+Analyse this slide and return ONLY valid JSON (no markdown fences) matching this exact schema:
+{
+  "overall": "2–3 sentence overall assessment",
+  "issues": ["specific issue 1", "specific issue 2"],
+  "suggestions": ["improvement 1", "improvement 2"],
+  "change_summary": "one-line summary of what changed",
+  "updated_content": { /* improved content using the EXACT SAME JSON structure and keys */ }
+}
+
+Rules: keep the same JSON structure/keys in updated_content. Be concise, persuasive, professional. Focus on impact for a CLP Power tender.`;
+
+    const response = await axios.post(
+      'https://api.deepseek.com/chat/completions',
+      { model: 'deepseek-chat', messages: [{ role: 'user', content: prompt }], max_tokens: 3000, temperature: 0.7 },
+      { headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' }, timeout: 90000 }
+    );
+
+    const raw = response.data.choices[0]?.message?.content || '';
+    let review;
+    try {
+      review = JSON.parse(raw.replace(/^```(?:json)?\n?|\n?```$/g, '').trim());
+    } catch {
+      review = { overall: raw, issues: [], suggestions: [], change_summary: 'AI review', updated_content: slide.content };
+    }
+    res.json({ review, usage: response.data.usage });
+  } catch (err) {
+    console.error('[presentation-deck] ai-review error', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ─── PUT /api/presentation-deck/:slug/slides/:slideNum/content ────────────────
+// Save slide content override + create version history entry
+
+router.put('/:slug/slides/:slideNum/content', async (req, res) => {
+  const { slug, slideNum } = req.params;
+  const slideNumber = parseInt(slideNum, 10);
+  const { title, subtitle, content, notes, change_summary = 'Edit', changed_by = 'ai', ai_comment } = req.body;
+  try {
+    const { rows: vRows } = await pool.query(
+      `SELECT COALESCE(MAX(version_number), 0) + 1 AS next_v
+       FROM slide_version_history WHERE deck_slug=$1 AND slide_number=$2`,
+      [slug, slideNumber]
+    );
+    const nextV = vRows[0].next_v;
+
+    await pool.query(
+      `INSERT INTO slide_version_history
+         (deck_slug, slide_number, version_number, title, subtitle, content, notes, change_summary, changed_by, ai_comment)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
+      [slug, slideNumber, nextV, title, subtitle, JSON.stringify(content), notes, change_summary, changed_by, ai_comment || null]
+    );
+
+    const { rows } = await pool.query(
+      `INSERT INTO slide_content_overrides (deck_slug, slide_number, title, subtitle, content, notes, updated_at)
+       VALUES ($1,$2,$3,$4,$5,$6,NOW())
+       ON CONFLICT (deck_slug, slide_number)
+       DO UPDATE SET title=$3, subtitle=$4, content=$5, notes=$6, updated_at=NOW()
+       RETURNING *`,
+      [slug, slideNumber, title, subtitle, JSON.stringify(content), notes]
+    );
+    res.json({ ok: true, override: rows[0], version: nextV });
+  } catch (err) {
+    console.error('[presentation-deck] slide content save error', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ─── GET /api/presentation-deck/:slug/slides/:slideNum/history ────────────────
+// Version history for a slide (newest first)
+
+router.get('/:slug/slides/:slideNum/history', async (req, res) => {
+  const { slug, slideNum } = req.params;
+  const slideNumber = parseInt(slideNum, 10);
+  try {
+    const { rows } = await pool.query(
+      `SELECT id, version_number, title, subtitle, content, notes,
+              change_summary, changed_by, ai_comment, created_at
+       FROM slide_version_history
+       WHERE deck_slug=$1 AND slide_number=$2
+       ORDER BY version_number DESC LIMIT 20`,
+      [slug, slideNumber]
+    );
+    res.json({ history: rows });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ─── POST /api/presentation-deck/:slug/slides/:slideNum/restore/:versionId ───
+// Restore a slide to a specific version
+
+router.post('/:slug/slides/:slideNum/restore/:versionId', async (req, res) => {
+  const { slug, slideNum, versionId } = req.params;
+  const slideNumber = parseInt(slideNum, 10);
+  try {
+    const { rows: vRows } = await pool.query(
+      `SELECT * FROM slide_version_history WHERE id=$1 AND deck_slug=$2 AND slide_number=$3`,
+      [parseInt(versionId, 10), slug, slideNumber]
+    );
+    if (!vRows.length) return res.status(404).json({ error: 'Version not found' });
+    const v = vRows[0];
+
+    const { rows: cRows } = await pool.query(
+      `SELECT COALESCE(MAX(version_number), 0) + 1 AS next_v
+       FROM slide_version_history WHERE deck_slug=$1 AND slide_number=$2`,
+      [slug, slideNumber]
+    );
+    await pool.query(
+      `INSERT INTO slide_version_history
+         (deck_slug, slide_number, version_number, title, subtitle, content, notes, change_summary, changed_by)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,'restore')`,
+      [slug, slideNumber, cRows[0].next_v, v.title, v.subtitle, JSON.stringify(v.content), v.notes,
+       `Restored to v${v.version_number}`]
+    );
+    await pool.query(
+      `INSERT INTO slide_content_overrides (deck_slug, slide_number, title, subtitle, content, notes, updated_at)
+       VALUES ($1,$2,$3,$4,$5,$6,NOW())
+       ON CONFLICT (deck_slug, slide_number)
+       DO UPDATE SET title=$3, subtitle=$4, content=$5, notes=$6, updated_at=NOW()`,
+      [slug, slideNumber, v.title, v.subtitle, JSON.stringify(v.content), v.notes]
+    );
+    res.json({ ok: true });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
