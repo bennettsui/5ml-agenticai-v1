@@ -126,6 +126,7 @@ export default function ManifestPage() {
   }
 
   async function patchItem(id: string, patch: Partial<Pick<ManifestItem, 'status' | 'override_prompt' | 'priority' | 'notes'>>) {
+    const prevItem = items.find(it => it.id === id);
     const res = await fetch(`/api/presentation-deck/images/${id}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
@@ -134,14 +135,20 @@ export default function ManifestPage() {
     if (res.ok) {
       const updated = await res.json();
       setItems(prev => prev.map(it => it.id === id ? { ...it, ...updated } : it));
+      // Keep summary counts in sync so button counts update immediately
+      if (patch.status && prevItem && patch.status !== prevItem.status) {
+        setSummary(prev => ({
+          ...prev,
+          [prevItem.status]: Math.max(0, (prev[prevItem.status] || 0) - 1),
+          [patch.status]: (prev[patch.status] || 0) + 1,
+        }));
+      }
     }
   }
 
   async function approveAll() {
     const pendingItems = items.filter(it => it.status === 'pending');
-    for (const it of pendingItems) {
-      await patchItem(it.id, { status: 'approved' });
-    }
+    await Promise.all(pendingItems.map(it => patchItem(it.id, { status: 'approved' })));
   }
 
   const sections = [...new Set(items.map(it => it.section).filter(Boolean))];
