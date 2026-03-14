@@ -481,7 +481,7 @@ export const USE_CASES: UseCaseConfig[] = [
   },
   {
     id: 'receipt-to-audit',
-    name: 'Receipt to Audit',
+    name: 'Receipt OCR',
     description: 'Receipt to P&L automation with Claude Vision OCR, auto-categorization, and HK compliance',
     solutionLine: 'ExpLab',
     status: 'live',

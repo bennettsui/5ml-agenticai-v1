@@ -21,7 +21,7 @@ export default function MansAccountingDashboard() {
               </Link>
               <div>
                 <h1 className="text-2xl font-bold text-gray-900">
-                  Man's Accounting Firm
+                  Receipt OCR
                 </h1>
                 <p className="text-sm text-gray-600">Receipt Processing Analytics</p>
               </div>
