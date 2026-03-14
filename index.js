@@ -4129,14 +4129,17 @@ try {
   console.warn('⚠️ Image Compression routes not loaded:', error.message);
 }
 
-// Cantonese Transcription Analysis
+// Transcription Analysis
 try {
-  const { router: cantoneseTranscriptionRoutes, initDb: initCantoneseDb } = require('./use-cases/cantonese-transcription/api/routes');
-  app.use('/api/cantonese-transcription', cantoneseTranscriptionRoutes);
-  initCantoneseDb().catch(err => console.error('[cantonese-transcription] DB init error:', err.message));
-  console.log('✅ Cantonese Transcription routes loaded: /api/cantonese-transcription');
+  const { router: transcriptionRoutes, initDb: initTranscriptionDb } = require('./use-cases/transcription/api/routes');
+  const { router: transcriptionAdminRoutes } = require('./use-cases/transcription/admin/routes');
+  app.use('/api/transcription', transcriptionRoutes);
+  app.use('/api/transcription/admin', transcriptionAdminRoutes);
+  initTranscriptionDb().catch(err => console.error('[transcription] DB init error:', err.message));
+  console.log('✅ Transcription routes loaded: /api/transcription');
+  console.log('✅ Transcription admin routes loaded: /api/transcription/admin');
 } catch (error) {
-  console.warn('⚠️ Cantonese Transcription routes not loaded:', error.message);
+  console.warn('⚠️ Transcription routes not loaded:', error.message);
 }
 
 // Event Check-in System
@@ -4162,6 +4165,19 @@ try {
   console.warn('⚠️ Event Check-in routes not loaded:', error.message);
 }
 
+// EventFlow — Event Management SaaS
+try {
+  const eventflowRoutes = require('./use-cases/eventflow/api/routes');
+  app.use('/api/eventflow', eventflowRoutes);
+  // Kiosk HTML (vanilla, not Next.js)
+  app.get('/eventflow/checkin', (req, res) =>
+    res.sendFile(path.join(__dirname, 'use-cases', 'eventflow', 'public', 'checkin.html'))
+  );
+  app.use('/eventflow/static', express.static(path.join(__dirname, 'use-cases', 'eventflow', 'public')));
+  console.log('✅ EventFlow routes loaded: /api/eventflow, /eventflow/checkin');
+} catch (error) {
+  console.warn('⚠️ EventFlow routes not loaded:', error.message);
+}
 // Adaptive Learning for Schools
 try {
   const adaptiveLearningRoutes = require('./use-cases/adaptive-learning/api/routes');
