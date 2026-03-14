@@ -4,7 +4,8 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import {
   Upload, Link2, FileText, CheckCircle2, AlertCircle, Loader2,
   ChevronLeft, ChevronRight, Download, FileSpreadsheet, History,
-  Plus, Pencil, Check, X, Info, ArrowLeft,
+  Plus, Pencil, Check, X, Info, ArrowLeft, BookOpen, Sparkles,
+  ChevronDown, ChevronUp,
 } from 'lucide-react';
 
 // ---------------------------------------------------------------------------
@@ -230,7 +231,7 @@ function StepIndicator({ current }: { current: Step }) {
 // Main component
 // ---------------------------------------------------------------------------
 export default function ReceiptOCRPage() {
-  const [mode, setMode] = useState<'new' | 'history'>('new');
+  const [mode, setMode] = useState<'new' | 'history' | 'learning'>('new');
   const [step, setStep] = useState<Step>('upload');
 
   // — Upload state
@@ -265,6 +266,13 @@ export default function ReceiptOCRPage() {
   // — History state
   const [batches, setBatches] = useState<BatchStatus[]>([]);
   const [historyLoading, setHistoryLoading] = useState(false);
+  const [expandedBatches, setExpandedBatches] = useState<Set<string>>(new Set());
+  const [batchRemarks, setBatchRemarks] = useState<Record<string, { vendor: string; category_name: string; receipt_date: string; remarks: string }[]>>({});
+
+  // — Learning state
+  const [learningData, setLearningData] = useState<{ total_remarks: number; batches: any[]; summary: string | null } | null>(null);
+  const [learningLoading, setLearningLoading] = useState(false);
+  const [summaryLoading, setSummaryLoading] = useState(false);
 
   // Auto-scroll logs
   useEffect(() => {
@@ -309,8 +317,11 @@ export default function ReceiptOCRPage() {
     setLogs(prev => [...prev, { ts, msg, level }]);
   }, []);
 
+  // Track which log IDs we've already shown from polling
+  const shownLogStepsRef = useRef<Set<string>>(new Set());
+
   const startLiveUpdates = useCallback((bid: string) => {
-    // Polling fallback
+    // Polling — also surfaces recent_logs from the DB into the live log panel
     pollRef.current = setInterval(async () => {
       try {
         const r = await fetch(apiUrl(`/api/receipts/batches/${bid}/status`));
@@ -318,10 +329,24 @@ export default function ReceiptOCRPage() {
         const d = await r.json();
         if (d.status) {
           setBatchStatus(d);
+
+          // Surface any DB log entries not yet shown
+          if (Array.isArray(d.recent_logs)) {
+            for (const entry of [...d.recent_logs].reverse()) {
+              const key = `${entry.created_at}_${entry.step}`;
+              if (!shownLogStepsRef.current.has(key)) {
+                shownLogStepsRef.current.add(key);
+                const level = entry.log_level === 'error' ? 'error' : entry.log_level === 'warning' ? 'warning' : 'info';
+                addLog(entry.message, level);
+              }
+            }
+          }
+
           if (d.status === 'completed' || d.status === 'failed') {
             clearInterval(pollRef.current!);
-            if (d.status === 'completed') {
-              addLog('Processing complete!', 'info');
+            if (d.status === 'failed') {
+              // Fetch the last error log and show it prominently
+              addLog(`Batch failed — check logs above for details`, 'error');
             }
           }
         }
@@ -513,8 +538,45 @@ export default function ReceiptOCRPage() {
     setHistoryLoading(false);
   };
 
+  const toggleBatchRemarks = async (batchId: string) => {
+    setExpandedBatches(prev => {
+      const next = new Set(prev);
+      if (next.has(batchId)) { next.delete(batchId); return next; }
+      next.add(batchId);
+      return next;
+    });
+    if (!batchRemarks[batchId]) {
+      try {
+        const r = await fetch(apiUrl(`/api/receipts/batches/${batchId}/receipts`));
+        const d = await r.json();
+        if (d.success) {
+          setBatchRemarks(prev => ({
+            ...prev,
+            [batchId]: d.receipts.filter((rx: any) => rx.remarks?.trim()),
+          }));
+        }
+      } catch { /* ignore */ }
+    }
+  };
+
+  // ---------------------------------------------------------------------------
+  // Learning
+  // ---------------------------------------------------------------------------
+  const loadLearning = async (withSummary = false) => {
+    if (withSummary) setSummaryLoading(true);
+    else setLearningLoading(true);
+    try {
+      const r = await fetch(apiUrl(`/api/receipts/learning?summarize=${withSummary}`));
+      const d = await r.json();
+      if (d.success) setLearningData(d);
+    } catch { /* ignore */ }
+    if (withSummary) setSummaryLoading(false);
+    else setLearningLoading(false);
+  };
+
   useEffect(() => {
     if (mode === 'history') loadHistory();
+    if (mode === 'learning') loadLearning(false);
   }, [mode]);
 
   // ---------------------------------------------------------------------------
@@ -561,6 +623,12 @@ export default function ReceiptOCRPage() {
             >
               <History className="w-3.5 h-3.5 inline mr-1" />History
             </button>
+            <button
+              onClick={() => setMode('learning')}
+              className={`px-3 py-1.5 rounded text-sm font-medium transition-colors ${mode === 'learning' ? 'bg-slate-700 text-white' : 'text-slate-400 hover:text-white'}`}
+            >
+              <BookOpen className="w-3.5 h-3.5 inline mr-1" />Learning
+            </button>
           </div>
         </div>
       </div>
@@ -575,34 +643,150 @@ export default function ReceiptOCRPage() {
             <div className="text-slate-500 text-sm">No batches yet.</div>
           ) : (
             <div className="space-y-2">
-              {batches.map((b: any) => (
-                <div key={b.batch_id}
-                  className="bg-slate-800/60 border border-slate-700/50 rounded-lg px-4 py-3 flex items-center justify-between hover:bg-slate-800 transition-colors cursor-pointer"
-                  onClick={async () => {
-                    setBatchId(b.batch_id);
-                    setBatchStatus(b);
-                    await loadReceipts(b.batch_id);
-                    setMode('new');
-                    setStep('pl');
-                  }}
-                >
-                  <div>
-                    <div className="text-sm font-medium text-white">
-                      Batch {b.batch_id?.slice(0, 8)}…
+              {batches.map((b: any) => {
+                const isExpanded = expandedBatches.has(b.batch_id);
+                const remarks = batchRemarks[b.batch_id];
+                return (
+                  <div key={b.batch_id} className="bg-slate-800/60 border border-slate-700/50 rounded-lg overflow-hidden">
+                    <div className="px-4 py-3 flex items-center justify-between">
+                      <div
+                        className="flex-1 cursor-pointer"
+                        onClick={async () => {
+                          setBatchId(b.batch_id);
+                          setBatchStatus(b);
+                          await loadReceipts(b.batch_id);
+                          setMode('new');
+                          setStep('pl');
+                        }}
+                      >
+                        <div className="text-sm font-medium text-white">
+                          Batch {b.batch_id?.slice(0, 8)}…
+                        </div>
+                        <div className="text-xs text-slate-400 mt-0.5">
+                          {b.created_at ? new Date(b.created_at).toLocaleString('en-HK') : ''}
+                          {b.total_receipts ? ` · ${b.total_receipts} receipts` : ''}
+                          {b.total_amount ? ` · HKD ${fmt(b.total_amount)}` : ''}
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <StatusBadge status={b.status} />
+                        <button
+                          onClick={() => toggleBatchRemarks(b.batch_id)}
+                          className="text-slate-500 hover:text-slate-300 flex items-center gap-1 text-xs"
+                          title="Show learning notes"
+                        >
+                          <BookOpen className="w-3.5 h-3.5" />
+                          {isExpanded ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
+                        </button>
+                        <ChevronRight
+                          className="w-4 h-4 text-slate-500 cursor-pointer"
+                          onClick={async () => {
+                            setBatchId(b.batch_id);
+                            setBatchStatus(b);
+                            await loadReceipts(b.batch_id);
+                            setMode('new');
+                            setStep('pl');
+                          }}
+                        />
+                      </div>
                     </div>
-                    <div className="text-xs text-slate-400 mt-0.5">
-                      {b.created_at ? new Date(b.created_at).toLocaleString('en-HK') : ''}
-                      {b.total_receipts ? ` · ${b.total_receipts} receipts` : ''}
-                      {b.total_amount ? ` · ${b.currency || 'HKD'} ${fmt(b.total_amount)}` : ''}
-                    </div>
+
+                    {/* Learning notes for this batch */}
+                    {isExpanded && (
+                      <div className="border-t border-slate-700/50 bg-slate-900/40 px-4 py-3">
+                        {!remarks ? (
+                          <div className="flex items-center gap-2 text-slate-500 text-xs">
+                            <Loader2 className="w-3 h-3 animate-spin" /> Loading notes…
+                          </div>
+                        ) : remarks.length === 0 ? (
+                          <p className="text-slate-500 text-xs italic">No learning notes for this batch.</p>
+                        ) : (
+                          <div className="space-y-2">
+                            <p className="text-xs text-slate-500 mb-2">{remarks.length} learning note(s):</p>
+                            {remarks.map((rx: any) => (
+                              <div key={rx.receipt_id} className="flex items-start gap-3 text-xs">
+                                <div className="flex-shrink-0 text-slate-500 w-24 truncate">{rx.vendor}</div>
+                                <div className="flex-shrink-0 text-slate-600 w-20">{rx.receipt_date}</div>
+                                <div className="flex-1 text-slate-300">{rx.remarks}</div>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    )}
                   </div>
-                  <div className="flex items-center gap-3">
-                    <StatusBadge status={b.status} />
-                    <ChevronRight className="w-4 h-4 text-slate-500" />
-                  </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
+          )}
+        </div>
+      )}
+
+      {/* Learning mode */}
+      {mode === 'learning' && (
+        <div className="max-w-7xl mx-auto px-6 py-8 space-y-6">
+          <div className="flex items-center justify-between">
+            <div>
+              <h2 className="text-base font-semibold text-white">Learning Notes</h2>
+              <p className="text-xs text-slate-500 mt-0.5">Remarks saved during receipt review — used to guide future OCR analysis</p>
+            </div>
+            <button
+              onClick={() => loadLearning(true)}
+              disabled={summaryLoading || !learningData?.total_remarks}
+              className="px-4 py-2 bg-violet-700 hover:bg-violet-600 disabled:bg-slate-700 disabled:text-slate-500 text-white rounded-lg text-sm font-medium flex items-center gap-2 transition-colors"
+            >
+              {summaryLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
+              Generate Summary
+            </button>
+          </div>
+
+          {learningLoading ? (
+            <div className="flex items-center gap-2 text-slate-400 text-sm"><Loader2 className="w-4 h-4 animate-spin" /> Loading…</div>
+          ) : !learningData || learningData.total_remarks === 0 ? (
+            <div className="bg-slate-900 border border-slate-800 rounded-xl p-8 text-center">
+              <BookOpen className="w-8 h-8 mx-auto mb-3 text-slate-600" />
+              <p className="text-slate-400 text-sm">No learning notes yet.</p>
+              <p className="text-slate-600 text-xs mt-1">Add remarks to receipts in the P&L view — they'll appear here and inform future analyses.</p>
+            </div>
+          ) : (
+            <>
+              {/* DeepSeek summary */}
+              {learningData.summary && (
+                <div className="bg-violet-950/30 border border-violet-800/40 rounded-xl p-5">
+                  <div className="flex items-center gap-2 mb-3">
+                    <Sparkles className="w-4 h-4 text-violet-400" />
+                    <span className="text-sm font-medium text-violet-300">DeepSeek Learning Summary</span>
+                  </div>
+                  <div className="text-sm text-slate-300 whitespace-pre-wrap leading-relaxed">{learningData.summary}</div>
+                </div>
+              )}
+
+              {/* All notes grouped by batch */}
+              <div className="space-y-4">
+                <p className="text-xs text-slate-500">{learningData.total_remarks} note(s) across {learningData.batches.length} batch(es)</p>
+                {learningData.batches.map((batch: any) => (
+                  <div key={batch.batch_id} className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden">
+                    <div className="px-4 py-2.5 border-b border-slate-800 flex items-center gap-3">
+                      <span className="text-xs text-slate-500">Batch {batch.batch_id?.slice(0, 8)}…</span>
+                      <span className="text-xs text-slate-600">
+                        {batch.batch_created_at ? new Date(batch.batch_created_at).toLocaleString('en-HK') : ''}
+                      </span>
+                      <span className="text-xs text-slate-600">{batch.remarks.length} note(s)</span>
+                    </div>
+                    <div className="divide-y divide-slate-800/60">
+                      {batch.remarks.map((rx: any) => (
+                        <div key={rx.receipt_id} className="px-4 py-2.5 grid grid-cols-[120px_80px_100px_1fr] gap-3 text-xs items-start">
+                          <span className="text-slate-300 font-medium truncate">{rx.vendor}</span>
+                          <span className="text-slate-500">{rx.receipt_date}</span>
+                          <span className="text-slate-500">{rx.currency} {fmt(rx.amount)}</span>
+                          <span className="text-slate-300">{rx.remarks}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </>
           )}
         </div>
       )}
@@ -769,8 +953,15 @@ export default function ReceiptOCRPage() {
                       </button>
                     )}
                     {isFailed && (
-                      <div className="text-red-400 text-sm flex items-center gap-2">
-                        <AlertCircle className="w-4 h-4" /> Processing failed. {batchStatus?.message}
+                      <div className="space-y-1">
+                        <div className="text-red-400 text-sm flex items-center gap-2">
+                          <AlertCircle className="w-4 h-4" /> Processing failed — see log above for details.
+                        </div>
+                        {batchStatus?.message && (
+                          <div className="text-red-500 text-xs font-mono bg-red-950/40 border border-red-900/50 rounded px-3 py-1.5">
+                            {batchStatus.message}
+                          </div>
+                        )}
                       </div>
                     )}
                     {isProcessing && (

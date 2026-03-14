@@ -1229,6 +1229,138 @@ router.put('/:receiptId/remarks', async (req, res) => {
 });
 
 // =============================================================================
+// LEARNING ENDPOINTS
+// =============================================================================
+
+/**
+ * GET /receipts/learning
+ *
+ * Returns all non-empty remarks grouped by batch, plus a DeepSeek-generated
+ * summary of patterns learned across all batches.
+ *
+ * Query params:
+ *   summarize=true  — run DeepSeek synthesis (default false, costs API call)
+ *   limit=200       — max remarks to fetch
+ */
+router.get('/learning', async (req, res) => {
+  try {
+    const limit = Math.min(parseInt(req.query.limit, 10) || 200, 500);
+    const summarize = req.query.summarize === 'true';
+
+    // Fetch all non-empty remarks with context
+    const result = await db.query(
+      `SELECT
+        r.receipt_id, r.batch_id, r.vendor, r.amount, r.currency,
+        r.category_name, r.receipt_date, r.remarks,
+        rb.created_at AS batch_created_at
+       FROM receipts r
+       JOIN receipt_batches rb ON rb.batch_id = r.batch_id
+       WHERE r.remarks IS NOT NULL AND trim(r.remarks) <> ''
+       ORDER BY rb.created_at DESC, r.created_at DESC
+       LIMIT $1`,
+      [limit]
+    );
+
+    const remarks = result.rows;
+
+    // Group by batch
+    const byBatch = {};
+    for (const row of remarks) {
+      const key = row.batch_id;
+      if (!byBatch[key]) {
+        byBatch[key] = {
+          batch_id: key,
+          batch_created_at: row.batch_created_at,
+          remarks: [],
+        };
+      }
+      byBatch[key].remarks.push({
+        receipt_id: row.receipt_id,
+        vendor: row.vendor,
+        amount: row.amount,
+        currency: row.currency,
+        category_name: row.category_name,
+        receipt_date: row.receipt_date,
+        remarks: row.remarks,
+      });
+    }
+
+    const batches = Object.values(byBatch);
+
+    let summary = null;
+
+    if (summarize && remarks.length > 0 && process.env.DEEPSEEK_API_KEY) {
+      const fetch = require('node-fetch');
+
+      const remarkLines = remarks
+        .map(r => `- [${r.receipt_date}] ${r.vendor} (${r.currency} ${r.amount}, ${r.category_name || 'uncategorised'}): "${r.remarks}"`)
+        .join('\n');
+
+      const prompt = `You are an accounting assistant reviewing user notes on receipts.
+Below are remarks left by the user during receipt review sessions.
+Synthesise these into actionable learning insights: patterns in categorisation corrections, vendor-specific rules, deductibility notes, and any recurring issues.
+Format as concise bullet points grouped by theme. Be specific and practical.
+
+Remarks:
+${remarkLines}`;
+
+      try {
+        const r = await fetch('https://api.deepseek.com/v1/chat/completions', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${process.env.DEEPSEEK_API_KEY}`,
+          },
+          body: JSON.stringify({
+            model: process.env.DEEPSEEK_MODEL || 'deepseek-chat',
+            messages: [{ role: 'user', content: prompt }],
+            temperature: 0.3,
+            max_tokens: 1000,
+          }),
+        });
+        const d = await r.json();
+        summary = d.choices?.[0]?.message?.content || null;
+      } catch (err) {
+        console.error('Learning summary DeepSeek error:', err.message);
+      }
+    }
+
+    res.json({
+      success: true,
+      total_remarks: remarks.length,
+      batches,
+      summary,
+    });
+  } catch (error) {
+    console.error('learning endpoint error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * GET /receipts/learning/context
+ *
+ * Returns the last N remarks formatted as a compact string for injecting
+ * into an LLM prompt. Used internally by batch-processor.
+ */
+router.get('/learning/context', async (req, res) => {
+  try {
+    const limit = Math.min(parseInt(req.query.limit, 10) || 50, 100);
+    const result = await db.query(
+      `SELECT vendor, category_name, remarks
+       FROM receipts
+       WHERE remarks IS NOT NULL AND trim(remarks) <> ''
+       ORDER BY created_at DESC
+       LIMIT $1`,
+      [limit]
+    );
+    res.json({ success: true, remarks: result.rows });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// =============================================================================
 // HELPER FUNCTIONS
 // =============================================================================
 

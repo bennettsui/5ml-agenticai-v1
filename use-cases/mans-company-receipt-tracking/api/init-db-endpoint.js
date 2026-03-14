@@ -69,12 +69,10 @@ router.get('/init-database', async (req, res) => {
       ORDER BY table_name
     `);
 
-    // Run column migrations for existing deployments
-    await db.query(`
-      ALTER TABLE receipts ADD COLUMN IF NOT EXISTS image_data TEXT;
-      ALTER TABLE receipts ADD COLUMN IF NOT EXISTS remarks TEXT;
-      ALTER TABLE receipt_batches ADD COLUMN IF NOT EXISTS ocr_provider VARCHAR(50) DEFAULT 'google-vision';
-    `);
+    // Run column migrations for existing deployments (one statement per query — pg limitation)
+    await db.query(`ALTER TABLE receipts ADD COLUMN IF NOT EXISTS image_data TEXT`);
+    await db.query(`ALTER TABLE receipts ADD COLUMN IF NOT EXISTS remarks TEXT`);
+    await db.query(`ALTER TABLE receipt_batches ADD COLUMN IF NOT EXISTS ocr_provider VARCHAR(50) DEFAULT 'google-vision'`);
 
     console.log('✅ Database initialized successfully');
     console.log(`📊 Created ${result.rows.length} tables`);
