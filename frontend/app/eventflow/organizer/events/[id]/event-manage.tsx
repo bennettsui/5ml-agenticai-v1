@@ -9,10 +9,15 @@ const API = process.env.NEXT_PUBLIC_API_URL || '';
 function token() { return typeof window !== 'undefined' ? localStorage.getItem('ef_token') || '' : ''; }
 function authHeaders() { return { Authorization: `Bearer ${token()}`, 'Content-Type': 'application/json' }; }
 
+const EVENT_CATEGORIES = [
+  'Conference', 'Workshop', 'Networking', 'Concert', 'Exhibition',
+  'Seminar', 'Hackathon', 'Charity', 'Sports', 'Community', 'Other',
+];
+
 interface Event {
   id: number; slug: string; title: string; description: string; banner_url: string;
   location: string; address: string; start_at: string; end_at: string; timezone: string;
-  status: string; checkin_pin: string;
+  status: string; checkin_pin: string; is_public: boolean; category: string | null;
 }
 interface Tier { id: number; name: string; description: string; capacity: number | null; sold: number; price: number; is_active: boolean; }
 interface Stats { total: number; checked_in: number; }
@@ -26,7 +31,35 @@ interface NotifLog {
   first_name: string; last_name: string; email: string;
 }
 
-type Tab = 'overview' | 'attendees' | 'checkin' | 'notifications' | 'settings';
+interface FormField {
+  id: number; field_key: string; field_type: string; label: string;
+  placeholder: string | null; required: boolean; options: string[] | null; sort_order: number;
+}
+
+// Built-in core fields always present (organizer can toggle required)
+const CORE_FIELDS = [
+  { key: 'first_name', label: 'First Name',    type: 'text',  alwaysRequired: true  },
+  { key: 'last_name',  label: 'Last Name',     type: 'text',  alwaysRequired: true  },
+  { key: 'email',      label: 'Email Address', type: 'email', alwaysRequired: true  },
+  { key: 'phone',      label: 'Phone Number',  type: 'phone', alwaysRequired: false },
+  { key: 'organization', label: 'Organization / Company', type: 'text', alwaysRequired: false },
+  { key: 'title',      label: 'Job Title',     type: 'text',  alwaysRequired: false },
+];
+
+const FIELD_TYPES = [
+  { value: 'text', label: 'Short Text' },
+  { value: 'textarea', label: 'Long Text' },
+  { value: 'email', label: 'Email' },
+  { value: 'phone', label: 'Phone' },
+  { value: 'number', label: 'Number' },
+  { value: 'date', label: 'Date' },
+  { value: 'select', label: 'Dropdown (Select)' },
+  { value: 'checkbox', label: 'Checkboxes (Multi)' },
+];
+
+type Tab = 'overview' | 'attendees' | 'checkin' | 'notifications' | 'ai' | 'form' | 'settings';
+
+type AITool = 'describe' | 'social' | 'agenda' | 'email' | 'banner';
 
 const STATUS_STYLES: Record<string, string> = {
   published: 'bg-green-500/15 text-green-400',
@@ -55,6 +88,21 @@ export default function EventManagePage({ id }: { id: string }) {
   const [settingsForm, setSettingsForm] = useState<Partial<Event>>({});
   const [settingsSaving, setSettingsSaving] = useState(false);
   const [settingsMsg, setSettingsMsg] = useState('');
+
+  // AI Studio
+  const [aiTool, setAiTool] = useState<AITool>('describe');
+  const [aiLoading, setAiLoading] = useState(false);
+  const [aiResult, setAiResult] = useState('');
+  const [aiBannerStyle, setAiBannerStyle] = useState('');
+  const [aiDurationHours, setAiDurationHours] = useState('');
+
+  // RSVP Form Builder
+  const [formFields, setFormFields] = useState<FormField[]>([]);
+  const [formLoading, setFormLoading] = useState(false);
+  const [showAddField, setShowAddField] = useState(false);
+  const [newField, setNewField] = useState({ label: '', field_key: '', field_type: 'text', placeholder: '', required: false, options: '' });
+  const [fieldSaving, setFieldSaving] = useState(false);
+
   const sseRef = useRef<EventSource | null>(null);
 
   useEffect(() => {
@@ -64,6 +112,8 @@ export default function EventManagePage({ id }: { id: string }) {
   useEffect(() => {
     if (tab === 'attendees') loadAttendees();
     if (tab === 'notifications') loadNotifLog();
+    if (tab === 'ai') setAiResult('');
+    if (tab === 'form') loadFormFields();
   }, [tab]);
 
   // SSE for live stats
@@ -146,6 +196,71 @@ export default function EventManagePage({ id }: { id: string }) {
     setSettingsSaving(false);
   }
 
+  async function loadFormFields() {
+    setFormLoading(true);
+    const r = await fetch(`${API}/api/eventflow/events/${eventId}/form-fields`, { headers: authHeaders() });
+    const data = await r.json();
+    setFormFields(data.fields || []);
+    setFormLoading(false);
+  }
+
+  async function addCustomField() {
+    if (!newField.label.trim()) return;
+    setFieldSaving(true);
+    const key = newField.field_key.trim() || newField.label.toLowerCase().replace(/[^a-z0-9]/g, '_');
+    const options = ['select', 'checkbox'].includes(newField.field_type)
+      ? newField.options.split('\n').map((s) => s.trim()).filter(Boolean)
+      : null;
+    const r = await fetch(`${API}/api/eventflow/events/${eventId}/form-fields`, {
+      method: 'POST', headers: authHeaders(),
+      body: JSON.stringify({ ...newField, field_key: key, options, sort_order: formFields.length }),
+    });
+    if (r.ok) {
+      const data = await r.json();
+      setFormFields((prev) => [...prev, data.field]);
+      setNewField({ label: '', field_key: '', field_type: 'text', placeholder: '', required: false, options: '' });
+      setShowAddField(false);
+    }
+    setFieldSaving(false);
+  }
+
+  async function deleteCustomField(id: number) {
+    await fetch(`${API}/api/eventflow/events/${eventId}/form-fields/${id}`, { method: 'DELETE', headers: authHeaders() });
+    setFormFields((prev) => prev.filter((f) => f.id !== id));
+  }
+
+  async function toggleFieldRequired(id: number, required: boolean) {
+    const r = await fetch(`${API}/api/eventflow/events/${eventId}/form-fields/${id}`, {
+      method: 'PATCH', headers: authHeaders(),
+      body: JSON.stringify({ required }),
+    });
+    if (r.ok) {
+      const data = await r.json();
+      setFormFields((prev) => prev.map((f) => f.id === id ? data.field : f));
+    }
+  }
+
+  async function runAI() {
+    if (!event) return;
+    setAiLoading(true); setAiResult('');
+    try {
+      const base = { title: event.title, description: event.description, location: event.location, category: event.category, start_at: event.start_at };
+      let endpoint = aiTool;
+      let body: Record<string, unknown> = { ...base };
+      if (aiTool === 'banner') { endpoint = 'banner-prompt'; body = { title: event.title, description: event.description, category: event.category, style: aiBannerStyle }; }
+      if (aiTool === 'agenda') { body = { ...base, duration_hours: aiDurationHours ? parseInt(aiDurationHours) : undefined }; }
+
+      const r = await fetch(`${API}/api/eventflow/ai/${endpoint}`, {
+        method: 'POST', headers: authHeaders(), body: JSON.stringify(body),
+      });
+      const data = await r.json();
+      setAiResult(data.text || data.prompt || data.error || 'No result');
+    } catch (err) {
+      setAiResult('Request failed — check AI provider config');
+    }
+    setAiLoading(false);
+  }
+
   const filteredAttendees = attendees.filter((a) =>
     !attendeeSearch || `${a.first_name} ${a.last_name} ${a.email} ${a.organization}`.toLowerCase().includes(attendeeSearch.toLowerCase())
   );
@@ -161,11 +276,21 @@ export default function EventManagePage({ id }: { id: string }) {
   );
 
   const TABS: { key: Tab; label: string }[] = [
-    { key: 'overview', label: 'Overview' },
-    { key: 'attendees', label: `Attendees (${stats.total})` },
-    { key: 'checkin', label: 'Check-in' },
-    { key: 'notifications', label: 'Notifications' },
-    { key: 'settings', label: 'Settings' },
+    { key: 'overview',       label: 'Overview' },
+    { key: 'attendees',      label: `Attendees (${stats.total})` },
+    { key: 'checkin',        label: 'Check-in' },
+    { key: 'notifications',  label: 'Notifications' },
+    { key: 'ai',             label: '✨ AI Studio' },
+    { key: 'form',           label: '📋 RSVP Form' },
+    { key: 'settings',       label: 'Settings' },
+  ];
+
+  const AI_TOOLS: { key: AITool; label: string; desc: string }[] = [
+    { key: 'describe', label: '📝 Description',    desc: 'Generate an engaging event description' },
+    { key: 'social',   label: '📱 Social Copy',    desc: 'Instagram, LinkedIn & Twitter/X posts' },
+    { key: 'email',    label: '📧 Email Blast',     desc: 'Promotional email with subject + body' },
+    { key: 'agenda',   label: '📋 Agenda',          desc: 'Suggested time-slotted event schedule' },
+    { key: 'banner',   label: '🎨 Banner Prompt',   desc: 'AI image prompt for Midjourney / DALL-E' },
   ];
 
   return (
@@ -179,11 +304,17 @@ export default function EventManagePage({ id }: { id: string }) {
         </div>
         <div className="flex items-start justify-between gap-4">
           <div>
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-3 flex-wrap">
               <h1 className="text-2xl font-black">{event.title}</h1>
               <span className={`text-xs font-semibold px-2.5 py-1 rounded-full ${STATUS_STYLES[event.status] || STATUS_STYLES.cancelled}`}>
                 {event.status}
               </span>
+              {!event.is_public && (
+                <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-slate-700 text-slate-400">🔒 Private</span>
+              )}
+              {event.category && (
+                <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-violet-500/15 text-violet-300">{event.category}</span>
+              )}
             </div>
             <p className="text-slate-500 text-sm mt-1">
               {new Date(event.start_at).toLocaleDateString('en-HK', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
@@ -206,10 +337,10 @@ export default function EventManagePage({ id }: { id: string }) {
       </div>
 
       {/* Tabs */}
-      <div className="flex gap-1 border-b border-white/[0.06] mb-6">
+      <div className="flex gap-1 border-b border-white/[0.06] mb-6 overflow-x-auto">
         {TABS.map(({ key, label }) => (
           <button key={key} onClick={() => setTab(key)}
-            className={`px-4 py-2.5 text-sm font-medium transition-colors -mb-px border-b-2 ${
+            className={`px-4 py-2.5 text-sm font-medium transition-colors -mb-px border-b-2 whitespace-nowrap ${
               tab === key
                 ? 'text-amber-400 border-amber-400'
                 : 'text-slate-500 border-transparent hover:text-slate-300'
@@ -291,11 +422,13 @@ export default function EventManagePage({ id }: { id: string }) {
           <div className="bg-slate-800/60 border border-white/[0.08] rounded-2xl p-6 space-y-3">
             <h3 className="font-bold text-sm mb-4">Event Details</h3>
             {[
-              { label: 'Slug', value: event.slug },
-              { label: 'Location', value: event.location || '—' },
-              { label: 'Address', value: event.address || '—' },
-              { label: 'Timezone', value: event.timezone },
-              { label: 'End Date', value: event.end_at ? new Date(event.end_at).toLocaleString('en-HK') : '—' },
+              { label: 'Slug',      value: event.slug },
+              { label: 'Category',  value: event.category || '—' },
+              { label: 'Visibility', value: event.is_public ? '🌐 Public' : '🔒 Private (direct link only)' },
+              { label: 'Location',  value: event.location || '—' },
+              { label: 'Address',   value: event.address || '—' },
+              { label: 'Timezone',  value: event.timezone },
+              { label: 'End Date',  value: event.end_at ? new Date(event.end_at).toLocaleString('en-HK') : '—' },
             ].map(({ label, value }) => (
               <div key={label} className="flex gap-4 text-sm">
                 <span className="text-slate-500 w-24 flex-shrink-0">{label}</span>
@@ -480,11 +613,226 @@ export default function EventManagePage({ id }: { id: string }) {
         </div>
       )}
 
+      {/* AI Studio */}
+      {tab === 'ai' && (
+        <div className="space-y-6 max-w-3xl">
+          <div className="bg-violet-500/5 border border-violet-500/20 rounded-2xl p-5">
+            <h3 className="font-bold text-sm text-violet-300 mb-1">✨ AI Studio</h3>
+            <p className="text-xs text-slate-500">Generate content for your event using AI. All outputs are editable — copy and paste where needed.</p>
+          </div>
+
+          {/* Tool selector */}
+          <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
+            {AI_TOOLS.map(({ key, label, desc }) => (
+              <button key={key} onClick={() => { setAiTool(key); setAiResult(''); }}
+                className={`p-3 rounded-xl border text-left transition-all ${
+                  aiTool === key
+                    ? 'border-violet-500/50 bg-violet-500/10 text-violet-300'
+                    : 'border-white/[0.08] bg-slate-800/60 text-slate-400 hover:border-violet-500/30 hover:text-violet-300'
+                }`}>
+                <div className="text-sm font-semibold mb-1">{label}</div>
+                <div className="text-xs opacity-60 leading-snug">{desc}</div>
+              </button>
+            ))}
+          </div>
+
+          {/* Extra options per tool */}
+          <div className="bg-slate-800/60 border border-white/[0.08] rounded-2xl p-5 space-y-4">
+            <div className="flex items-start justify-between">
+              <div>
+                <div className="font-semibold text-sm">{AI_TOOLS.find((t) => t.key === aiTool)?.label}</div>
+                <div className="text-xs text-slate-500 mt-0.5">Based on: {event.title}{event.category ? ` · ${event.category}` : ''}</div>
+              </div>
+              <button onClick={runAI} disabled={aiLoading}
+                className="flex items-center gap-2 bg-violet-500 hover:bg-violet-400 disabled:opacity-50 text-white font-bold px-5 py-2.5 rounded-xl text-sm transition-colors">
+                {aiLoading ? (
+                  <><span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />Generating…</>
+                ) : '✨ Generate'}
+              </button>
+            </div>
+
+            {aiTool === 'banner' && (
+              <div>
+                <label className="block text-xs text-slate-500 mb-1.5">Preferred Style (optional)</label>
+                <input type="text" placeholder="e.g. Minimalist, Vibrant, Dark cinematic…" value={aiBannerStyle}
+                  onChange={(e) => setAiBannerStyle(e.target.value)}
+                  className="w-full px-3 py-2 bg-slate-900/60 border border-white/[0.08] rounded-lg text-white text-sm focus:outline-none focus:border-violet-500/50 transition-colors" />
+              </div>
+            )}
+
+            {aiTool === 'agenda' && (
+              <div>
+                <label className="block text-xs text-slate-500 mb-1.5">Duration (hours)</label>
+                <input type="number" min="1" max="24" placeholder="e.g. 3" value={aiDurationHours}
+                  onChange={(e) => setAiDurationHours(e.target.value)}
+                  className="w-full px-3 py-2 bg-slate-900/60 border border-white/[0.08] rounded-lg text-white text-sm focus:outline-none focus:border-violet-500/50 transition-colors" />
+              </div>
+            )}
+
+            {/* Result */}
+            {aiResult && (
+              <div className="relative">
+                <div className="bg-slate-900/60 border border-white/[0.06] rounded-xl p-4">
+                  <pre className="text-sm text-slate-200 whitespace-pre-wrap font-sans leading-relaxed">{aiResult}</pre>
+                </div>
+                <button
+                  onClick={() => { navigator.clipboard.writeText(aiResult); }}
+                  className="absolute top-3 right-3 text-xs text-slate-500 hover:text-slate-300 bg-slate-800 px-2.5 py-1 rounded-lg border border-white/[0.08] transition-colors">
+                  Copy
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* RSVP Form Builder */}
+      {tab === 'form' && (
+        <div className="max-w-2xl space-y-6">
+          {/* Core built-in fields */}
+          <div className="bg-slate-800/60 border border-white/[0.08] rounded-2xl overflow-hidden">
+            <div className="px-6 py-4 border-b border-white/[0.06]">
+              <h3 className="font-bold text-sm">Core Fields</h3>
+              <p className="text-xs text-slate-500 mt-0.5">Always included in the registration form. First name, last name, and email are always required.</p>
+            </div>
+            <div className="divide-y divide-white/[0.04]">
+              {CORE_FIELDS.map((f) => (
+                <div key={f.key} className="px-6 py-3 flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <span className="text-xs px-2 py-0.5 rounded bg-slate-700 text-slate-400 font-mono">{f.type}</span>
+                    <span className="text-sm font-medium text-slate-200">{f.label}</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    {f.alwaysRequired ? (
+                      <span className="text-xs text-red-400 font-semibold">Required</span>
+                    ) : (
+                      <span className="text-xs text-slate-500">Optional</span>
+                    )}
+                    <div className={`w-7 h-4 rounded-full ${f.alwaysRequired ? 'bg-amber-500' : 'bg-slate-700'}`}>
+                      <div className={`w-3 h-3 bg-white rounded-full mt-0.5 shadow transition-transform ${f.alwaysRequired ? 'ml-3.5' : 'ml-0.5'}`} />
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Custom fields */}
+          <div className="bg-slate-800/60 border border-white/[0.08] rounded-2xl overflow-hidden">
+            <div className="px-6 py-4 border-b border-white/[0.06] flex items-center justify-between">
+              <div>
+                <h3 className="font-bold text-sm">Custom Fields</h3>
+                <p className="text-xs text-slate-500 mt-0.5">Add additional questions for your attendees.</p>
+              </div>
+              <button onClick={() => setShowAddField(!showAddField)}
+                className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-amber-500/15 text-amber-400 hover:bg-amber-500/25 transition-colors">
+                + Add Field
+              </button>
+            </div>
+
+            {/* Add field form */}
+            {showAddField && (
+              <div className="px-6 py-5 border-b border-amber-500/20 bg-amber-500/[0.03] space-y-4">
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs text-slate-500 mb-1.5">Field Label *</label>
+                    <input type="text" placeholder="e.g. Dietary Requirements" value={newField.label}
+                      onChange={(e) => setNewField((f) => ({ ...f, label: e.target.value }))}
+                      className="w-full px-3 py-2 bg-slate-900/60 border border-white/[0.08] rounded-lg text-white text-sm focus:outline-none focus:border-amber-500/50" />
+                  </div>
+                  <div>
+                    <label className="block text-xs text-slate-500 mb-1.5">Field Type</label>
+                    <select value={newField.field_type}
+                      onChange={(e) => setNewField((f) => ({ ...f, field_type: e.target.value }))}
+                      className="w-full px-3 py-2 bg-slate-900/60 border border-white/[0.08] rounded-lg text-white text-sm focus:outline-none focus:border-amber-500/50">
+                      {FIELD_TYPES.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
+                    </select>
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-xs text-slate-500 mb-1.5">Placeholder (optional)</label>
+                  <input type="text" placeholder="Hint shown inside the field…" value={newField.placeholder}
+                    onChange={(e) => setNewField((f) => ({ ...f, placeholder: e.target.value }))}
+                    className="w-full px-3 py-2 bg-slate-900/60 border border-white/[0.08] rounded-lg text-white text-sm focus:outline-none focus:border-amber-500/50" />
+                </div>
+                {['select', 'checkbox'].includes(newField.field_type) && (
+                  <div>
+                    <label className="block text-xs text-slate-500 mb-1.5">Options (one per line)</label>
+                    <textarea rows={4} placeholder={"Option A\nOption B\nOption C"} value={newField.options}
+                      onChange={(e) => setNewField((f) => ({ ...f, options: e.target.value }))}
+                      className="w-full px-3 py-2 bg-slate-900/60 border border-white/[0.08] rounded-lg text-white text-sm focus:outline-none focus:border-amber-500/50 resize-none" />
+                  </div>
+                )}
+                <div className="flex items-center gap-4">
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input type="checkbox" checked={newField.required}
+                      onChange={(e) => setNewField((f) => ({ ...f, required: e.target.checked }))}
+                      className="w-4 h-4 rounded border-slate-600 text-amber-500 focus:ring-amber-500/40" />
+                    <span className="text-sm text-slate-300">Required field</span>
+                  </label>
+                  <div className="flex gap-2 ml-auto">
+                    <button onClick={() => setShowAddField(false)}
+                      className="text-xs text-slate-500 hover:text-slate-300 px-3 py-2 transition-colors">Cancel</button>
+                    <button onClick={addCustomField} disabled={fieldSaving || !newField.label.trim()}
+                      className="bg-amber-500 hover:bg-amber-400 disabled:opacity-50 text-slate-950 font-bold text-xs px-4 py-2 rounded-lg transition-colors">
+                      {fieldSaving ? 'Saving…' : 'Add Field'}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Existing custom fields */}
+            {formLoading ? (
+              <div className="px-6 py-8 text-center text-slate-600 text-sm">Loading…</div>
+            ) : formFields.length === 0 ? (
+              <div className="px-6 py-8 text-center text-slate-600 text-sm">
+                No custom fields yet — click <span className="text-amber-400">+ Add Field</span> to create one.
+              </div>
+            ) : (
+              <div className="divide-y divide-white/[0.04]">
+                {formFields.map((f) => (
+                  <div key={f.id} className="px-6 py-3 flex items-center justify-between gap-3">
+                    <div className="flex items-center gap-3 min-w-0">
+                      <span className="text-xs px-2 py-0.5 rounded bg-slate-700 text-slate-400 font-mono flex-shrink-0">{f.field_type}</span>
+                      <div className="min-w-0">
+                        <div className="text-sm font-medium text-slate-200 truncate">{f.label}</div>
+                        {f.placeholder && <div className="text-xs text-slate-600 truncate">{f.placeholder}</div>}
+                        {f.options && <div className="text-xs text-slate-600 truncate">{f.options.join(' · ')}</div>}
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-3 flex-shrink-0">
+                      <label className="flex items-center gap-1.5 cursor-pointer">
+                        <input type="checkbox" checked={f.required}
+                          onChange={(e) => toggleFieldRequired(f.id, e.target.checked)}
+                          className="w-3.5 h-3.5 rounded border-slate-600" />
+                        <span className="text-xs text-slate-500">Required</span>
+                      </label>
+                      <button onClick={() => deleteCustomField(f.id)}
+                        className="text-slate-600 hover:text-red-400 text-xs transition-colors">
+                        Remove
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Preview note */}
+          <div className="bg-blue-500/5 border border-blue-500/20 rounded-xl p-4 text-xs text-blue-300 space-y-1">
+            <div className="font-semibold">📋 Form Preview</div>
+            <p className="text-slate-400">Attendees will see the core fields above followed by your custom fields in the order listed. Changes apply immediately to new registrations.</p>
+          </div>
+        </div>
+      )}
+
       {/* Settings */}
       {tab === 'settings' && (
         <div className="max-w-xl space-y-6">
           <div className="bg-slate-800/60 border border-white/[0.08] rounded-2xl p-6 space-y-5">
             <h3 className="font-bold text-sm">Edit Event</h3>
+
             {[
               { key: 'title', label: 'Title', type: 'text' },
               { key: 'location', label: 'Venue', type: 'text' },
@@ -498,12 +846,44 @@ export default function EventManagePage({ id }: { id: string }) {
                   className="w-full px-4 py-3 bg-slate-900/60 border border-white/[0.08] rounded-xl text-white text-sm focus:outline-none focus:border-amber-500/50 transition-colors" />
               </div>
             ))}
+
+            {/* Category */}
+            <div>
+              <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1.5">Category</label>
+              <select value={settingsForm.category || ''}
+                onChange={(e) => setSettingsForm((f) => ({ ...f, category: e.target.value || null }))}
+                className="w-full px-4 py-3 bg-slate-900/60 border border-white/[0.08] rounded-xl text-white text-sm focus:outline-none focus:border-amber-500/50 transition-colors">
+                <option value="">— No category —</option>
+                {EVENT_CATEGORIES.map((cat) => <option key={cat} value={cat}>{cat}</option>)}
+              </select>
+            </div>
+
+            {/* Public / Private */}
+            <div className="flex items-center justify-between bg-slate-900/40 border border-white/[0.06] rounded-xl p-4">
+              <div>
+                <div className="text-sm font-semibold">
+                  {settingsForm.is_public ? '🌐 Public' : '🔒 Private'}
+                </div>
+                <div className="text-xs text-slate-500 mt-0.5">
+                  {settingsForm.is_public
+                    ? 'Visible in the public event listing'
+                    : 'Hidden from listing — direct link only'}
+                </div>
+              </div>
+              <button type="button"
+                onClick={() => setSettingsForm((f) => ({ ...f, is_public: !f.is_public }))}
+                className={`relative w-11 h-6 rounded-full transition-colors ${settingsForm.is_public ? 'bg-amber-500' : 'bg-slate-700'}`}>
+                <span className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform ${settingsForm.is_public ? 'translate-x-5' : ''}`} />
+              </button>
+            </div>
+
             <div>
               <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1.5">Description</label>
               <textarea rows={4} value={settingsForm.description || ''}
                 onChange={(e) => setSettingsForm((f) => ({ ...f, description: e.target.value }))}
                 className="w-full px-4 py-3 bg-slate-900/60 border border-white/[0.08] rounded-xl text-white text-sm focus:outline-none focus:border-amber-500/50 transition-colors resize-none" />
             </div>
+
             <div>
               <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1.5">Check-in PIN</label>
               <input type="text" value={settingsForm.checkin_pin || ''}
@@ -511,6 +891,7 @@ export default function EventManagePage({ id }: { id: string }) {
                 onChange={(e) => setSettingsForm((f) => ({ ...f, checkin_pin: e.target.value.replace(/\D/g, '') }))}
                 className="w-full px-4 py-3 bg-slate-900/60 border border-white/[0.08] rounded-xl text-white text-sm font-mono tracking-widest focus:outline-none focus:border-amber-500/50 transition-colors" />
             </div>
+
             {settingsMsg && <p className={`text-sm ${settingsMsg === 'Saved' ? 'text-green-400' : 'text-red-400'}`}>{settingsMsg}</p>}
             <button onClick={saveSettings} disabled={settingsSaving}
               className="bg-amber-500 hover:bg-amber-400 disabled:opacity-50 text-slate-950 font-bold px-5 py-2.5 rounded-xl text-sm transition-colors">

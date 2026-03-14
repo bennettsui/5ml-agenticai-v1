@@ -7,10 +7,12 @@ import Link from 'next/link';
 const API = process.env.NEXT_PUBLIC_API_URL || '';
 
 interface Tier { id: number; name: string; description: string | null; price: number; currency: string; capacity: number | null; sold: number; color: string; is_active: boolean; }
+interface FormField { id: number; field_key: string; field_type: string; label: string; placeholder: string | null; required: boolean; options: string[] | null; }
 interface Event {
   id: number; slug: string; title: string; description: string | null; banner_url: string | null;
   location: string | null; start_at: string; end_at: string; timezone: string;
   organizer_name: string; tiers: Tier[]; stats: { total: number; checked_in: number };
+  formFields?: FormField[];
 }
 
 const TIER_COLORS: Record<string, string> = {
@@ -43,6 +45,7 @@ export default function EventDetailPage({ slug }: { slug: string }) {
     first_name: '', last_name: '', email: '', organization: '', phone: '',
     notify_whatsapp: false, notify_line: false,
   });
+  const [customResponses, setCustomResponses] = useState<Record<string, string | boolean>>({});
 
   useEffect(() => {
     fetch(`${API}/api/eventflow/public/events/${slug}`)
@@ -58,7 +61,7 @@ export default function EventDetailPage({ slug }: { slug: string }) {
     try {
       const res = await fetch(`${API}/api/eventflow/public/events/${slug}/rsvp`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...form, tier_id: selectedTier.id }),
+        body: JSON.stringify({ ...form, tier_id: selectedTier.id, custom_responses: customResponses }),
       });
       const data = await res.json();
       if (!res.ok) { alert(data.error || 'Registration failed'); setSubmitting(false); return; }
@@ -227,6 +230,59 @@ export default function EventDetailPage({ slug }: { slug: string }) {
                       onChange={(e) => setForm((f) => ({ ...f, phone: e.target.value }))}
                       className="w-full px-3 py-2.5 bg-slate-900 border border-white/[0.08] rounded-xl text-white text-sm focus:outline-none focus:border-amber-500/50 transition-colors" />
                   </div>
+                  {/* Custom form fields */}
+                  {(event.formFields ?? []).map((field) => (
+                    <div key={field.id}>
+                      <label className="block text-xs text-slate-500 mb-1">
+                        {field.label} {field.required && <span className="text-slate-400">*</span>}
+                      </label>
+                      {field.field_type === 'textarea' ? (
+                        <textarea
+                          required={field.required}
+                          placeholder={field.placeholder ?? ''}
+                          value={(customResponses[field.field_key] as string) ?? ''}
+                          onChange={(e) => setCustomResponses((r) => ({ ...r, [field.field_key]: e.target.value }))}
+                          rows={3}
+                          className="w-full px-3 py-2.5 bg-slate-900 border border-white/[0.08] rounded-xl text-white text-sm focus:outline-none focus:border-amber-500/50 transition-colors resize-none"
+                        />
+                      ) : field.field_type === 'select' ? (
+                        <select
+                          required={field.required}
+                          value={(customResponses[field.field_key] as string) ?? ''}
+                          onChange={(e) => setCustomResponses((r) => ({ ...r, [field.field_key]: e.target.value }))}
+                          className="w-full px-3 py-2.5 bg-slate-900 border border-white/[0.08] rounded-xl text-white text-sm focus:outline-none focus:border-amber-500/50 transition-colors"
+                        >
+                          <option value="">Select…</option>
+                          {(field.options ?? []).map((opt) => (
+                            <option key={opt} value={opt}>{opt}</option>
+                          ))}
+                        </select>
+                      ) : field.field_type === 'checkbox' ? (
+                        <div className="space-y-1">
+                          {(field.options ?? []).map((opt) => (
+                            <label key={opt} className="flex items-center gap-2 cursor-pointer">
+                              <input
+                                type="checkbox"
+                                checked={(customResponses[`${field.field_key}__${opt}`] as boolean) ?? false}
+                                onChange={(e) => setCustomResponses((r) => ({ ...r, [`${field.field_key}__${opt}`]: e.target.checked }))}
+                                className="w-3.5 h-3.5 rounded accent-amber-500"
+                              />
+                              <span className="text-slate-300 text-sm">{opt}</span>
+                            </label>
+                          ))}
+                        </div>
+                      ) : (
+                        <input
+                          type={field.field_type === 'phone' ? 'tel' : field.field_type === 'number' ? 'number' : field.field_type === 'date' ? 'date' : 'text'}
+                          required={field.required}
+                          placeholder={field.placeholder ?? ''}
+                          value={(customResponses[field.field_key] as string) ?? ''}
+                          onChange={(e) => setCustomResponses((r) => ({ ...r, [field.field_key]: e.target.value }))}
+                          className="w-full px-3 py-2.5 bg-slate-900 border border-white/[0.08] rounded-xl text-white text-sm focus:outline-none focus:border-amber-500/50 transition-colors"
+                        />
+                      )}
+                    </div>
+                  ))}
                   <div className="flex gap-4 pt-1">
                     {[
                       { key: 'notify_whatsapp', label: 'WhatsApp' },

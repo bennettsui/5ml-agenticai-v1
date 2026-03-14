@@ -1,10 +1,15 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 
 const API = process.env.NEXT_PUBLIC_API_URL || '';
+const RECAPTCHA_SITE_KEY = process.env.NEXT_PUBLIC_RECAPTCHA_SITE_KEY || '';
+
+declare global {
+  interface Window { grecaptcha: any; }
+}
 
 export default function OrganizerSignup() {
   const router = useRouter();
@@ -12,13 +17,26 @@ export default function OrganizerSignup() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
+  useEffect(() => {
+    if (!RECAPTCHA_SITE_KEY) return;
+    const script = document.createElement('script');
+    script.src = `https://www.google.com/recaptcha/api.js?render=${RECAPTCHA_SITE_KEY}`;
+    script.async = true;
+    document.head.appendChild(script);
+    return () => { document.head.removeChild(script); };
+  }, []);
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(''); setLoading(true);
     try {
+      let recaptcha_token = '';
+      if (RECAPTCHA_SITE_KEY && window.grecaptcha) {
+        recaptcha_token = await window.grecaptcha.execute(RECAPTCHA_SITE_KEY, { action: 'signup' });
+      }
       const res = await fetch(`${API}/api/eventflow/organizer/signup`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(form),
+        body: JSON.stringify({ ...form, recaptcha_token }),
       });
       const data = await res.json();
       if (!res.ok) { setError(data.error || 'Signup failed'); setLoading(false); return; }
@@ -64,6 +82,14 @@ export default function OrganizerSignup() {
           Already have an account?{' '}
           <Link href="/eventflow/organizer/login" className="text-amber-400 hover:underline">Sign in</Link>
         </p>
+        {RECAPTCHA_SITE_KEY && (
+          <p className="text-center text-xs text-slate-700 mt-4">
+            Protected by reCAPTCHA.{' '}
+            <a href="https://policies.google.com/privacy" className="hover:underline" target="_blank" rel="noopener">Privacy</a>
+            {' & '}
+            <a href="https://policies.google.com/terms" className="hover:underline" target="_blank" rel="noopener">Terms</a>
+          </p>
+        )}
       </div>
     </div>
   );

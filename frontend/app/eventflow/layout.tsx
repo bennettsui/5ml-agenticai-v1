@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import ProfilingBanner from './ProfilingBanner';
 
 export const metadata: Metadata = {
   title: 'EventFlow — Where great events begin',
@@ -11,5 +12,10 @@ export const metadata: Metadata = {
 };
 
 export default function EventFlowLayout({ children }: { children: React.ReactNode }) {
-  return <>{children}</>;
+  return (
+    <>
+      {children}
+      <ProfilingBanner />
+    </>
+  );
 }
