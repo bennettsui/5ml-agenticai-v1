@@ -4177,6 +4177,7 @@ try {
   console.log('✅ EventFlow routes loaded: /api/eventflow, /eventflow/checkin');
 } catch (error) {
   console.warn('⚠️ EventFlow routes not loaded:', error.message);
+}
 // Adaptive Learning for Schools
 try {
   const adaptiveLearningRoutes = require('./use-cases/adaptive-learning/api/routes');
