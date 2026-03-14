@@ -27,6 +27,13 @@ const IMAGE_MIME_TYPES = {
 // Gemini model to use for OCR (flash = fast + cheap, good at document text)
 const OCR_MODEL = 'gemini-2.0-flash';
 
+// Pricing per 1M tokens (USD) — update if Gemini pricing changes
+const GEMINI_PRICE = { input: 0.075, output: 0.30 };
+
+function calcGeminiCost(inputTokens, outputTokens) {
+  return (inputTokens / 1e6) * GEMINI_PRICE.input + (outputTokens / 1e6) * GEMINI_PRICE.output;
+}
+
 const OCR_PROMPT = `You are an OCR engine for receipt images. Analyze this receipt and return ONLY valid JSON with no markdown, no explanation.
 
 Return this exact structure:
@@ -103,15 +110,26 @@ class GoogleVisionOCR {
 
     const content = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
 
+    // Capture token usage from Gemini response
+    const inputTokens  = data.usageMetadata?.promptTokenCount     || 0;
+    const outputTokens = data.usageMetadata?.candidatesTokenCount || 0;
+    const usage = {
+      model:        OCR_MODEL,
+      inputTokens,
+      outputTokens,
+      totalTokens:  inputTokens + outputTokens,
+      costUsd:      calcGeminiCost(inputTokens, outputTokens),
+    };
+
     if (!content) {
-      return [{ pageNumber: 1, text: '', boxes: [], confidence: 0 }];
+      return [{ pageNumber: 1, text: '', boxes: [], confidence: 0, usage }];
     }
 
     const parsed = this._parseResponse(content);
 
     // PDFs may contain multiple logical pages — treat as single result
     // (Gemini inline PDF processes the whole doc in one response)
-    return [{ pageNumber: 1, ...parsed }];
+    return [{ pageNumber: 1, ...parsed, usage }];
   }
 
   /**
