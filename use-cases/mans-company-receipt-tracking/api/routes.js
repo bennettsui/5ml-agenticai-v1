@@ -18,8 +18,30 @@ const path = require('path');
 const fs = require('fs').promises;
 const ExcelJS = require('exceljs');
 const crypto = require('crypto');
+const multer = require('multer');
 const { Dropbox } = require('dropbox');
 const { processReceiptBatch } = require('../lib/batch-processor');
+
+// Multer: store uploaded receipts to /tmp/receipt-uploads
+const receiptUploadStorage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    const dir = '/tmp/receipt-uploads';
+    require('fs').mkdirSync(dir, { recursive: true });
+    cb(null, dir);
+  },
+  filename: (req, file, cb) => {
+    const safeName = `${Date.now()}_${file.originalname.replace(/[^a-zA-Z0-9._-]/g, '_')}`;
+    cb(null, safeName);
+  },
+});
+const receiptUpload = multer({
+  storage: receiptUploadStorage,
+  limits: { fileSize: 20 * 1024 * 1024 }, // 20 MB per file
+  fileFilter: (req, file, cb) => {
+    const allowed = ['image/jpeg', 'image/png', 'image/webp', 'image/gif', 'application/pdf'];
+    cb(null, allowed.includes(file.mimetype));
+  },
+});
 
 const normalizeExcelValue = (value) => {
   if (value === null || value === undefined) return '';
@@ -918,6 +940,7 @@ router.put('/:receiptId', async (req, res) => {
       deductible,
       deductible_amount,
       non_deductible_amount,
+      remarks,
     } = req.body || {};
 
     const existingResult = await db.query(
@@ -1011,6 +1034,12 @@ router.put('/:receiptId', async (req, res) => {
     if (non_deductible_amount !== undefined) {
       updateFields.push(`non_deductible_amount = $${paramIndex}`);
       values.push(parseNumberField(non_deductible_amount, 'non_deductible_amount'));
+      paramIndex += 1;
+    }
+
+    if (remarks !== undefined) {
+      updateFields.push(`remarks = $${paramIndex}`);
+      values.push(remarks);
       paramIndex += 1;
     }
 
@@ -1130,6 +1159,122 @@ router.get('/analytics/compliance', async (req, res) => {
       success: false,
       error: 'Failed to fetch compliance analytics',
     });
+  }
+});
+
+// =============================================================================
+// NEW ENDPOINTS (v2)
+// =============================================================================
+
+/**
+ * POST /receipts/upload-multipart
+ *
+ * Accept multipart/form-data file uploads, create a batch, and kick off
+ * Google Vision + DeepSeek processing.
+ *
+ * Form fields:
+ *   period_start (optional)  YYYY-MM-DD
+ *   period_end   (optional)  YYYY-MM-DD
+ * Form files:
+ *   files[]  — JPG / PNG / WebP / PDF (multiple allowed)
+ */
+router.post('/upload-multipart', receiptUpload.array('files', 50), async (req, res) => {
+  try {
+    const { period_start, period_end } = req.body || {};
+
+    if (!req.files || req.files.length === 0) {
+      return res.status(400).json({ success: false, error: 'No files uploaded' });
+    }
+
+    if (!process.env.DATABASE_URL) {
+      return res.status(503).json({ success: false, error: 'Database not configured' });
+    }
+    if (!process.env.GOOGLE_VISION_API_KEY) {
+      return res.status(503).json({ success: false, error: 'GOOGLE_VISION_API_KEY not configured' });
+    }
+    if (!process.env.DEEPSEEK_API_KEY) {
+      return res.status(503).json({ success: false, error: 'DEEPSEEK_API_KEY not configured' });
+    }
+
+    const batchResult = await db.query(
+      `INSERT INTO receipt_batches (client_name, status, period_start, period_end)
+       VALUES ($1, 'pending', $2, $3) RETURNING batch_id, created_at`,
+      ['Receipt OCR', period_start || null, period_end || null]
+    );
+    const batchId = batchResult.rows[0].batch_id;
+
+    const uploadedFiles = req.files.map(f => ({
+      success: true,
+      filename: f.originalname,
+      path: f.path,
+      hash: '',
+      size: f.size,
+    }));
+
+    processReceiptBatch(batchId, null, 'Receipt OCR', uploadedFiles, 'google-vision').catch(err => {
+      console.error(`Batch ${batchId} error:`, err);
+    });
+
+    res.json({
+      success: true,
+      batch_id: batchId,
+      file_count: req.files.length,
+      status: 'pending',
+      created_at: batchResult.rows[0].created_at,
+    });
+  } catch (error) {
+    console.error('upload-multipart error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * GET /receipts/batches/:batchId/receipts
+ *
+ * Return all receipts for a batch including image_data and ocr_boxes.
+ */
+router.get('/batches/:batchId/receipts', async (req, res) => {
+  try {
+    const { batchId } = req.params;
+    const result = await db.query(
+      `SELECT receipt_id, image_path, receipt_date, vendor, description,
+              amount, currency, tax_amount, receipt_number, payment_method,
+              category_id, category_name, ocr_confidence, ocr_raw_text,
+              ocr_boxes, image_data, deductible, deductible_amount,
+              non_deductible_amount, remarks, requires_review, reviewed,
+              created_at
+       FROM receipts WHERE batch_id=$1 ORDER BY created_at ASC`,
+      [batchId]
+    );
+    res.json({ success: true, receipts: result.rows });
+  } catch (error) {
+    console.error('batches/:id/receipts error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * PUT /receipts/:receiptId/remarks
+ *
+ * Save a user remark on a receipt (for learning / audit trail).
+ */
+router.put('/:receiptId/remarks', async (req, res) => {
+  try {
+    const { receiptId } = req.params;
+    const { remarks } = req.body || {};
+
+    const result = await db.query(
+      `UPDATE receipts SET remarks=$1, updated_at=NOW()
+       WHERE receipt_id=$2 RETURNING receipt_id, remarks`,
+      [remarks || '', receiptId]
+    );
+    if (result.rows.length === 0) {
+      return res.status(404).json({ success: false, error: 'Receipt not found' });
+    }
+    res.json({ success: true, receipt_id: receiptId, remarks: result.rows[0].remarks });
+  } catch (error) {
+    console.error('remarks error:', error);
+    res.status(500).json({ success: false, error: error.message });
   }
 });
 

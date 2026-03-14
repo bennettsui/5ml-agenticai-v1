@@ -1,7 +1,62 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
-import { AlertCircle, CheckCircle2, Clock, Download, FileSpreadsheet, Loader2, Upload } from 'lucide-react';
+import { useState, useEffect, useRef, useCallback } from 'react';
+import {
+  Upload, Link2, FileText, CheckCircle2, AlertCircle, Loader2,
+  ChevronLeft, ChevronRight, Download, FileSpreadsheet, History,
+  Plus, Pencil, Check, X, Info, ArrowLeft,
+} from 'lucide-react';
+
+// ---------------------------------------------------------------------------
+// Types
+// ---------------------------------------------------------------------------
+interface UploadedFile {
+  id: string;
+  file: File;
+  status: 'pending' | 'uploading' | 'done' | 'error';
+  progress: number;
+  error?: string;
+}
+
+interface LogLine {
+  ts: string;
+  msg: string;
+  level?: 'info' | 'warning' | 'error';
+}
+
+interface OcrBox {
+  id: string;
+  text: string;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  confidence?: number;
+}
+
+interface Receipt {
+  receipt_id: string;
+  image_path: string;
+  image_data: string | null;
+  receipt_date: string;
+  vendor: string;
+  description: string | null;
+  amount: number | string;
+  currency: string;
+  tax_amount: number | string | null;
+  receipt_number: string | null;
+  payment_method: string | null;
+  category_id: string | null;
+  category_name: string | null;
+  ocr_confidence: number | string | null;
+  ocr_raw_text: string | null;
+  ocr_boxes: OcrBox[] | null;
+  deductible: boolean | null;
+  deductible_amount: number | string | null;
+  non_deductible_amount: number | string | null;
+  remarks: string | null;
+  requires_review: boolean | null;
+}
 
 interface BatchStatus {
   batch_id: string;
@@ -11,1241 +66,1071 @@ interface BatchStatus {
   processed_receipts: number;
   failed_receipts: number;
   total_amount: number;
-  deductible_amount: number;
-  recent_logs: Array<{
-    log_level: string;
-    step: string;
-    message: string;
-    created_at: string;
-  }>;
-  updated_at: string;
+  message?: string;
 }
 
-interface ReceiptResult {
-  receipt_id: string;
-  receipt_date: string;
-  vendor: string;
-  description: string | null;
-  amount: number | string;
-  currency: string;
-  tax_amount?: number | string | null;
-  receipt_number?: string | null;
-  payment_method?: string | null;
-  category_id: string | null;
-  category_name: string | null;
-  categorization_confidence?: number | string | null;
-  categorization_reasoning?: string | null;
-  ocr_confidence?: number | string | null;
-  ocr_warnings?: string[] | null;
-  ocr_raw_text?: string | null;
-  deductible?: boolean | null;
-  deductible_amount?: number | string | null;
-  non_deductible_amount?: number | string | null;
-  requires_review?: boolean | null;
-  reviewed?: boolean | null;
-}
+type Step = 'upload' | 'ocr' | 'pl';
 
-interface ExcelPreview {
-  sheet_name: string;
-  columns: string[];
-  rows: Array<Array<string | number | null>>;
-  total_rows: number;
-}
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+const fmt = (v: number | string | null | undefined, decimals = 2) => {
+  const n = typeof v === 'number' ? v : Number(v);
+  return Number.isFinite(n) ? n.toFixed(decimals) : '0.00';
+};
 
-interface ReceiptEditDraft {
-  receipt_date: string;
-  vendor: string;
-  description: string;
-  amount: string;
-  currency: string;
-  tax_amount: string;
-  receipt_number: string;
-  payment_method: string;
-  category_id: string;
-  category_name: string;
-  deductible: boolean;
-  deductible_amount: string;
-  non_deductible_amount: string;
-}
+const apiBase = () => {
+  if (typeof window === 'undefined') return '';
+  const h = window.location.hostname;
+  if (h === 'localhost' || h === '127.0.0.1') return process.env.NEXT_PUBLIC_API_URL || '';
+  return '';
+};
 
-export default function ReceiptProcessor() {
-  const [uploadedFiles, setUploadedFiles] = useState<File[]>([]);
-  const [clientName, setClientName] = useState("Man's Accounting Firm");
-  const [periodStart, setPeriodStart] = useState('');
-  const [periodEnd, setPeriodEnd] = useState('');
-  const [inputMode, setInputMode] = useState<'upload' | 'dropbox'>('upload');
-  const [dropboxUrl, setDropboxUrl] = useState('');
-  const [ocrModel, setOcrModel] = useState<'claude-haiku' | 'deepseek'>('claude-haiku');
-  const [isProcessing, setIsProcessing] = useState(false);
-  const [batchId, setBatchId] = useState<string | null>(null);
-  const [batchStatus, setBatchStatus] = useState<BatchStatus | null>(null);
-  const [receiptResults, setReceiptResults] = useState<ReceiptResult[]>([]);
-  const [isReceiptLoading, setIsReceiptLoading] = useState(false);
-  const [receiptError, setReceiptError] = useState<string>('');
-  const [excelPreview, setExcelPreview] = useState<ExcelPreview | null>(null);
-  const [isExcelLoading, setIsExcelLoading] = useState(false);
-  const [excelError, setExcelError] = useState<string>('');
-  const [editingReceiptId, setEditingReceiptId] = useState<string | null>(null);
-  const [editDraft, setEditDraft] = useState<ReceiptEditDraft | null>(null);
-  const [isSavingEdit, setIsSavingEdit] = useState(false);
-  const [saveError, setSaveError] = useState('');
-  const [error, setError] = useState<string>('');
-  const receiptFetchKeyRef = useRef<string>('');
-  const excelFetchKeyRef = useRef<string>('');
-  const excelRetryTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-  const isLocalhost = () => {
-    if (typeof window === 'undefined') return false;
-    return window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
-  };
-  const API_BASE = isLocalhost() ? (process.env.NEXT_PUBLIC_API_URL || '') : '';
+const apiUrl = (p: string) => `${apiBase()}${p}`;
 
-  const formatErrorMessage = (value: unknown): string => {
-    if (typeof value === 'string') return value;
-    if (value && typeof value === 'object') {
-      const message = (value as { message?: string }).message;
-      const status = (value as { status?: string | number }).status;
-      if (message && status !== undefined) return `${message} (status ${status})`;
-      if (message) return message;
-    }
-    return 'Unexpected error occurred';
-  };
+// ---------------------------------------------------------------------------
+// OcrImageOverlay  (canvas-based bounding boxes)
+// ---------------------------------------------------------------------------
+function OcrImageOverlay({
+  imageData,
+  boxes,
+  highlightId,
+  onBoxClick,
+}: {
+  imageData: string;
+  boxes: OcrBox[];
+  highlightId: string | null;
+  onBoxClick: (box: OcrBox) => void;
+}) {
+  const imgRef = useRef<HTMLImageElement>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const [dim, setDim] = useState({ w: 0, h: 0 });
+  const [hovered, setHovered] = useState<string | null>(null);
 
-  const toDisplayText = (value: unknown): string => {
-    if (typeof value === 'string') return value;
-    if (typeof value === 'number') return String(value);
-    if (value && typeof value === 'object') return JSON.stringify(value);
-    return '';
-  };
+  const draw = useCallback(() => {
+    const canvas = canvasRef.current;
+    const img = imgRef.current;
+    if (!canvas || !img || dim.w === 0) return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-  const formatAmount = (value: unknown): string => {
-    const parsed = typeof value === 'number' ? value : Number(value);
-    if (!Number.isFinite(parsed)) return '0.00';
-    return parsed.toFixed(2);
-  };
+    for (const box of boxes) {
+      const isHighlit = box.id === highlightId;
+      const isHov = box.id === hovered;
+      const x = box.x * dim.w;
+      const y = box.y * dim.h;
+      const w = box.width * dim.w;
+      const h = box.height * dim.h;
 
-  const formatCellValue = (value: unknown): string => {
-    if (value === null || value === undefined) return '';
-    if (typeof value === 'string') return value;
-    if (typeof value === 'number') return value.toString();
-    if (typeof value === 'boolean') return value ? 'Yes' : 'No';
-    if (value instanceof Date) return value.toISOString().split('T')[0];
-    const stringified = JSON.stringify(value);
-    return stringified === undefined ? String(value) : stringified;
-  };
+      ctx.strokeStyle = isHighlit ? '#f59e0b' : isHov ? '#3b82f6' : '#ef4444';
+      ctx.lineWidth = isHighlit || isHov ? 2.5 : 1.5;
+      ctx.strokeRect(x, y, w, h);
 
-  const toInputValue = (value: unknown, fallback = ''): string => {
-    if (value === null || value === undefined) return fallback;
-    if (typeof value === 'string') return value;
-    if (typeof value === 'number') return value.toString();
-    return String(value);
-  };
-
-  const scheduleExcelRetry = (targetBatchId: string, delayMs = 2000) => {
-    if (excelRetryTimeoutRef.current) {
-      clearTimeout(excelRetryTimeoutRef.current);
-    }
-    excelRetryTimeoutRef.current = setTimeout(() => {
-      void loadExcelPreview(targetBatchId, true);
-    }, delayMs);
-  };
-
-  const loadExcelPreview = async (targetBatchId: string, force = false) => {
-    if (!targetBatchId) return;
-    if (!force && excelFetchKeyRef.current === targetBatchId) return;
-
-    setIsExcelLoading(true);
-    setExcelError('');
-
-    try {
-      const response = await fetch(apiUrl(`/api/receipts/batches/${targetBatchId}/excel-preview`));
-      if (!response.ok) {
-        if (response.status === 404 || response.status === 202) {
-          scheduleExcelRetry(targetBatchId, 2000);
-          return;
-        }
+      if (isHighlit || isHov) {
+        ctx.fillStyle = isHighlit ? 'rgba(245,158,11,0.15)' : 'rgba(59,130,246,0.12)';
+        ctx.fillRect(x, y, w, h);
       }
-      const data = await response.json();
-
-      if (!data.success) {
-        const retryDelay = typeof data.retry_after === 'number' ? data.retry_after * 1000 : 2000;
-        scheduleExcelRetry(targetBatchId, retryDelay);
-        return;
-      }
-
-      setExcelPreview({
-        sheet_name: data.sheet_name,
-        columns: Array.isArray(data.columns) ? data.columns : [],
-        rows: Array.isArray(data.rows) ? data.rows : [],
-        total_rows: typeof data.total_rows === 'number' ? data.total_rows : 0,
-      });
-      excelFetchKeyRef.current = targetBatchId;
-    } catch (err) {
-      setExcelError(formatErrorMessage(err));
-    } finally {
-      setIsExcelLoading(false);
     }
+  }, [boxes, dim, highlightId, hovered]);
+
+  useEffect(() => { draw(); }, [draw]);
+
+  const handleLoad = () => {
+    const img = imgRef.current;
+    const canvas = canvasRef.current;
+    if (!img || !canvas) return;
+    canvas.width = img.naturalWidth;
+    canvas.height = img.naturalHeight;
+    setDim({ w: img.naturalWidth, h: img.naturalHeight });
   };
 
-  const readFileAsBase64 = (file: File): Promise<string> => (
-    new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = () => {
-        const result = reader.result?.toString() || '';
-        const commaIndex = result.indexOf(',');
-        resolve(commaIndex >= 0 ? result.slice(commaIndex + 1) : result);
-      };
-      reader.onerror = () => reject(new Error('Failed to read file'));
-      reader.readAsDataURL(file);
-    })
-  );
-
-  const normalizeStatus = (value: unknown): string => {
-    if (typeof value === 'string') return value;
-    if (value && typeof value === 'object') {
-      const nested = (value as { status?: unknown }).status;
-      if (typeof nested === 'string') return nested;
-    }
-    return 'processing';
-  };
-
-  const normalizeProgress = (value: unknown): number => {
-    if (typeof value === 'number') return value;
-    const parsed = Number(value);
-    return Number.isFinite(parsed) ? parsed : 0;
-  };
-
-  const apiUrl = (path: string) => (API_BASE ? `${API_BASE}${path}` : path);
-
-  // Real-time updates with WebSocket (fallback to polling)
-  useEffect(() => {
-    if (!batchId) return;
-
-    let pollInterval: NodeJS.Timeout | null = null;
-    let ws: WebSocket | null = null;
-
-    function startPolling() {
-      if (pollInterval) return; // Already polling
-
-      pollInterval = setInterval(async () => {
-        try {
-          const response = await fetch(apiUrl(`/api/receipts/batches/${batchId}/status`));
-          const data = await response.json();
-
-          if (data.success) {
-            const normalized = {
-              ...data,
-              status: normalizeStatus(data.status),
-              progress: normalizeProgress(data.progress),
-            } as BatchStatus;
-            setBatchStatus(normalized);
-
-            if (normalized.status === 'completed' || normalized.status === 'failed') {
-              setIsProcessing(false);
-              if (pollInterval) clearInterval(pollInterval);
-            }
-          } else {
-            setError(data.error ? formatErrorMessage(data.error) : 'Failed to fetch status');
-          }
-        } catch (err) {
-          console.error('Error polling status:', err);
-        }
-      }, 2000);
-    }
-
-    // Start polling immediately to keep UI in sync even if WebSocket is quiet.
-    startPolling();
-
-    // Try WebSocket for real-time updates.
-    try {
-      const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-      const host = window.location.host;
-      const wsUrl = `${protocol}//${host}/ws`;
-      ws = new WebSocket(wsUrl);
-
-      ws.onopen = () => {
-        console.log('✅ WebSocket connected for real-time updates');
-        ws?.send(JSON.stringify({ type: 'subscribe', batchId }));
-      };
-
-      ws.onmessage = (event) => {
-        try {
-          const message = JSON.parse(event.data);
-
-          if (message.type === 'update') {
-            const { event: updateEvent, data } = message;
-
-            if ((updateEvent === 'progress' || updateEvent === 'status') && data) {
-              const nextData = (data && typeof data === 'object') ? { ...(data as Record<string, unknown>) } : {};
-              console.log('📨 WebSocket update received:', nextData);
-              if ('status' in nextData) {
-                nextData.status = normalizeStatus(nextData.status);
-              }
-              if ('progress' in nextData) {
-                nextData.progress = normalizeProgress(nextData.progress);
-              }
-              setBatchStatus(prev => {
-                console.log('batchStatus prevData', prev);
-                console.log('🔄 Merging batch status update:', { prev, nextData });
-                if (prev) {
-                  return { ...prev, ...nextData };
-                }
-                const fallback: BatchStatus = {
-                  batch_id: batchId || '',
-                  status: normalizeStatus(nextData.status),
-                  progress: normalizeProgress(nextData.progress),
-                  total_receipts: 0,
-                  processed_receipts: 0,
-                  failed_receipts: 0,
-                  total_amount: 0,
-                  deductible_amount: 0,
-                  recent_logs: [],
-                  updated_at: new Date().toISOString(),
-                };
-                return { ...fallback, ...nextData } as BatchStatus;
-              });
-
-              if (normalizeStatus(nextData.status) === 'completed' || normalizeStatus(nextData.status) === 'failed') {
-                setIsProcessing(false);
-              }
-            } else if (updateEvent === 'completed') {
-              setIsProcessing(false);
-              ws?.close();
-            }
-          }
-        } catch (err) {
-          console.error('WebSocket message error:', err);
-        }
-      };
-
-      ws.onerror = (err) => {
-        console.warn('WebSocket error, falling back to polling', err);
-        startPolling();
-      };
-
-      ws.onclose = () => {
-        console.log('WebSocket disconnected');
-        startPolling();
-      };
-    } catch (err) {
-      console.warn('WebSocket not available, using polling', err);
-      startPolling();
-    }
-
-    return () => {
-      if (ws && ws.readyState === WebSocket.OPEN) {
-        ws.send(JSON.stringify({ type: 'unsubscribe', batchId }));
-        ws.close();
-      }
-      if (pollInterval) clearInterval(pollInterval);
-    };
-  }, [batchId]);
-
-  useEffect(() => {
-    if (!batchId) return;
-    const processedCount = batchStatus?.processed_receipts ?? 0;
-    if (processedCount === 0) return;
-
-    const statusValue = batchStatus ? normalizeStatus(batchStatus.status) : 'processing';
-    const fetchKey = `${batchId}:${processedCount}:${statusValue}`;
-    if (receiptFetchKeyRef.current === fetchKey) return;
-
-    let cancelled = false;
-    setIsReceiptLoading(true);
-    setReceiptError('');
-
-    const fetchReceiptDetails = async () => {
-      try {
-        const response = await fetch(apiUrl(`/api/receipts/batches/${batchId}`));
-        const data = await response.json();
-
-        if (!data.success) {
-          throw new Error(data.error ? formatErrorMessage(data.error) : 'Failed to fetch receipt results');
-        }
-
-        if (!cancelled) {
-          setReceiptResults(Array.isArray(data.receipts) ? data.receipts : []);
-          receiptFetchKeyRef.current = fetchKey;
-        }
-      } catch (err) {
-        if (!cancelled) {
-          setReceiptError(formatErrorMessage(err));
-        }
-      } finally {
-        if (!cancelled) {
-          setIsReceiptLoading(false);
-        }
-      }
-    };
-
-    fetchReceiptDetails();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [batchId, batchStatus?.processed_receipts, batchStatus?.status]);
-
-  useEffect(() => {
-    if (!batchId || !batchStatus) return undefined;
-    if (normalizeStatus(batchStatus.status) !== 'completed') return undefined;
-    void loadExcelPreview(batchId);
-    return () => {
-      if (excelRetryTimeoutRef.current) {
-        clearTimeout(excelRetryTimeoutRef.current);
-        excelRetryTimeoutRef.current = null;
-      }
-    };
-  }, [batchId, batchStatus?.status]);
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setError('');
-    setIsProcessing(true);
-    setBatchStatus(null);
-    setReceiptResults([]);
-    setReceiptError('');
-    receiptFetchKeyRef.current = '';
-    setExcelPreview(null);
-    setExcelError('');
-    excelFetchKeyRef.current = '';
-    if (excelRetryTimeoutRef.current) {
-      clearTimeout(excelRetryTimeoutRef.current);
-      excelRetryTimeoutRef.current = null;
-    }
-    setEditingReceiptId(null);
-    setEditDraft(null);
-    setSaveError('');
-
-    try {
-      let response: Response;
-
-      if (inputMode === 'dropbox') {
-        if (!dropboxUrl.trim()) {
-          setError('Please enter a Dropbox folder URL.');
-          setIsProcessing(false);
-          return;
-        }
-        response = await fetch(apiUrl('/api/receipts/process'), {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            client_name: clientName,
-            dropbox_url: dropboxUrl.trim(),
-            period_start: periodStart || null,
-            period_end: periodEnd || null,
-            ocr_model: ocrModel,
-          }),
-        });
-      } else {
-        if (uploadedFiles.length === 0) {
-          setError('Please select at least one receipt image.');
-          setIsProcessing(false);
-          return;
-        }
-
-        const images = await Promise.all(
-          uploadedFiles.map(async (file) => ({
-            filename: file.name,
-            data: await readFileAsBase64(file),
-          }))
-        );
-
-        response = await fetch(apiUrl('/api/receipts/process-upload'), {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            client_name: clientName,
-            period_start: periodStart || null,
-            period_end: periodEnd || null,
-            ocr_model: ocrModel,
-            images,
-          }),
-        });
-      }
-
-      const data = await response.json();
-
-      if (data.success) {
-        setBatchId(data.batch_id);
-        setBatchStatus({
-          batch_id: data.batch_id,
-          status: normalizeStatus(data.status),
-          progress: 0,
-          total_receipts: 0,
-          processed_receipts: 0,
-          failed_receipts: 0,
-          total_amount: 0,
-          deductible_amount: 0,
-          recent_logs: [],
-          updated_at: new Date().toISOString(),
-        });
-      } else {
-        setError(data.error ? formatErrorMessage(data.error) : 'Failed to start processing');
-        setIsProcessing(false);
-      }
-    } catch (err) {
-      setError('Network error. Please try again.');
-      setIsProcessing(false);
-    }
-  };
-
-  const handleDownload = () => {
-    if (batchId) {
-      window.location.href = apiUrl(`/api/receipts/batches/${batchId}/download`);
-    }
-  };
-
-  const startEditingReceipt = (receipt: ReceiptResult) => {
-    setEditingReceiptId(receipt.receipt_id);
-    setEditDraft({
-      receipt_date: toInputValue(receipt.receipt_date),
-      vendor: toInputValue(receipt.vendor),
-      description: toInputValue(receipt.description),
-      amount: toInputValue(receipt.amount, '0'),
-      currency: toInputValue(receipt.currency || 'HKD', 'HKD'),
-      tax_amount: toInputValue(receipt.tax_amount, '0'),
-      receipt_number: toInputValue(receipt.receipt_number),
-      payment_method: toInputValue(receipt.payment_method),
-      category_id: toInputValue(receipt.category_id),
-      category_name: toInputValue(receipt.category_name),
-      deductible: Boolean(receipt.deductible ?? true),
-      deductible_amount: toInputValue(receipt.deductible_amount, '0'),
-      non_deductible_amount: toInputValue(receipt.non_deductible_amount, '0'),
+  const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
+    const img = imgRef.current;
+    if (!img || dim.w === 0) return;
+    const rect = img.getBoundingClientRect();
+    const mx = (e.clientX - rect.left) * (dim.w / rect.width);
+    const my = (e.clientY - rect.top) * (dim.h / rect.height);
+    const found = boxes.find(b => {
+      const bx = b.x * dim.w, by = b.y * dim.h;
+      return mx >= bx && mx <= bx + b.width * dim.w && my >= by && my <= by + b.height * dim.h;
     });
-    setSaveError('');
+    setHovered(found?.id ?? null);
   };
 
-  const cancelEditingReceipt = () => {
-    setEditingReceiptId(null);
-    setEditDraft(null);
-    setSaveError('');
-  };
-
-  const handleSaveReceipt = async () => {
-    if (!editingReceiptId || !editDraft) return;
-
-    const parsedAmount = Number(editDraft.amount);
-    const parsedDeductibleAmount = Number(editDraft.deductible_amount);
-    const parsedNonDeductible = editDraft.non_deductible_amount.trim().length > 0
-      ? Number(editDraft.non_deductible_amount)
-      : Math.max(parsedAmount - parsedDeductibleAmount, 0);
-    const parsedTaxAmount = editDraft.tax_amount.trim().length > 0
-      ? Number(editDraft.tax_amount)
-      : 0;
-
-    if (!editDraft.receipt_date || !editDraft.vendor.trim()) {
-      setSaveError('Receipt date and vendor are required.');
-      return;
-    }
-    if (!Number.isFinite(parsedAmount) || !Number.isFinite(parsedDeductibleAmount)) {
-      setSaveError('Amount and deductible amount must be valid numbers.');
-      return;
-    }
-    if (!Number.isFinite(parsedNonDeductible) || !Number.isFinite(parsedTaxAmount)) {
-      setSaveError('Non-deductible and tax amounts must be valid numbers.');
-      return;
-    }
-    if (!editDraft.currency.trim()) {
-      setSaveError('Currency is required.');
-      return;
-    }
-    if (!editDraft.category_id.trim() || !editDraft.category_name.trim()) {
-      setSaveError('Category ID and name are required.');
-      return;
-    }
-
-    setIsSavingEdit(true);
-    setSaveError('');
-
-    try {
-      const response = await fetch(apiUrl(`/api/receipts/${editingReceiptId}`), {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          receipt_date: editDraft.receipt_date,
-          vendor: editDraft.vendor.trim(),
-          description: editDraft.description.trim() || null,
-          amount: parsedAmount,
-          currency: editDraft.currency.trim().toUpperCase(),
-          tax_amount: parsedTaxAmount,
-          receipt_number: editDraft.receipt_number.trim() || null,
-          payment_method: editDraft.payment_method.trim() || null,
-          category_id: editDraft.category_id.trim(),
-          category_name: editDraft.category_name.trim(),
-          deductible: editDraft.deductible,
-          deductible_amount: parsedDeductibleAmount,
-          non_deductible_amount: parsedNonDeductible,
-        }),
-      });
-
-      const data = await response.json();
-
-      if (!data.success) {
-        throw new Error(data.error ? formatErrorMessage(data.error) : 'Failed to save receipt');
-      }
-
-      const updatedReceipt = data.receipt as ReceiptResult;
-      setReceiptResults(prev =>
-        prev.map(item => item.receipt_id === updatedReceipt.receipt_id ? { ...item, ...updatedReceipt } : item)
-      );
-
-      setEditingReceiptId(null);
-      setEditDraft(null);
-
-      if (batchId && batchStatus && normalizeStatus(batchStatus.status) === 'completed') {
-        excelFetchKeyRef.current = '';
-        await loadExcelPreview(batchId, true);
-      }
-    } catch (err) {
-      setSaveError(formatErrorMessage(err));
-    } finally {
-      setIsSavingEdit(false);
-    }
-  };
-
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'completed':
-        return 'text-green-600 bg-green-50';
-      case 'failed':
-        return 'text-red-600 bg-red-50';
-      case 'processing':
-        return 'text-blue-600 bg-blue-50';
-      default:
-        return 'text-gray-600 bg-gray-50';
-    }
-  };
-
-  const getStatusIcon = (status: string) => {
-    switch (status) {
-      case 'completed':
-        return <CheckCircle2 className="w-5 h-5" />;
-      case 'failed':
-        return <AlertCircle className="w-5 h-5" />;
-      case 'processing':
-        return <Loader2 className="w-5 h-5 animate-spin" />;
-      default:
-        return <Clock className="w-5 h-5" />;
+  const handleClick = () => {
+    if (hovered) {
+      const box = boxes.find(b => b.id === hovered);
+      if (box) onBoxClick(box);
     }
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-900 dark:to-slate-800 py-8">
-      <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
-        {/* Header */}
-        <div className="mb-8">
-          <h1 className="text-3xl font-bold text-slate-900 dark:text-white">Receipt to P&L Automation</h1>
-          <p className="mt-2 text-slate-600 dark:text-slate-400">
-            Upload receipts and get a complete P&L statement in under 3 minutes
-          </p>
+    <div
+      className="relative inline-block select-none"
+      onMouseMove={handleMouseMove}
+      onMouseLeave={() => setHovered(null)}
+      onClick={handleClick}
+      style={{ cursor: hovered ? 'pointer' : 'default' }}
+    >
+      <img
+        ref={imgRef}
+        src={imageData}
+        alt="Receipt"
+        onLoad={handleLoad}
+        className="max-w-full h-auto block rounded"
+        style={{ maxHeight: '70vh' }}
+      />
+      <canvas
+        ref={canvasRef}
+        className="absolute top-0 left-0 pointer-events-none rounded"
+        style={{ width: '100%', height: '100%' }}
+      />
+      {boxes.length > 0 && (
+        <div className="absolute top-2 right-2 bg-red-500/90 text-white text-xs px-2 py-0.5 rounded-full">
+          {boxes.length} words
         </div>
+      )}
+    </div>
+  );
+}
 
-        {/* Input Form */}
-        <div className="bg-white dark:bg-slate-800 rounded-lg shadow-md p-6 mb-8">
-          <form onSubmit={handleSubmit} className="space-y-6">
+// ---------------------------------------------------------------------------
+// Step indicator
+// ---------------------------------------------------------------------------
+function StepIndicator({ current }: { current: Step }) {
+  const steps: { id: Step; label: string }[] = [
+    { id: 'upload', label: '1  Upload' },
+    { id: 'ocr',    label: '2  OCR Review' },
+    { id: 'pl',     label: '3  P&L' },
+  ];
+  return (
+    <div className="flex items-center gap-0">
+      {steps.map((s, i) => (
+        <div key={s.id} className="flex items-center">
+          {i > 0 && (
+            <div className={`h-px w-8 ${current === 'upload' && i >= 1 ? 'bg-slate-600' : current === 'ocr' && i >= 2 ? 'bg-slate-600' : 'bg-blue-500'}`} />
+          )}
+          <div className={`px-4 py-1.5 rounded-full text-sm font-medium transition-colors ${
+            s.id === current
+              ? 'bg-blue-600 text-white'
+              : steps.indexOf(steps.find(x => x.id === current)!) > i
+                ? 'bg-green-600/20 text-green-400'
+                : 'bg-slate-800 text-slate-400'
+          }`}>
+            {s.id !== current && steps.indexOf(steps.find(x => x.id === current)!) > i ? '✓ ' : ''}{s.label}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Main component
+// ---------------------------------------------------------------------------
+export default function ReceiptOCRPage() {
+  const [mode, setMode] = useState<'new' | 'history'>('new');
+  const [step, setStep] = useState<Step>('upload');
+
+  // — Upload state
+  const [files, setFiles] = useState<UploadedFile[]>([]);
+  const [dropboxUrl, setDropboxUrl] = useState('');
+  const [inputMode, setInputMode] = useState<'file' | 'dropbox'>('file');
+  const [isDragging, setIsDragging] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState('');
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // — Processing state
+  const [batchId, setBatchId] = useState<string | null>(null);
+  const [batchStatus, setBatchStatus] = useState<BatchStatus | null>(null);
+  const [logs, setLogs] = useState<LogLine[]>([]);
+  const logsEndRef = useRef<HTMLDivElement>(null);
+  const wsRef = useRef<WebSocket | null>(null);
+  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  // — OCR Review state
+  const [receipts, setReceipts] = useState<Receipt[]>([]);
+  const [ocrIdx, setOcrIdx] = useState(0);
+  const [highlightBoxId, setHighlightBoxId] = useState<string | null>(null);
+  const [editDraft, setEditDraft] = useState<Partial<Receipt> | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
+
+  // — P&L state
+  const [plEdit, setPlEdit] = useState<Record<string, Partial<Receipt>>>({});
+  const [remarksEdit, setRemarksEdit] = useState<Record<string, string>>({});
+  const [isSavingRemarks, setIsSavingRemarks] = useState<Record<string, boolean>>({});
+
+  // — History state
+  const [batches, setBatches] = useState<BatchStatus[]>([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
+
+  // Auto-scroll logs
+  useEffect(() => {
+    logsEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [logs]);
+
+  // ---------------------------------------------------------------------------
+  // File handling
+  // ---------------------------------------------------------------------------
+  const addFiles = (incoming: FileList | File[]) => {
+    const arr = Array.from(incoming);
+    const allowed = arr.filter(f =>
+      f.type.startsWith('image/') || f.type === 'application/pdf'
+    );
+    if (allowed.length < arr.length) {
+      setSubmitError(`${arr.length - allowed.length} file(s) skipped — only images and PDFs accepted.`);
+    }
+    setFiles(prev => [
+      ...prev,
+      ...allowed.map(f => ({
+        id: `${Date.now()}_${Math.random()}`,
+        file: f,
+        status: 'pending' as const,
+        progress: 0,
+      })),
+    ]);
+  };
+
+  const removeFile = (id: string) => setFiles(prev => prev.filter(f => f.id !== id));
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(false);
+    addFiles(e.dataTransfer.files);
+  };
+
+  // ---------------------------------------------------------------------------
+  // WebSocket + polling for live updates
+  // ---------------------------------------------------------------------------
+  const addLog = useCallback((msg: string, level: LogLine['level'] = 'info') => {
+    const ts = new Date().toLocaleTimeString('en-HK', { hour12: false });
+    setLogs(prev => [...prev, { ts, msg, level }]);
+  }, []);
+
+  const startLiveUpdates = useCallback((bid: string) => {
+    // Polling fallback
+    pollRef.current = setInterval(async () => {
+      try {
+        const r = await fetch(apiUrl(`/api/receipts/batches/${bid}/status`));
+        if (!r.ok) return;
+        const d = await r.json();
+        if (d.status) {
+          setBatchStatus(d);
+          if (d.status === 'completed' || d.status === 'failed') {
+            clearInterval(pollRef.current!);
+            if (d.status === 'completed') {
+              addLog('Processing complete!', 'info');
+            }
+          }
+        }
+      } catch { /* ignore */ }
+    }, 2000);
+
+    // WebSocket for real-time logs
+    try {
+      const proto = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+      const ws = new WebSocket(`${proto}//${window.location.host}/ws`);
+      wsRef.current = ws;
+
+      ws.onopen = () => {
+        ws.send(JSON.stringify({ type: 'subscribe', batchId: bid }));
+        addLog('Connected to live processing stream', 'info');
+      };
+
+      ws.onmessage = (ev) => {
+        try {
+          const data = JSON.parse(ev.data);
+          if (data.type === 'progress' || data.type === 'status') {
+            const payload = data.data || data;
+            if (payload.message) addLog(payload.message);
+            if (payload.status) {
+              setBatchStatus(prev => ({ ...(prev as BatchStatus), ...payload }));
+            }
+          }
+          if (data.type === 'log' && data.message) {
+            addLog(data.message, data.level || 'info');
+          }
+        } catch { /* ignore */ }
+      };
+
+      ws.onclose = () => { wsRef.current = null; };
+    } catch { /* WS not available */ }
+  }, [addLog]);
+
+  useEffect(() => {
+    return () => {
+      clearInterval(pollRef.current!);
+      wsRef.current?.close();
+    };
+  }, []);
+
+  // ---------------------------------------------------------------------------
+  // Submit batch
+  // ---------------------------------------------------------------------------
+  const submitBatch = async () => {
+    setSubmitError('');
+    setIsSubmitting(true);
+    setLogs([]);
+    addLog('Preparing upload...');
+
+    try {
+      let batchData: { batch_id: string };
+
+      if (inputMode === 'dropbox') {
+        if (!dropboxUrl.trim()) throw new Error('Please enter a Dropbox folder URL');
+        addLog(`Starting Dropbox download: ${dropboxUrl}`);
+        const r = await fetch(apiUrl('/api/receipts/process'), {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ client_name: 'Receipt OCR', dropbox_url: dropboxUrl, ocr_model: 'google-vision' }),
+        });
+        const d = await r.json();
+        if (!d.success) throw new Error(d.error || d.details || 'Failed to start batch');
+        batchData = d;
+      } else {
+        if (files.length === 0) throw new Error('Please add at least one file');
+
+        const formData = new FormData();
+        for (const uf of files) {
+          formData.append('files', uf.file);
+          setFiles(prev => prev.map(f => f.id === uf.id ? { ...f, status: 'uploading', progress: 50 } : f));
+        }
+        addLog(`Uploading ${files.length} file(s)...`);
+
+        const r = await fetch(apiUrl('/api/receipts/upload-multipart'), {
+          method: 'POST',
+          body: formData,
+        });
+
+        if (!r.ok) {
+          const errText = await r.text();
+          let errMsg = `Upload failed (${r.status})`;
+          try { const j = JSON.parse(errText); errMsg = j.error || errMsg; } catch { /* */ }
+          throw new Error(errMsg);
+        }
+
+        const d = await r.json();
+        if (!d.success) throw new Error(d.error || 'Upload failed');
+
+        setFiles(prev => prev.map(f => ({ ...f, status: 'done', progress: 100 })));
+        batchData = d;
+        addLog(`${files.length} file(s) uploaded — batch ${d.batch_id}`);
+      }
+
+      setBatchId(batchData.batch_id);
+      setBatchStatus({
+        batch_id: batchData.batch_id,
+        status: 'pending',
+        progress: 0,
+        total_receipts: 0,
+        processed_receipts: 0,
+        failed_receipts: 0,
+        total_amount: 0,
+      });
+
+      startLiveUpdates(batchData.batch_id);
+      addLog('OCR processing started — Google Vision + DeepSeek');
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Unexpected error';
+      setSubmitError(msg);
+      addLog(`Error: ${msg}`, 'error');
+      setFiles(prev => prev.map(f => f.status === 'uploading' ? { ...f, status: 'error', error: msg } : f));
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  // ---------------------------------------------------------------------------
+  // Load receipts when moving to OCR step
+  // ---------------------------------------------------------------------------
+  const loadReceipts = useCallback(async (bid: string) => {
+    try {
+      const r = await fetch(apiUrl(`/api/receipts/batches/${bid}/receipts`));
+      const d = await r.json();
+      if (d.success) {
+        setReceipts(d.receipts);
+        setOcrIdx(0);
+      }
+    } catch { /* ignore */ }
+  }, []);
+
+  const goToOcr = async () => {
+    if (!batchId) return;
+    await loadReceipts(batchId);
+    setStep('ocr');
+  };
+
+  // ---------------------------------------------------------------------------
+  // OCR Review: save edits
+  // ---------------------------------------------------------------------------
+  const saveEdit = async () => {
+    if (!editDraft || !receipts[ocrIdx]) return;
+    setIsSaving(true);
+    try {
+      const r = await fetch(apiUrl(`/api/receipts/${receipts[ocrIdx].receipt_id}`), {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(editDraft),
+      });
+      const d = await r.json();
+      if (d.success) {
+        setReceipts(prev => prev.map((rx, i) => i === ocrIdx ? { ...rx, ...editDraft } : rx));
+        setEditDraft(null);
+      }
+    } catch { /* ignore */ }
+    setIsSaving(false);
+  };
+
+  // ---------------------------------------------------------------------------
+  // P&L: save remarks
+  // ---------------------------------------------------------------------------
+  const saveRemarks = async (receiptId: string) => {
+    setIsSavingRemarks(prev => ({ ...prev, [receiptId]: true }));
+    try {
+      await fetch(apiUrl(`/api/receipts/${receiptId}/remarks`), {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ remarks: remarksEdit[receiptId] ?? '' }),
+      });
+      setReceipts(prev => prev.map(r => r.receipt_id === receiptId
+        ? { ...r, remarks: remarksEdit[receiptId] ?? '' } : r));
+    } catch { /* ignore */ }
+    setIsSavingRemarks(prev => ({ ...prev, [receiptId]: false }));
+  };
+
+  // ---------------------------------------------------------------------------
+  // History
+  // ---------------------------------------------------------------------------
+  const loadHistory = async () => {
+    setHistoryLoading(true);
+    try {
+      const r = await fetch(apiUrl('/api/receipts/batches?limit=50'));
+      const d = await r.json();
+      if (d.success) setBatches(d.batches || []);
+    } catch { /* ignore */ }
+    setHistoryLoading(false);
+  };
+
+  useEffect(() => {
+    if (mode === 'history') loadHistory();
+  }, [mode]);
+
+  // ---------------------------------------------------------------------------
+  // Current OCR receipt
+  // ---------------------------------------------------------------------------
+  const receipt = receipts[ocrIdx] ?? null;
+  const ocrBoxes: OcrBox[] = (() => {
+    if (!receipt?.ocr_boxes) return [];
+    if (Array.isArray(receipt.ocr_boxes)) return receipt.ocr_boxes as OcrBox[];
+    try { return JSON.parse(receipt.ocr_boxes as unknown as string); } catch { return []; }
+  })();
+
+  const isProcessing = batchStatus?.status === 'processing' || batchStatus?.status === 'pending';
+  const isDone = batchStatus?.status === 'completed';
+  const isFailed = batchStatus?.status === 'failed';
+
+  // ---------------------------------------------------------------------------
+  // Render
+  // ---------------------------------------------------------------------------
+  return (
+    <div className="min-h-screen bg-slate-950 text-slate-100">
+      {/* Header */}
+      <div className="bg-slate-900 border-b border-slate-800">
+        <div className="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
+          <div className="flex items-center gap-4">
+            <a href="/" className="text-slate-400 hover:text-slate-200 flex items-center gap-1 text-sm">
+              <ArrowLeft className="w-4 h-4" /> Back
+            </a>
             <div>
-              <label htmlFor="clientName" className="block text-sm font-medium text-slate-700 dark:text-slate-300">
-                Client Name
-              </label>
-              <input
-                type="text"
-                id="clientName"
-                value={clientName}
-                onChange={(e) => setClientName(e.target.value)}
-                className="mt-1 block w-full rounded-md border-slate-300 dark:border-slate-600 shadow-sm focus:border-blue-500 focus:ring-blue-500 px-4 py-2 border bg-white dark:bg-slate-700 text-slate-900 dark:text-white"
-                placeholder="Man's Accounting Firm"
-                required
-              />
+              <h1 className="text-lg font-bold text-white">Receipt OCR</h1>
+              <p className="text-xs text-slate-400">Google Vision + DeepSeek · P&L automation</p>
             </div>
-
-            <div>
-              <label className="block text-sm font-medium text-slate-700 dark:text-slate-300">
-                Receipt Source
-              </label>
-              <div className="mt-2 flex flex-wrap gap-4">
-                <label className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-300">
-                  <input
-                    type="radio"
-                    name="inputMode"
-                    value="upload"
-                    checked={inputMode === 'upload'}
-                    onChange={() => setInputMode('upload')}
-                    disabled={isProcessing}
-                  />
-                  Upload Images
-                </label>
-                <label className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-300">
-                  <input
-                    type="radio"
-                    name="inputMode"
-                    value="dropbox"
-                    checked={inputMode === 'dropbox'}
-                    onChange={() => setInputMode('dropbox')}
-                    disabled={isProcessing}
-                  />
-                  Dropbox Folder URL
-                </label>
-              </div>
-            </div>
-
-            <div>
-              <label htmlFor="ocrModel" className="block text-sm font-medium text-slate-700 dark:text-slate-300">
-                OCR Model
-              </label>
-              <select
-                id="ocrModel"
-                value={ocrModel}
-                onChange={(e) => setOcrModel(e.target.value as 'claude-haiku' | 'deepseek')}
-                className="mt-1 block w-full rounded-md border-slate-300 dark:border-slate-600 shadow-sm focus:border-blue-500 focus:ring-blue-500 px-4 py-2 border bg-white dark:bg-slate-700 text-slate-900 dark:text-white"
-                disabled={isProcessing}
-              >
-                <option value="claude-haiku">Claude Haiku (Vision)</option>
-                <option value="deepseek">DeepSeek (Tesseract + LLM)</option>
-              </select>
-              <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
-                Choose the OCR model for receipt extraction.
-              </p>
-            </div>
-
-            {inputMode === 'upload' ? (
-              <div>
-                <label htmlFor="receiptFiles" className="block text-sm font-medium text-slate-700 dark:text-slate-300">
-                  Receipt Images
-                </label>
-                <div className="mt-1 relative">
-                  <input
-                    type="file"
-                    id="receiptFiles"
-                    accept="image/*"
-                    multiple
-                    onChange={(e) => setUploadedFiles(Array.from(e.target.files || []))}
-                    className="block w-full rounded-md border-slate-300 dark:border-slate-600 shadow-sm focus:border-blue-500 focus:ring-blue-500 px-4 py-2 border bg-white dark:bg-slate-700 text-slate-900 dark:text-white file:mr-4 file:py-2 file:px-3 file:rounded-md file:border-0 file:text-sm file:font-medium file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
-                    disabled={isProcessing}
-                  />
-                  <Upload className="absolute right-3 top-2.5 h-5 w-5 text-slate-400 dark:text-slate-500" />
-                </div>
-                <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
-                  Upload one or more receipt images (JPG, PNG, WEBP)
-                </p>
-              </div>
-            ) : (
-              <div>
-                <label htmlFor="dropboxUrl" className="block text-sm font-medium text-slate-700 dark:text-slate-300">
-                  Dropbox Folder URL
-                </label>
-                <input
-                  type="url"
-                  id="dropboxUrl"
-                  value={dropboxUrl}
-                  onChange={(e) => setDropboxUrl(e.target.value)}
-                  className="mt-1 block w-full rounded-md border-slate-300 dark:border-slate-600 shadow-sm focus:border-blue-500 focus:ring-blue-500 px-4 py-2 border bg-white dark:bg-slate-700 text-slate-900 dark:text-white"
-                  placeholder="https://www.dropbox.com/sh/..."
-                  disabled={isProcessing}
-                />
-                <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
-                  Paste a shared Dropbox folder link that contains receipt images.
-                </p>
-              </div>
-            )}
-
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label htmlFor="periodStart" className="block text-sm font-medium text-slate-700 dark:text-slate-300">
-                  Period Start (Optional)
-                </label>
-                <input
-                  type="date"
-                  id="periodStart"
-                  value={periodStart}
-                  onChange={(e) => setPeriodStart(e.target.value)}
-                  className="mt-1 block w-full rounded-md border-slate-300 dark:border-slate-600 shadow-sm focus:border-blue-500 focus:ring-blue-500 px-4 py-2 border bg-white dark:bg-slate-700 text-slate-900 dark:text-white"
-                  disabled={isProcessing}
-                />
-              </div>
-
-              <div>
-                <label htmlFor="periodEnd" className="block text-sm font-medium text-slate-700 dark:text-slate-300">
-                  Period End (Optional)
-                </label>
-                <input
-                  type="date"
-                  id="periodEnd"
-                  value={periodEnd}
-                  onChange={(e) => setPeriodEnd(e.target.value)}
-                  className="mt-1 block w-full rounded-md border-slate-300 dark:border-slate-600 shadow-sm focus:border-blue-500 focus:ring-blue-500 px-4 py-2 border bg-white dark:bg-slate-700 text-slate-900 dark:text-white"
-                  disabled={isProcessing}
-                />
-              </div>
-            </div>
-
+          </div>
+          <div className="flex items-center gap-2">
             <button
-              type="submit"
-              disabled={isProcessing}
-              className="w-full flex justify-center items-center px-4 py-3 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:bg-slate-400 disabled:cursor-not-allowed dark:bg-blue-600 dark:hover:bg-blue-700"
+              onClick={() => setMode('new')}
+              className={`px-3 py-1.5 rounded text-sm font-medium transition-colors ${mode === 'new' ? 'bg-blue-600 text-white' : 'text-slate-400 hover:text-white'}`}
             >
-              {isProcessing ? (
+              <Plus className="w-3.5 h-3.5 inline mr-1" />New Batch
+            </button>
+            <button
+              onClick={() => setMode('history')}
+              className={`px-3 py-1.5 rounded text-sm font-medium transition-colors ${mode === 'history' ? 'bg-slate-700 text-white' : 'text-slate-400 hover:text-white'}`}
+            >
+              <History className="w-3.5 h-3.5 inline mr-1" />History
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* History mode */}
+      {mode === 'history' && (
+        <div className="max-w-7xl mx-auto px-6 py-8">
+          <h2 className="text-base font-semibold text-white mb-4">Previous Batches</h2>
+          {historyLoading ? (
+            <div className="flex items-center gap-2 text-slate-400"><Loader2 className="w-4 h-4 animate-spin" /> Loading...</div>
+          ) : batches.length === 0 ? (
+            <div className="text-slate-500 text-sm">No batches yet.</div>
+          ) : (
+            <div className="space-y-2">
+              {batches.map((b: any) => (
+                <div key={b.batch_id}
+                  className="bg-slate-800/60 border border-slate-700/50 rounded-lg px-4 py-3 flex items-center justify-between hover:bg-slate-800 transition-colors cursor-pointer"
+                  onClick={async () => {
+                    setBatchId(b.batch_id);
+                    setBatchStatus(b);
+                    await loadReceipts(b.batch_id);
+                    setMode('new');
+                    setStep('pl');
+                  }}
+                >
+                  <div>
+                    <div className="text-sm font-medium text-white">
+                      Batch {b.batch_id?.slice(0, 8)}…
+                    </div>
+                    <div className="text-xs text-slate-400 mt-0.5">
+                      {b.created_at ? new Date(b.created_at).toLocaleString('en-HK') : ''}
+                      {b.total_receipts ? ` · ${b.total_receipts} receipts` : ''}
+                      {b.total_amount ? ` · ${b.currency || 'HKD'} ${fmt(b.total_amount)}` : ''}
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <StatusBadge status={b.status} />
+                    <ChevronRight className="w-4 h-4 text-slate-500" />
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* New batch mode */}
+      {mode === 'new' && (
+        <div className="max-w-7xl mx-auto px-6 py-6">
+          {/* Step indicator */}
+          <div className="flex items-center justify-between mb-8">
+            <StepIndicator current={step} />
+            {batchId && isDone && step === 'upload' && (
+              <button onClick={goToOcr} className="text-sm text-blue-400 hover:text-blue-300 flex items-center gap-1">
+                Review OCR <ChevronRight className="w-4 h-4" />
+              </button>
+            )}
+          </div>
+
+          {/* ================================================================ */}
+          {/* STEP 1: Upload                                                   */}
+          {/* ================================================================ */}
+          {step === 'upload' && (
+            <div className="space-y-6">
+              {/* Input mode toggle */}
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setInputMode('file')}
+                  className={`px-4 py-2 rounded text-sm font-medium transition-colors ${inputMode === 'file' ? 'bg-blue-600 text-white' : 'bg-slate-800 text-slate-400 hover:text-white'}`}
+                >
+                  <Upload className="w-3.5 h-3.5 inline mr-1.5" />Upload Files
+                </button>
+                <button
+                  onClick={() => setInputMode('dropbox')}
+                  className={`px-4 py-2 rounded text-sm font-medium transition-colors ${inputMode === 'dropbox' ? 'bg-blue-600 text-white' : 'bg-slate-800 text-slate-400 hover:text-white'}`}
+                >
+                  <Link2 className="w-3.5 h-3.5 inline mr-1.5" />Dropbox URL
+                </button>
+              </div>
+
+              {inputMode === 'file' ? (
                 <>
-                  <Loader2 className="w-5 h-5 mr-2 animate-spin" />
-                  Processing...
+                  {/* Drop zone */}
+                  <div
+                    onDragOver={e => { e.preventDefault(); setIsDragging(true); }}
+                    onDragLeave={() => setIsDragging(false)}
+                    onDrop={handleDrop}
+                    onClick={() => fileInputRef.current?.click()}
+                    className={`border-2 border-dashed rounded-xl p-12 text-center cursor-pointer transition-colors ${
+                      isDragging ? 'border-blue-500 bg-blue-500/5' : 'border-slate-700 hover:border-slate-500 bg-slate-900/40'
+                    }`}
+                  >
+                    <Upload className="w-8 h-8 mx-auto mb-3 text-slate-500" />
+                    <p className="text-slate-300 font-medium mb-1">Drop receipt files here, or click to browse</p>
+                    <p className="text-slate-500 text-sm">JPG, PNG, WebP, PDF — multiple files allowed · PDFs will be split per page</p>
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      multiple
+                      accept="image/*,.pdf"
+                      className="hidden"
+                      onChange={e => e.target.files && addFiles(e.target.files)}
+                    />
+                  </div>
+
+                  {/* File list */}
+                  {files.length > 0 && (
+                    <div className="space-y-2">
+                      {files.map(uf => (
+                        <div key={uf.id} className="bg-slate-800/60 rounded-lg px-4 py-2.5 flex items-center gap-3">
+                          <FileText className="w-4 h-4 text-slate-400 flex-shrink-0" />
+                          <div className="flex-1 min-w-0">
+                            <div className="text-sm text-slate-200 truncate">{uf.file.name}</div>
+                            <div className="text-xs text-slate-500">{(uf.file.size / 1024).toFixed(0)} KB · {uf.file.type}</div>
+                            {uf.status === 'uploading' && (
+                              <div className="mt-1 h-1 bg-slate-700 rounded-full overflow-hidden">
+                                <div className="h-full bg-blue-500 transition-all" style={{ width: `${uf.progress}%` }} />
+                              </div>
+                            )}
+                            {uf.error && <div className="text-xs text-red-400 mt-0.5">{uf.error}</div>}
+                          </div>
+                          <StatusIcon status={uf.status} />
+                          <button onClick={() => removeFile(uf.id)} className="text-slate-600 hover:text-slate-300 ml-1">
+                            <X className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </>
               ) : (
+                <div className="space-y-3">
+                  <label className="text-sm text-slate-400">Dropbox shared folder URL</label>
+                  <input
+                    type="url"
+                    value={dropboxUrl}
+                    onChange={e => setDropboxUrl(e.target.value)}
+                    placeholder="https://www.dropbox.com/sh/..."
+                    className="w-full bg-slate-800 border border-slate-700 rounded-lg px-4 py-2.5 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-blue-500"
+                  />
+                  <p className="text-xs text-slate-500">Files will be downloaded from the folder and processed automatically.</p>
+                </div>
+              )}
+
+              {submitError && (
+                <div className="bg-red-950/50 border border-red-800 rounded-lg px-4 py-3 text-sm text-red-300 flex items-start gap-2">
+                  <AlertCircle className="w-4 h-4 flex-shrink-0 mt-0.5" />
+                  <div>
+                    <div className="font-medium">Upload error</div>
+                    <div className="mt-0.5 text-red-400">{submitError}</div>
+                    <div className="mt-1 text-xs text-red-500">Check your API keys (GOOGLE_VISION_API_KEY, DEEPSEEK_API_KEY) and try again.</div>
+                  </div>
+                </div>
+              )}
+
+              {/* Live log */}
+              {(isProcessing || isDone || isFailed || logs.length > 0) && (
+                <div className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden">
+                  <div className="px-4 py-2.5 border-b border-slate-800 flex items-center justify-between">
+                    <span className="text-xs font-medium text-slate-400 uppercase tracking-wider">Live Processing Log</span>
+                    {batchStatus && (
+                      <div className="flex items-center gap-3">
+                        <StatusBadge status={batchStatus.status} />
+                        {isProcessing && (
+                          <div className="flex items-center gap-2 text-xs text-slate-400">
+                            <div className="h-1.5 w-24 bg-slate-700 rounded-full overflow-hidden">
+                              <div className="h-full bg-blue-500 transition-all duration-500" style={{ width: `${batchStatus.progress || 0}%` }} />
+                            </div>
+                            {batchStatus.progress || 0}%
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                  <div className="p-4 max-h-52 overflow-y-auto font-mono text-xs space-y-1">
+                    {logs.map((l, i) => (
+                      <div key={i} className={`flex gap-2 ${l.level === 'error' ? 'text-red-400' : l.level === 'warning' ? 'text-yellow-400' : 'text-slate-300'}`}>
+                        <span className="text-slate-600 flex-shrink-0">{l.ts}</span>
+                        <span>{l.msg}</span>
+                      </div>
+                    ))}
+                    <div ref={logsEndRef} />
+                  </div>
+                </div>
+              )}
+
+              {/* Action buttons */}
+              <div className="flex items-center gap-3">
+                {!batchId ? (
+                  <button
+                    onClick={submitBatch}
+                    disabled={isSubmitting || (inputMode === 'file' ? files.length === 0 : !dropboxUrl.trim())}
+                    className="px-6 py-2.5 bg-blue-600 hover:bg-blue-500 disabled:bg-slate-700 disabled:text-slate-500 text-white rounded-lg text-sm font-medium transition-colors flex items-center gap-2"
+                  >
+                    {isSubmitting ? <><Loader2 className="w-4 h-4 animate-spin" /> Processing...</> : <><Upload className="w-4 h-4" /> Start Processing</>}
+                  </button>
+                ) : (
+                  <>
+                    {isDone && (
+                      <button
+                        onClick={goToOcr}
+                        className="px-6 py-2.5 bg-green-600 hover:bg-green-500 text-white rounded-lg text-sm font-medium flex items-center gap-2"
+                      >
+                        <CheckCircle2 className="w-4 h-4" /> Review OCR Results
+                        <ChevronRight className="w-4 h-4" />
+                      </button>
+                    )}
+                    {isFailed && (
+                      <div className="text-red-400 text-sm flex items-center gap-2">
+                        <AlertCircle className="w-4 h-4" /> Processing failed. {batchStatus?.message}
+                      </div>
+                    )}
+                    {isProcessing && (
+                      <div className="text-blue-400 text-sm flex items-center gap-2">
+                        <Loader2 className="w-4 h-4 animate-spin" /> Processing {batchStatus?.processed_receipts ?? 0}/{batchStatus?.total_receipts ?? '?'} receipts…
+                      </div>
+                    )}
+                  </>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* ================================================================ */}
+          {/* STEP 2: OCR Review                                               */}
+          {/* ================================================================ */}
+          {step === 'ocr' && (
+            <div className="space-y-4">
+              {receipts.length === 0 ? (
+                <div className="text-slate-400 text-sm">No receipts found.</div>
+              ) : (
                 <>
-                  <FileSpreadsheet className="w-5 h-5 mr-2" />
-                  Process Receipts
+                  {/* Thumbnail strip */}
+                  <div className="flex gap-2 overflow-x-auto pb-2">
+                    {receipts.map((r, i) => (
+                      <button
+                        key={r.receipt_id}
+                        onClick={() => { setOcrIdx(i); setEditDraft(null); setHighlightBoxId(null); }}
+                        className={`flex-shrink-0 w-16 h-20 rounded border-2 overflow-hidden transition-colors ${
+                          i === ocrIdx ? 'border-blue-500' : 'border-slate-700 hover:border-slate-500'
+                        }`}
+                      >
+                        {r.image_data ? (
+                          <img src={r.image_data} alt={r.image_path} className="w-full h-full object-cover" />
+                        ) : (
+                          <div className="w-full h-full bg-slate-800 flex items-center justify-center">
+                            <FileText className="w-5 h-5 text-slate-600" />
+                          </div>
+                        )}
+                      </button>
+                    ))}
+                  </div>
+
+                  {/* Side-by-side viewer */}
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                    {/* Left: image with red bounding boxes */}
+                    <div className="bg-slate-900 border border-slate-800 rounded-xl p-4">
+                      <div className="flex items-center justify-between mb-3">
+                        <h3 className="text-sm font-medium text-slate-300">
+                          Receipt {ocrIdx + 1} / {receipts.length}
+                          <span className="text-slate-500 ml-2 font-normal text-xs">{receipt?.image_path}</span>
+                        </h3>
+                        <div className="flex items-center gap-1 text-xs text-slate-500">
+                          <div className="w-3 h-3 border-2 border-red-500 rounded-sm" />
+                          <span>Red boxes = detected text</span>
+                        </div>
+                      </div>
+                      <div className="overflow-auto max-h-[70vh] flex justify-center bg-slate-950/50 rounded-lg p-2">
+                        {receipt?.image_data ? (
+                          <OcrImageOverlay
+                            imageData={receipt.image_data}
+                            boxes={ocrBoxes}
+                            highlightId={highlightBoxId}
+                            onBoxClick={(box) => setHighlightBoxId(box.id === highlightBoxId ? null : box.id)}
+                          />
+                        ) : (
+                          <div className="flex flex-col items-center justify-center text-slate-500 py-16">
+                            <FileText className="w-12 h-12 mb-2" />
+                            <span className="text-sm">Image not available</span>
+                          </div>
+                        )}
+                      </div>
+
+                      {highlightBoxId && (
+                        <div className="mt-2 bg-yellow-950/40 border border-yellow-800/50 rounded px-3 py-1.5 text-xs text-yellow-300 flex items-center justify-between">
+                          <span>Selected: "{ocrBoxes.find(b => b.id === highlightBoxId)?.text}"</span>
+                          <button onClick={() => setHighlightBoxId(null)} className="text-yellow-500 hover:text-yellow-300"><X className="w-3 h-3" /></button>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Right: editable fields */}
+                    <div className="space-y-4">
+                      <div className="bg-slate-900 border border-slate-800 rounded-xl p-4">
+                        <div className="flex items-center justify-between mb-4">
+                          <h3 className="text-sm font-medium text-slate-300">Extracted Data</h3>
+                          {receipt && (
+                            <div className="flex items-center gap-1 text-xs">
+                              {editDraft ? (
+                                <>
+                                  <button onClick={saveEdit} disabled={isSaving} className="px-2.5 py-1 bg-green-600 hover:bg-green-500 text-white rounded text-xs flex items-center gap-1">
+                                    {isSaving ? <Loader2 className="w-3 h-3 animate-spin" /> : <Check className="w-3 h-3" />} Save
+                                  </button>
+                                  <button onClick={() => setEditDraft(null)} className="px-2.5 py-1 bg-slate-700 hover:bg-slate-600 text-white rounded text-xs">Cancel</button>
+                                </>
+                              ) : (
+                                <button
+                                  onClick={() => setEditDraft({
+                                    receipt_date: receipt.receipt_date,
+                                    vendor: receipt.vendor,
+                                    description: receipt.description ?? '',
+                                    amount: receipt.amount,
+                                    currency: receipt.currency,
+                                    tax_amount: receipt.tax_amount ?? 0,
+                                    receipt_number: receipt.receipt_number ?? '',
+                                    payment_method: receipt.payment_method ?? '',
+                                    category_name: receipt.category_name ?? '',
+                                    deductible: receipt.deductible ?? true,
+                                  })}
+                                  className="px-2.5 py-1 bg-slate-700 hover:bg-slate-600 text-white rounded text-xs flex items-center gap-1"
+                                >
+                                  <Pencil className="w-3 h-3" /> Edit
+                                </button>
+                              )}
+                            </div>
+                          )}
+                        </div>
+
+                        {receipt && (
+                          <div className="space-y-3 text-sm">
+                            {[
+                              { label: 'Date',           key: 'receipt_date',   type: 'date' },
+                              { label: 'Vendor',         key: 'vendor',         type: 'text' },
+                              { label: 'Amount',         key: 'amount',         type: 'number' },
+                              { label: 'Currency',       key: 'currency',       type: 'text' },
+                              { label: 'Tax',            key: 'tax_amount',     type: 'number' },
+                              { label: 'Category',       key: 'category_name',  type: 'text' },
+                              { label: 'Payment',        key: 'payment_method', type: 'text' },
+                              { label: 'Receipt #',      key: 'receipt_number', type: 'text' },
+                              { label: 'Description',    key: 'description',    type: 'text' },
+                            ].map(({ label, key, type }) => {
+                              const rawVal = (editDraft ?? receipt)[key as keyof Receipt];
+                              const val = rawVal !== null && rawVal !== undefined ? String(rawVal) : '';
+                              return (
+                                <div key={key} className="flex items-center gap-3">
+                                  <span className="text-slate-500 w-24 flex-shrink-0">{label}</span>
+                                  {editDraft ? (
+                                    <input
+                                      type={type}
+                                      value={val}
+                                      onChange={e => setEditDraft(prev => ({ ...prev!, [key]: e.target.value }))}
+                                      className="flex-1 bg-slate-800 border border-slate-600 rounded px-2 py-1 text-sm text-white focus:outline-none focus:border-blue-500"
+                                    />
+                                  ) : (
+                                    <span className={`text-slate-200 ${key === 'amount' ? 'font-semibold text-green-400' : ''}`}>
+                                      {key === 'amount' ? `${receipt.currency} ${fmt(receipt.amount)}` : val || '—'}
+                                    </span>
+                                  )}
+                                </div>
+                              );
+                            })}
+
+                            {/* Confidence */}
+                            <div className="flex items-center gap-3 pt-1 border-t border-slate-800">
+                              <span className="text-slate-500 w-24 flex-shrink-0">Confidence</span>
+                              <div className="flex items-center gap-2">
+                                <div className="h-1.5 w-20 bg-slate-700 rounded-full overflow-hidden">
+                                  <div
+                                    className={`h-full rounded-full ${Number(receipt.ocr_confidence) >= 0.85 ? 'bg-green-500' : Number(receipt.ocr_confidence) >= 0.6 ? 'bg-yellow-500' : 'bg-red-500'}`}
+                                    style={{ width: `${Math.round(Number(receipt.ocr_confidence ?? 0.5) * 100)}%` }}
+                                  />
+                                </div>
+                                <span className="text-slate-400 text-xs">{Math.round(Number(receipt.ocr_confidence ?? 0.5) * 100)}%</span>
+                              </div>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Raw OCR text */}
+                      {receipt?.ocr_raw_text && (
+                        <details className="bg-slate-900/60 border border-slate-800 rounded-xl">
+                          <summary className="px-4 py-2.5 text-xs text-slate-400 cursor-pointer select-none">
+                            Raw OCR text ({receipt.ocr_raw_text.length} chars)
+                          </summary>
+                          <div className="px-4 pb-4 max-h-40 overflow-y-auto">
+                            <pre className="text-xs text-slate-400 whitespace-pre-wrap font-mono">{receipt.ocr_raw_text}</pre>
+                          </div>
+                        </details>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Navigation */}
+                  <div className="flex items-center justify-between pt-2">
+                    <button
+                      onClick={() => { setOcrIdx(i => Math.max(0, i - 1)); setEditDraft(null); setHighlightBoxId(null); }}
+                      disabled={ocrIdx === 0}
+                      className="px-4 py-2 bg-slate-800 hover:bg-slate-700 disabled:opacity-40 rounded-lg text-sm flex items-center gap-1"
+                    >
+                      <ChevronLeft className="w-4 h-4" /> Previous
+                    </button>
+                    <span className="text-slate-500 text-sm">{ocrIdx + 1} / {receipts.length}</span>
+                    {ocrIdx < receipts.length - 1 ? (
+                      <button
+                        onClick={() => { setOcrIdx(i => i + 1); setEditDraft(null); setHighlightBoxId(null); }}
+                        className="px-4 py-2 bg-slate-800 hover:bg-slate-700 rounded-lg text-sm flex items-center gap-1"
+                      >
+                        Next <ChevronRight className="w-4 h-4" />
+                      </button>
+                    ) : (
+                      <button
+                        onClick={() => setStep('pl')}
+                        className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-sm flex items-center gap-2"
+                      >
+                        View P&L <ChevronRight className="w-4 h-4" />
+                      </button>
+                    )}
+                  </div>
                 </>
               )}
-            </button>
-          </form>
+            </div>
+          )}
 
-          {error.length > 0 && (
-            <div className="mt-4 p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-md">
-              <div className="flex">
-                <AlertCircle className="h-5 w-5 text-red-400 dark:text-red-500" />
-                <div className="ml-3">
-                  <h3 className="text-sm font-medium text-red-800 dark:text-red-300">Error</h3>
-                  <p className="mt-1 text-sm text-red-700 dark:text-red-400">{toDisplayText(error)}</p>
+          {/* ================================================================ */}
+          {/* STEP 3: P&L                                                      */}
+          {/* ================================================================ */}
+          {step === 'pl' && (
+            <div className="space-y-6">
+              {/* Summary cards */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                {[
+                  { label: 'Receipts',     value: String(receipts.length) },
+                  { label: 'Total',        value: `${receipts[0]?.currency || 'HKD'} ${fmt(receipts.reduce((s, r) => s + Number(r.amount || 0), 0))}` },
+                  { label: 'Deductible',   value: `${receipts[0]?.currency || 'HKD'} ${fmt(receipts.filter(r => r.deductible).reduce((s, r) => s + Number(r.deductible_amount || r.amount || 0), 0))}` },
+                  { label: 'Flagged',      value: String(receipts.filter(r => r.requires_review).length) },
+                ].map(c => (
+                  <div key={c.label} className="bg-slate-800/60 border border-slate-700/50 rounded-xl px-4 py-3">
+                    <div className="text-xs text-slate-500 mb-1">{c.label}</div>
+                    <div className="text-base font-semibold text-white">{c.value}</div>
+                  </div>
+                ))}
+              </div>
+
+              {/* Table */}
+              <div className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden">
+                <div className="flex items-center justify-between px-4 py-3 border-b border-slate-800">
+                  <h3 className="text-sm font-medium text-slate-300">P&L Table</h3>
+                  <a
+                    href={batchId ? apiUrl(`/api/receipts/batches/${batchId}/download`) : '#'}
+                    download
+                    className="px-3 py-1.5 bg-emerald-700 hover:bg-emerald-600 text-white rounded text-xs font-medium flex items-center gap-1.5"
+                  >
+                    <Download className="w-3.5 h-3.5" /> Download Excel
+                  </a>
                 </div>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b border-slate-800 text-xs text-slate-500 uppercase tracking-wider">
+                        {['Date', 'Vendor', 'Amount', 'Category', 'Payment', 'Deductible', 'Remarks', ''].map(h => (
+                          <th key={h} className="px-4 py-2.5 text-left font-medium">{h}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-800/60">
+                      {receipts.map((r) => {
+                        const draft = plEdit[r.receipt_id];
+                        const rem = remarksEdit[r.receipt_id] ?? r.remarks ?? '';
+                        return (
+                          <tr key={r.receipt_id} className="hover:bg-slate-800/30 transition-colors">
+                            <td className="px-4 py-2.5 text-slate-300 whitespace-nowrap">
+                              {draft?.receipt_date !== undefined ? (
+                                <input type="date" value={String(draft.receipt_date)} onChange={e => setPlEdit(p => ({ ...p, [r.receipt_id]: { ...p[r.receipt_id], receipt_date: e.target.value } }))}
+                                  className="bg-slate-800 border border-slate-600 rounded px-1.5 py-0.5 text-xs w-28" />
+                              ) : r.receipt_date}
+                            </td>
+                            <td className="px-4 py-2.5 text-slate-200 max-w-[150px]">
+                              {draft?.vendor !== undefined ? (
+                                <input value={String(draft.vendor)} onChange={e => setPlEdit(p => ({ ...p, [r.receipt_id]: { ...p[r.receipt_id], vendor: e.target.value } }))}
+                                  className="bg-slate-800 border border-slate-600 rounded px-1.5 py-0.5 text-xs w-full" />
+                              ) : <span className="truncate block">{r.vendor}</span>}
+                            </td>
+                            <td className="px-4 py-2.5 text-green-400 font-medium whitespace-nowrap">
+                              {draft?.amount !== undefined ? (
+                                <input type="number" value={String(draft.amount)} onChange={e => setPlEdit(p => ({ ...p, [r.receipt_id]: { ...p[r.receipt_id], amount: e.target.value } }))}
+                                  className="bg-slate-800 border border-slate-600 rounded px-1.5 py-0.5 text-xs w-24" />
+                              ) : `${r.currency} ${fmt(r.amount)}`}
+                            </td>
+                            <td className="px-4 py-2.5 text-slate-400 text-xs">{r.category_name || '—'}</td>
+                            <td className="px-4 py-2.5 text-slate-400 text-xs">{r.payment_method || '—'}</td>
+                            <td className="px-4 py-2.5">
+                              <span className={`text-xs px-1.5 py-0.5 rounded ${r.deductible ? 'bg-green-900/40 text-green-400' : 'bg-slate-800 text-slate-500'}`}>
+                                {r.deductible ? 'Yes' : 'No'}
+                              </span>
+                            </td>
+                            <td className="px-4 py-2.5 min-w-[160px]">
+                              <div className="flex items-center gap-1.5">
+                                <input
+                                  value={rem}
+                                  onChange={e => setRemarksEdit(p => ({ ...p, [r.receipt_id]: e.target.value }))}
+                                  onBlur={() => { if (rem !== (r.remarks ?? '')) saveRemarks(r.receipt_id); }}
+                                  placeholder="Add remark…"
+                                  className="flex-1 bg-transparent border-b border-slate-700 focus:border-blue-500 outline-none text-xs text-slate-300 placeholder-slate-600 py-0.5"
+                                />
+                                {isSavingRemarks[r.receipt_id] && <Loader2 className="w-3 h-3 animate-spin text-blue-400" />}
+                              </div>
+                            </td>
+                            <td className="px-4 py-2.5">
+                              {draft ? (
+                                <div className="flex gap-1">
+                                  <button onClick={async () => {
+                                    await fetch(apiUrl(`/api/receipts/${r.receipt_id}`), {
+                                      method: 'PUT', headers: { 'Content-Type': 'application/json' },
+                                      body: JSON.stringify(draft),
+                                    });
+                                    setReceipts(prev => prev.map(rx => rx.receipt_id === r.receipt_id ? { ...rx, ...draft } : rx));
+                                    setPlEdit(p => { const n = { ...p }; delete n[r.receipt_id]; return n; });
+                                  }} className="text-green-400 hover:text-green-300"><Check className="w-3.5 h-3.5" /></button>
+                                  <button onClick={() => setPlEdit(p => { const n = { ...p }; delete n[r.receipt_id]; return n; })} className="text-slate-500 hover:text-slate-300"><X className="w-3.5 h-3.5" /></button>
+                                </div>
+                              ) : (
+                                <button onClick={() => setPlEdit(p => ({ ...p, [r.receipt_id]: { receipt_date: r.receipt_date, vendor: r.vendor, amount: r.amount } }))}
+                                  className="text-slate-600 hover:text-slate-300">
+                                  <Pencil className="w-3.5 h-3.5" />
+                                </button>
+                              )}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              {/* Back to OCR */}
+              <div className="flex gap-3">
+                <button onClick={() => setStep('ocr')} className="px-4 py-2 bg-slate-800 hover:bg-slate-700 rounded-lg text-sm flex items-center gap-1">
+                  <ChevronLeft className="w-4 h-4" /> Back to OCR Review
+                </button>
               </div>
             </div>
           )}
         </div>
-
-        {/* Processing Status */}
-        {batchStatus && (
-          <div className="bg-white dark:bg-slate-800 rounded-lg shadow-md p-6 mb-8">
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-xl font-semibold text-slate-900 dark:text-white">Processing Status</h2>
-              <div className={`flex items-center gap-2 px-3 py-1 rounded-full ${getStatusColor(normalizeStatus(batchStatus.status))}`}>
-                {getStatusIcon(normalizeStatus(batchStatus.status))}
-                <span className="text-sm font-medium capitalize">{normalizeStatus(batchStatus.status)}</span>
-              </div>
-            </div>
-
-            {/* Progress Bar */}
-            <div className="mb-6">
-              <div className="flex justify-between text-sm text-slate-600 dark:text-slate-400 mb-2">
-                <span>Progress</span>
-                <span>{normalizeProgress(batchStatus.progress)}%</span>
-              </div>
-              <div className="w-full bg-slate-200 dark:bg-slate-700 rounded-full h-2">
-                <div
-                  className="bg-blue-600 dark:bg-blue-500 h-2 rounded-full transition-all duration-300"
-                  style={{ width: `${normalizeProgress(batchStatus.progress)}%` }}
-                />
-              </div>
-              <div className="mt-2 text-sm text-slate-600 dark:text-slate-400">
-                {batchStatus.processed_receipts} / {batchStatus.total_receipts} receipts processed
-                {batchStatus.failed_receipts > 0 && (
-                  <span className="text-red-600 dark:text-red-400 ml-2">({batchStatus.failed_receipts} failed)</span>
-                )}
-              </div>
-            </div>
-
-            {/* Statistics */}
-            <div className="grid grid-cols-3 gap-4 mb-6">
-              <div className="bg-slate-50 dark:bg-slate-700/50 rounded-lg p-4">
-                <div className="text-sm text-slate-600 dark:text-slate-400">Total Amount</div>
-                <div className="text-2xl font-bold text-slate-900 dark:text-white">
-                  HKD {batchStatus.total_amount?.toFixed(2) || '0.00'}
-                </div>
-              </div>
-              <div className="bg-green-50 dark:bg-green-900/20 rounded-lg p-4">
-                <div className="text-sm text-slate-600 dark:text-slate-400">Deductible</div>
-                <div className="text-2xl font-bold text-green-600 dark:text-green-400">
-                  HKD {batchStatus.deductible_amount?.toFixed(2) || '0.00'}
-                </div>
-              </div>
-              <div className="bg-slate-50 dark:bg-slate-700/50 rounded-lg p-4">
-                <div className="text-sm text-slate-600 dark:text-slate-400">Non-Deductible</div>
-                <div className="text-2xl font-bold text-slate-600 dark:text-slate-300">
-                  HKD {((batchStatus.total_amount || 0) - (batchStatus.deductible_amount || 0)).toFixed(2)}
-                </div>
-              </div>
-            </div>
-
-            {/* Recent Logs */}
-            {batchStatus.recent_logs && batchStatus.recent_logs.length > 0 && (
-              <div className="mb-6">
-                <h3 className="text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">Recent Activity</h3>
-                <div className="bg-slate-50 dark:bg-slate-700/50 rounded-lg p-4 max-h-48 overflow-y-auto">
-                  <div className="space-y-2">
-                    {batchStatus.recent_logs.map((log, index) => (
-                      <div key={index} className="text-sm">
-                        <span className={`font-medium ${
-                          log.log_level === 'error' ? 'text-red-600 dark:text-red-400' :
-                          log.log_level === 'warning' ? 'text-yellow-600 dark:text-yellow-400' :
-                          'text-slate-600 dark:text-slate-400'
-                        }`}>
-                          [{log.step}]
-                        </span>
-                        <span className="text-slate-700 dark:text-slate-300 ml-2">{log.message}</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* Download Button */}
-            {normalizeStatus(batchStatus.status) === 'completed' && (
-              <button
-                onClick={handleDownload}
-                className="w-full flex justify-center items-center px-4 py-3 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500"
-              >
-                <Download className="w-5 h-5 mr-2" />
-                Download Excel P&L Report
-              </button>
-            )}
-
-            {/* Failed State */}
-            {normalizeStatus(batchStatus.status) === 'failed' && (
-              <div className="p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-md">
-                <div className="flex">
-                  <AlertCircle className="h-5 w-5 text-red-400 dark:text-red-500" />
-                  <div className="ml-3">
-                    <h3 className="text-sm font-medium text-red-800 dark:text-red-300">Processing Failed</h3>
-                    <p className="mt-1 text-sm text-red-700 dark:text-red-400">
-                      Please check the logs above and try again. If the problem persists, contact support.
-                    </p>
-                  </div>
-                </div>
-              </div>
-            )}
-          </div>
-        )}
-
-        {(receiptResults.length > 0 || isReceiptLoading || receiptError.length > 0) && (
-          <div className="bg-white dark:bg-slate-800 rounded-lg shadow-md p-6 mb-8">
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-xl font-semibold text-slate-900 dark:text-white">Receipt Results</h2>
-              {isReceiptLoading && (
-                <div className="flex items-center text-sm text-slate-500 dark:text-slate-400">
-                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                  Loading receipts...
-                </div>
-              )}
-            </div>
-
-            {receiptError.length > 0 && (
-              <div className="mb-4 p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-md">
-                <div className="flex">
-                  <AlertCircle className="h-5 w-5 text-red-400 dark:text-red-500" />
-                  <div className="ml-3">
-                    <h3 className="text-sm font-medium text-red-800 dark:text-red-300">Receipt Fetch Error</h3>
-                    <p className="mt-1 text-sm text-red-700 dark:text-red-400">{toDisplayText(receiptError)}</p>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {receiptResults.length === 0 && !isReceiptLoading && receiptError.length === 0 && (
-              <p className="text-sm text-slate-600 dark:text-slate-400">No OCR results available yet.</p>
-            )}
-
-            <div className="space-y-4">
-              {receiptResults.map((receipt) => {
-                const vendorLabel = receipt.vendor || 'Unknown vendor';
-                const dateLabel = receipt.receipt_date || 'Unknown date';
-                const currencyLabel = receipt.currency || 'HKD';
-                const amountLabel = `${currencyLabel} ${formatAmount(receipt.amount)}`;
-                const descriptionLabel = receipt.description || 'No description provided.';
-                const categoryLabel = receipt.category_name || 'Uncategorized';
-                const categoryIdLabel = receipt.category_id ? ` (${receipt.category_id})` : '';
-                const confidenceValue = typeof receipt.categorization_confidence === 'number'
-                  ? receipt.categorization_confidence
-                  : Number(receipt.categorization_confidence);
-                const confidenceLabel = Number.isFinite(confidenceValue)
-                  ? `${Math.round(confidenceValue * 100)}%`
-                  : 'n/a';
-                const contextualText = receipt.categorization_reasoning
-                  ? receipt.categorization_reasoning
-                  : `No contextual analysis recorded yet. Category: ${categoryLabel}${categoryIdLabel}. Confidence: ${confidenceLabel}.`;
-                const ocrText = receipt.ocr_raw_text || 'No OCR result available yet.';
-                const isEditing = editingReceiptId === receipt.receipt_id;
-
-                return (
-                  <div key={receipt.receipt_id} className="border border-slate-200 dark:border-slate-700 rounded-lg p-4">
-                    <div className="flex flex-wrap items-start justify-between gap-2">
-                      <div>
-                        <div className="text-sm font-semibold text-slate-900 dark:text-white">{vendorLabel}</div>
-                        <div className="text-xs text-slate-500 dark:text-slate-400">{dateLabel}</div>
-                        <div className="mt-1 text-xs text-slate-500 dark:text-slate-400">{descriptionLabel}</div>
-                      </div>
-                      <div className="flex flex-col items-end gap-2">
-                        <div className="text-sm font-medium text-slate-700 dark:text-slate-300">{amountLabel}</div>
-                        {isEditing ? (
-                          <div className="flex items-center gap-2">
-                            <button
-                              type="button"
-                              onClick={handleSaveReceipt}
-                              disabled={isSavingEdit}
-                              className="px-3 py-1 text-xs font-medium rounded-md bg-green-600 text-white hover:bg-green-700 disabled:bg-slate-400"
-                            >
-                              {isSavingEdit ? 'Saving...' : 'Save'}
-                            </button>
-                            <button
-                              type="button"
-                              onClick={cancelEditingReceipt}
-                              disabled={isSavingEdit}
-                              className="px-3 py-1 text-xs font-medium rounded-md border border-slate-300 dark:border-slate-600 text-slate-600 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700"
-                            >
-                              Cancel
-                            </button>
-                          </div>
-                        ) : (
-                          <button
-                            type="button"
-                            onClick={() => startEditingReceipt(receipt)}
-                            className="px-3 py-1 text-xs font-medium rounded-md border border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700"
-                          >
-                            Edit Receipt
-                          </button>
-                        )}
-                      </div>
-                    </div>
-
-                    {isEditing && editDraft && (
-                      <div className="mt-4 bg-slate-50 dark:bg-slate-700/50 rounded-lg p-4">
-                        <div className="grid gap-4 md:grid-cols-2">
-                          <div>
-                            <label className="block text-xs font-medium text-slate-600 dark:text-slate-300">Receipt Date</label>
-                            <input
-                              type="date"
-                              value={editDraft.receipt_date}
-                              onChange={(e) => setEditDraft({ ...editDraft, receipt_date: e.target.value })}
-                              className="mt-1 w-full rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-2 py-1 text-sm text-slate-900 dark:text-white"
-                            />
-                          </div>
-                          <div>
-                            <label className="block text-xs font-medium text-slate-600 dark:text-slate-300">Vendor</label>
-                            <input
-                              type="text"
-                              value={editDraft.vendor}
-                              onChange={(e) => setEditDraft({ ...editDraft, vendor: e.target.value })}
-                              className="mt-1 w-full rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-2 py-1 text-sm text-slate-900 dark:text-white"
-                            />
-                          </div>
-                          <div className="md:col-span-2">
-                            <label className="block text-xs font-medium text-slate-600 dark:text-slate-300">Description</label>
-                            <input
-                              type="text"
-                              value={editDraft.description}
-                              onChange={(e) => setEditDraft({ ...editDraft, description: e.target.value })}
-                              className="mt-1 w-full rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-2 py-1 text-sm text-slate-900 dark:text-white"
-                            />
-                          </div>
-                          <div>
-                            <label className="block text-xs font-medium text-slate-600 dark:text-slate-300">Amount</label>
-                            <input
-                              type="number"
-                              step="0.01"
-                              value={editDraft.amount}
-                              onChange={(e) => setEditDraft({ ...editDraft, amount: e.target.value })}
-                              className="mt-1 w-full rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-2 py-1 text-sm text-slate-900 dark:text-white"
-                            />
-                          </div>
-                          <div>
-                            <label className="block text-xs font-medium text-slate-600 dark:text-slate-300">Currency</label>
-                            <input
-                              type="text"
-                              value={editDraft.currency}
-                              onChange={(e) => setEditDraft({ ...editDraft, currency: e.target.value })}
-                              className="mt-1 w-full rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-2 py-1 text-sm text-slate-900 dark:text-white"
-                            />
-                          </div>
-                          <div>
-                            <label className="block text-xs font-medium text-slate-600 dark:text-slate-300">Tax / Service Charge</label>
-                            <input
-                              type="number"
-                              step="0.01"
-                              value={editDraft.tax_amount}
-                              onChange={(e) => setEditDraft({ ...editDraft, tax_amount: e.target.value })}
-                              className="mt-1 w-full rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-2 py-1 text-sm text-slate-900 dark:text-white"
-                            />
-                          </div>
-                          <div>
-                            <label className="block text-xs font-medium text-slate-600 dark:text-slate-300">Payment Method</label>
-                            <input
-                              type="text"
-                              value={editDraft.payment_method}
-                              onChange={(e) => setEditDraft({ ...editDraft, payment_method: e.target.value })}
-                              className="mt-1 w-full rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-2 py-1 text-sm text-slate-900 dark:text-white"
-                            />
-                          </div>
-                          <div>
-                            <label className="block text-xs font-medium text-slate-600 dark:text-slate-300">Receipt Number</label>
-                            <input
-                              type="text"
-                              value={editDraft.receipt_number}
-                              onChange={(e) => setEditDraft({ ...editDraft, receipt_number: e.target.value })}
-                              className="mt-1 w-full rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-2 py-1 text-sm text-slate-900 dark:text-white"
-                            />
-                          </div>
-                          <div>
-                            <label className="block text-xs font-medium text-slate-600 dark:text-slate-300">Category ID</label>
-                            <input
-                              type="text"
-                              value={editDraft.category_id}
-                              onChange={(e) => setEditDraft({ ...editDraft, category_id: e.target.value })}
-                              className="mt-1 w-full rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-2 py-1 text-sm text-slate-900 dark:text-white"
-                            />
-                          </div>
-                          <div>
-                            <label className="block text-xs font-medium text-slate-600 dark:text-slate-300">Category Name</label>
-                            <input
-                              type="text"
-                              value={editDraft.category_name}
-                              onChange={(e) => setEditDraft({ ...editDraft, category_name: e.target.value })}
-                              className="mt-1 w-full rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-2 py-1 text-sm text-slate-900 dark:text-white"
-                            />
-                          </div>
-                          <div>
-                            <label className="block text-xs font-medium text-slate-600 dark:text-slate-300">Deductible Amount</label>
-                            <input
-                              type="number"
-                              step="0.01"
-                              value={editDraft.deductible_amount}
-                              onChange={(e) => setEditDraft({ ...editDraft, deductible_amount: e.target.value })}
-                              className="mt-1 w-full rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-2 py-1 text-sm text-slate-900 dark:text-white"
-                            />
-                          </div>
-                          <div>
-                            <label className="block text-xs font-medium text-slate-600 dark:text-slate-300">Non-Deductible Amount</label>
-                            <input
-                              type="number"
-                              step="0.01"
-                              value={editDraft.non_deductible_amount}
-                              onChange={(e) => setEditDraft({ ...editDraft, non_deductible_amount: e.target.value })}
-                              className="mt-1 w-full rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-2 py-1 text-sm text-slate-900 dark:text-white"
-                            />
-                          </div>
-                          <div className="flex items-center gap-2">
-                            <input
-                              type="checkbox"
-                              checked={editDraft.deductible}
-                              onChange={(e) => setEditDraft({ ...editDraft, deductible: e.target.checked })}
-                              className="h-4 w-4 rounded border-slate-300 dark:border-slate-600"
-                            />
-                            <span className="text-xs text-slate-600 dark:text-slate-300">Deductible</span>
-                          </div>
-                        </div>
-                        {saveError && (
-                          <p className="mt-3 text-sm text-red-600 dark:text-red-400">{saveError}</p>
-                        )}
-                      </div>
-                    )}
-
-                    <div className="mt-4 grid gap-4 lg:grid-cols-2">
-                      <div className="bg-slate-50 dark:bg-slate-700/50 rounded-lg p-4">
-                        <h4 className="text-sm font-medium text-slate-700 dark:text-slate-300">OCR Result</h4>
-                        <pre className="mt-2 text-xs text-slate-700 dark:text-slate-300 whitespace-pre-wrap break-words max-h-64 overflow-y-auto">
-                          {ocrText}
-                        </pre>
-                      </div>
-
-                      <div className="bg-slate-50 dark:bg-slate-700/50 rounded-lg p-4">
-                        <h4 className="text-sm font-medium text-slate-700 dark:text-slate-300">Contextual Analysis</h4>
-                        <p className="mt-2 text-sm text-slate-700 dark:text-slate-300 whitespace-pre-wrap">
-                          {contextualText}
-                        </p>
-                        <div className="mt-3 text-xs text-slate-500 dark:text-slate-400">
-                          Category: {categoryLabel}{categoryIdLabel} • Confidence: {confidenceLabel}
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        )}
-
-        {batchStatus && normalizeStatus(batchStatus.status) === 'completed' && (
-          <div className="bg-white dark:bg-slate-800 rounded-lg shadow-md p-6 mb-8">
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-xl font-semibold text-slate-900 dark:text-white">Excel Preview</h2>
-              {isExcelLoading && (
-                <div className="flex items-center text-sm text-slate-500 dark:text-slate-400">
-                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                  Loading spreadsheet...
-                </div>
-              )}
-            </div>
-
-            {excelError.length > 0 && (
-              <div className="mb-4 p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-md">
-                <div className="flex">
-                  <AlertCircle className="h-5 w-5 text-red-400 dark:text-red-500" />
-                  <div className="ml-3">
-                    <h3 className="text-sm font-medium text-red-800 dark:text-red-300">Excel Preview Error</h3>
-                    <p className="mt-1 text-sm text-red-700 dark:text-red-400">{toDisplayText(excelError)}</p>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {excelPreview && excelPreview.columns.length > 0 ? (
-              <>
-                <div className="mb-3 text-sm text-slate-600 dark:text-slate-400">
-                  Sheet: {excelPreview.sheet_name} • Rows: {excelPreview.total_rows}
-                </div>
-                <div className="overflow-x-auto border border-slate-200 dark:border-slate-700 rounded-lg">
-                  <table className="min-w-full text-left text-sm">
-                    <thead className="bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-200">
-                      <tr>
-                        {excelPreview.columns.map((column, index) => (
-                          <th key={`${column}-${index}`} className="px-3 py-2 font-semibold whitespace-nowrap">
-                            {column}
-                          </th>
-                        ))}
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-200 dark:divide-slate-700">
-                      {excelPreview.rows.map((row, rowIndex) => (
-                        <tr key={`excel-row-${rowIndex}`} className="bg-white dark:bg-slate-800">
-                          {excelPreview.columns.map((_, cellIndex) => (
-                            <td key={`excel-cell-${rowIndex}-${cellIndex}`} className="px-3 py-2 text-slate-700 dark:text-slate-300 whitespace-nowrap">
-                              {formatCellValue(row[cellIndex])}
-                            </td>
-                          ))}
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-                {excelPreview.rows.length === 0 && !isExcelLoading && (
-                  <p className="mt-3 text-sm text-slate-600 dark:text-slate-400">No rows found in the spreadsheet.</p>
-                )}
-              </>
-            ) : (
-              !isExcelLoading && excelError.length === 0 && (
-                <p className="text-sm text-slate-600 dark:text-slate-400">Excel preview will appear once the export is ready.</p>
-              )
-            )}
-          </div>
-        )}
-
-        {/* Info Section */}
-        <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-6">
-          <h3 className="text-sm font-medium text-blue-800 dark:text-blue-300 mb-2">How it works</h3>
-          <ol className="list-decimal list-inside space-y-2 text-sm text-blue-700 dark:text-blue-400">
-            <li>Upload your receipt images (JPG, PNG, WEBP)</li>
-            <li>Click "Process Receipts" to start OCR and categorization</li>
-            <li>Our AI extracts data from receipts using your selected OCR model (supports Chinese + English)</li>
-            <li>Receipts are automatically categorized with HK IRD compliance checks</li>
-            <li>Download your complete P&L Excel report in under 3 minutes</li>
-          </ol>
-          <div className="mt-4 pt-4 border-t border-blue-200 dark:border-blue-800">
-            <p className="text-xs text-blue-600 dark:text-blue-400">
-              <strong>Privacy:</strong> Images are processed securely and deleted immediately after export.
-              All data stored in Hong Kong-compliant database with 7-year retention.
-            </p>
-          </div>
-        </div>
-      </div>
+      )}
     </div>
   );
+}
+
+// ---------------------------------------------------------------------------
+// Small shared components
+// ---------------------------------------------------------------------------
+function StatusBadge({ status }: { status: string }) {
+  const map: Record<string, string> = {
+    completed: 'bg-green-900/50 text-green-400 border-green-800/50',
+    processing: 'bg-blue-900/50 text-blue-400 border-blue-800/50',
+    pending: 'bg-yellow-900/50 text-yellow-400 border-yellow-800/50',
+    failed: 'bg-red-900/50 text-red-400 border-red-800/50',
+  };
+  return (
+    <span className={`text-xs px-2 py-0.5 rounded-full border font-medium ${map[status] || 'bg-slate-800 text-slate-400 border-slate-700'}`}>
+      {status}
+    </span>
+  );
+}
+
+function StatusIcon({ status }: { status: UploadedFile['status'] }) {
+  if (status === 'done') return <CheckCircle2 className="w-4 h-4 text-green-400" />;
+  if (status === 'error') return <AlertCircle className="w-4 h-4 text-red-400" />;
+  if (status === 'uploading') return <Loader2 className="w-4 h-4 text-blue-400 animate-spin" />;
+  return <div className="w-4 h-4 rounded-full border-2 border-slate-600" />;
 }

@@ -1,26 +1,33 @@
 /**
  * Batch Processor - Complete receipt processing workflow
- * with detailed debug checkpoints
+ *
+ * OCR flow:
+ *   1. Google Vision  → raw text + word-level bounding boxes
+ *   2. DeepSeek       → structure text into fields + categorisation
+ *
+ * Supports: images (JPG/PNG/WebP) and PDFs (each page → one receipt row).
+ * Image data is stored as base64 in receipts.image_data for the OCR viewer.
  */
 
 const path = require('path');
+const fsSync = require('fs');
+const fs = require('fs').promises;
 const ExcelJS = require('exceljs');
 const db = require('../../../db');
 
-let receiptsSchemaChecked = false;
+let schemaEnsured = false;
 
 async function ensureReceiptsSchema() {
-  if (receiptsSchemaChecked) return;
+  if (schemaEnsured) return;
   await db.query(`
-    ALTER TABLE receipts
-    ADD COLUMN IF NOT EXISTS ocr_boxes JSONB
+    ALTER TABLE receipts ADD COLUMN IF NOT EXISTS ocr_boxes  JSONB;
+    ALTER TABLE receipts ADD COLUMN IF NOT EXISTS image_data TEXT;
+    ALTER TABLE receipts ADD COLUMN IF NOT EXISTS remarks    TEXT;
+    ALTER TABLE receipt_batches ADD COLUMN IF NOT EXISTS ocr_provider VARCHAR(50) DEFAULT 'google-vision';
   `);
-  receiptsSchemaChecked = true;
+  schemaEnsured = true;
 }
 
-/**
- * Log processing step to database and console
- */
 async function logProcessing(batchId, level, step, message, details = null) {
   try {
     console.log(`[${level.toUpperCase()}] [${step}] ${message}`);
@@ -29,341 +36,372 @@ async function logProcessing(batchId, level, step, message, details = null) {
        VALUES ($1, $2, $3, $4, $5)`,
       [batchId, level, step, message, details ? JSON.stringify(details) : null]
     );
-  } catch (error) {
-    console.error('Error logging processing step:', error);
+  } catch (err) {
+    console.error('Error writing log:', err.message);
   }
 }
 
-/**
- * Process receipt batch with detailed checkpoints
- */
-const resolveOcrConfig = (value) => {
-  const normalized = typeof value === 'string' ? value.trim().toLowerCase() : '';
-  if (!normalized || normalized === 'claude' || normalized === 'claude-haiku' || normalized === 'haiku') {
+// ---------------------------------------------------------------------------
+// DeepSeek: structure raw OCR text into receipt fields
+// ---------------------------------------------------------------------------
+async function structureWithDeepSeek(rawText, filename) {
+  const fetch = require('node-fetch');
+  const apiKey = process.env.DEEPSEEK_API_KEY;
+  if (!apiKey) throw new Error('DEEPSEEK_API_KEY not configured');
+
+  const prompt = `You are a receipt data extraction specialist. Extract structured data from this receipt OCR text.
+
+Receipt filename: ${filename}
+OCR text:
+---
+${rawText}
+---
+
+Return ONLY valid JSON with these exact fields (no markdown, no explanation):
+{
+  "vendor": "store/restaurant name",
+  "date": "YYYY-MM-DD",
+  "amount": 0.00,
+  "currency": "HKD",
+  "tax_amount": 0.00,
+  "receipt_number": "optional receipt/invoice number",
+  "payment_method": "cash/credit/debit/octopus/etc",
+  "description": "brief description of purchase",
+  "category": "Food & Beverage | Transport | Office Supplies | Entertainment | Utilities | Professional Services | Other",
+  "deductible": true,
+  "confidence": 0.95
+}
+
+Rules:
+- date must be YYYY-MM-DD format; if unclear use today: ${new Date().toISOString().split('T')[0]}
+- amount must be a number (no currency symbol)
+- currency default HKD unless clearly different
+- confidence: 0.0-1.0 based on how clear the receipt text is`;
+
+  const response = await fetch('https://api.deepseek.com/v1/chat/completions', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${apiKey}`,
+    },
+    body: JSON.stringify({
+      model: process.env.DEEPSEEK_MODEL || 'deepseek-chat',
+      messages: [{ role: 'user', content: prompt }],
+      temperature: 0.1,
+      max_tokens: 500,
+    }),
+  });
+
+  if (!response.ok) {
+    throw new Error(`DeepSeek API error: ${response.status}`);
+  }
+
+  const data = await response.json();
+  const content = data.choices?.[0]?.message?.content || '';
+
+  // Strip any accidental markdown fences
+  const cleaned = content.replace(/```json\s*/g, '').replace(/```\s*/g, '').trim();
+
+  try {
+    return JSON.parse(cleaned);
+  } catch {
+    // Best-effort fallback
     return {
-      modelKey: 'claude-haiku',
-      label: 'Claude Haiku',
-      provider: 'claude',
-      model: 'claude-3-haiku-20240307',
+      vendor: 'Unknown',
+      date: new Date().toISOString().split('T')[0],
+      amount: 0,
+      currency: 'HKD',
+      tax_amount: 0,
+      receipt_number: '',
+      payment_method: '',
+      description: rawText.substring(0, 100),
+      category: 'Other',
+      deductible: true,
+      confidence: 0.3,
     };
   }
-  if (normalized === 'deepseek') {
-    return {
-      modelKey: 'deepseek',
-      label: 'DeepSeek',
-      provider: 'deepseek',
-      model: process.env.DEEPSEEK_OCR_MODEL || 'deepseek-chat',
-    };
-  }
-  return null;
+}
+
+// ---------------------------------------------------------------------------
+// Map DeepSeek category label to a category_id
+// ---------------------------------------------------------------------------
+const CATEGORY_MAP = {
+  'Food & Beverage': '5200',
+  'Transport': '5300',
+  'Office Supplies': '5100',
+  'Entertainment': '5400',
+  'Utilities': '5500',
+  'Professional Services': '5600',
+  'Other': '5900',
 };
 
-async function processReceiptBatch(batchId, dropboxUrl, clientName, uploadedFiles = null, ocrModel = 'claude-haiku') {
+// ---------------------------------------------------------------------------
+// Process a single receipt file (image or PDF page)
+// ---------------------------------------------------------------------------
+async function processOneFile(filePath, originalFilename, batchId, pageNumber, wsServer) {
+  const GoogleVisionOCR = require('./google-vision-ocr');
+
+  if (!process.env.GOOGLE_VISION_API_KEY) {
+    throw new Error('GOOGLE_VISION_API_KEY not configured');
+  }
+
+  const vision = new GoogleVisionOCR(process.env.GOOGLE_VISION_API_KEY);
+  const ext = path.extname(filePath).toLowerCase();
+
+  let pages;
+  if (ext === '.pdf') {
+    pages = await vision.processFile(filePath);
+  } else {
+    pages = await vision.processFile(filePath);
+  }
+
+  const results = [];
+  for (const page of pages) {
+    const label = pages.length > 1 ? `${originalFilename} (page ${page.pageNumber})` : originalFilename;
+
+    wsServer.sendProgress(batchId, {
+      message: `Google Vision OCR: ${label} — ${page.boxes.length} words detected`,
+    });
+
+    if (!page.text || page.text.trim().length < 5) {
+      results.push({
+        success: false,
+        filename: label,
+        error: 'No readable text detected by Google Vision',
+        page,
+      });
+      continue;
+    }
+
+    // Read image data for storage
+    let imageData = null;
+    let imageMime = 'image/jpeg';
+    try {
+      const buf = await fs.readFile(filePath);
+      imageData = buf.toString('base64');
+      const mimeMap = { '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.png': 'image/png', '.webp': 'image/webp', '.gif': 'image/gif' };
+      imageMime = mimeMap[ext] || 'image/jpeg';
+    } catch { /* non-fatal */ }
+
+    wsServer.sendProgress(batchId, { message: `DeepSeek: structuring ${label}...` });
+
+    let structured;
+    try {
+      structured = await structureWithDeepSeek(page.text, label);
+    } catch (err) {
+      wsServer.sendProgress(batchId, { message: `DeepSeek warning for ${label}: ${err.message}` });
+      structured = {
+        vendor: 'Unknown',
+        date: new Date().toISOString().split('T')[0],
+        amount: 0,
+        currency: 'HKD',
+        tax_amount: 0,
+        receipt_number: '',
+        payment_method: '',
+        description: '',
+        category: 'Other',
+        deductible: true,
+        confidence: 0.3,
+      };
+    }
+
+    results.push({
+      success: true,
+      filename: label,
+      page,
+      structured,
+      imageData,
+      imageMime,
+    });
+  }
+
+  return results;
+}
+
+// ---------------------------------------------------------------------------
+// Main batch processor
+// ---------------------------------------------------------------------------
+async function processReceiptBatch(batchId, dropboxUrl, clientName, uploadedFiles = null, ocrModel = 'google-vision') {
   const wsServer = require('../../../services/websocket-server');
   let downloadedFiles = [];
   const useUploads = Array.isArray(uploadedFiles) && uploadedFiles.length > 0;
-  const ocrConfig = resolveOcrConfig(ocrModel);
 
   try {
-    if (!ocrConfig) {
-      throw new Error(`Unsupported OCR model: ${ocrModel}`);
-    }
-
     console.log(`\n${'='.repeat(60)}`);
     console.log(`🚀 [BATCH ${batchId}] Starting receipt processing`);
-    if (useUploads) {
-      console.log(`📁 Uploads: ${uploadedFiles.length} files`);
-    } else {
-      console.log(`📁 Dropbox: ${dropboxUrl.substring(0, 50)}...`);
-    }
+    console.log(`📁 Source: ${useUploads ? `${uploadedFiles.length} uploaded files` : `Dropbox: ${(dropboxUrl || '').substring(0, 50)}`}`);
     console.log(`👤 Client: ${clientName}`);
-    console.log(`🧠 OCR Model: ${ocrConfig.label}`);
+    console.log(`🧠 OCR: Google Vision + DeepSeek`);
     console.log(`${'='.repeat(60)}\n`);
 
-    // CHECKPOINT 1: Update status
-    console.log('✓ CHECKPOINT 1: Setting status to processing...');
+    // Step 1: Set status
     await db.query(
-      "UPDATE receipt_batches SET status = 'processing', updated_at = NOW() WHERE batch_id = $1",
+      "UPDATE receipt_batches SET status='processing', ocr_provider='google-vision', updated_at=NOW() WHERE batch_id=$1",
       [batchId]
     );
-    await logProcessing(batchId, 'info', 'batch_start', 'Batch processing started');
+    await logProcessing(batchId, 'info', 'batch_start', 'Processing started — Google Vision + DeepSeek');
     wsServer.sendStatus(batchId, { status: 'processing', progress: 5 });
 
-    // CHECKPOINT 2: Validate environment
-    console.log('✓ CHECKPOINT 2: Checking environment...');
+    // Step 2: Env check
     if (!useUploads && !process.env.DROPBOX_ACCESS_TOKEN) {
       throw new Error('DROPBOX_ACCESS_TOKEN not configured');
     }
-    if (ocrConfig.provider === 'deepseek') {
-      if (!process.env.DEEPSEEK_API_KEY) {
-        throw new Error('DEEPSEEK_API_KEY not configured');
-      }
-    } else if (!process.env.ANTHROPIC_API_KEY) {
-      throw new Error('ANTHROPIC_API_KEY not configured');
+    if (!process.env.GOOGLE_VISION_API_KEY) {
+      throw new Error('GOOGLE_VISION_API_KEY not configured');
+    }
+    if (!process.env.DEEPSEEK_API_KEY) {
+      throw new Error('DEEPSEEK_API_KEY not configured');
     }
     await ensureReceiptsSchema();
-    console.log('✅ Environment OK\n');
 
-    // CHECKPOINT 3: Collect receipts
-    console.log('✓ CHECKPOINT 3: Collecting receipts...');
+    // Step 3: Collect files
+    wsServer.sendProgress(batchId, { progress: 10, message: useUploads ? 'Preparing uploads...' : 'Downloading from Dropbox...' });
+
     if (useUploads) {
-      await logProcessing(batchId, 'info', 'upload_start', 'Using uploaded receipts');
-      wsServer.sendProgress(batchId, { progress: 10, message: 'Preparing uploads...' });
       downloadedFiles = uploadedFiles;
-      if (downloadedFiles.length === 0) {
-        throw new Error('No receipts uploaded');
-      }
     } else {
-      await logProcessing(batchId, 'info', 'download_start', 'Downloading receipts');
-      wsServer.sendProgress(batchId, { progress: 10, message: 'Downloading...' });
-
       const DropboxConnector = require('../../../tools/dropbox-connector');
       const dropbox = new DropboxConnector(process.env.DROPBOX_ACCESS_TOKEN);
-
       const downloadResults = await dropbox.downloadReceipts(
         dropboxUrl,
         `/tmp/receipts/${batchId}`,
-        (p) => {
-          wsServer.sendProgress(batchId, {
-            progress: 10 + (p.progress * 0.2),
-            message: `Downloading ${p.current}/${p.total}`
-          });
-        }
+        (p) => wsServer.sendProgress(batchId, { progress: 10 + (p.progress * 0.1), message: `Downloading ${p.current}/${p.total}` })
       );
-
       downloadedFiles = downloadResults.results.filter(r => r.success);
-      if (downloadedFiles.length === 0) {
-        throw new Error('No receipts downloaded');
-      }
+      if (downloadedFiles.length === 0) throw new Error('No files downloaded from Dropbox');
     }
 
-    await db.query(
-      'UPDATE receipt_batches SET total_receipts = $1 WHERE batch_id = $2',
-      [downloadedFiles.length, batchId]
-    );
-    console.log(`✅ Collected ${downloadedFiles.length} receipts\n`);
+    await logProcessing(batchId, 'info', 'files_ready', `${downloadedFiles.length} file(s) ready for OCR`);
+    wsServer.sendProgress(batchId, { progress: 20, message: `${downloadedFiles.length} file(s) collected — starting OCR` });
 
-    const imagePaths = downloadedFiles.map(f => f.path);
-    let tesseractResults = [];
+    // Step 4: OCR each file
+    const allReceipts = [];   // { success, filename, structured, page, imageData, imageMime, error }
+    let fileIdx = 0;
 
-    if (ocrConfig.provider === 'deepseek') {
-      // CHECKPOINT 4A: Tesseract OCR for text extraction (required for DeepSeek)
-      console.log('✓ CHECKPOINT 4A: Running Tesseract OCR for DeepSeek...');
-      await logProcessing(batchId, 'info', 'tesseract_start', 'Starting Tesseract OCR for DeepSeek');
-      wsServer.sendProgress(batchId, { progress: 30, message: 'Extracting text with Tesseract...' });
+    for (const fileEntry of downloadedFiles) {
+      fileIdx++;
+      const filePath = fileEntry.path;
+      const originalName = fileEntry.filename || path.basename(filePath);
+      const progressBase = 20 + Math.round(((fileIdx - 1) / downloadedFiles.length) * 50);
+
+      wsServer.sendProgress(batchId, {
+        progress: progressBase,
+        message: `OCR ${fileIdx}/${downloadedFiles.length}: ${originalName}`,
+      });
+      await logProcessing(batchId, 'info', 'ocr_file', `Processing: ${originalName}`);
 
       try {
-        const TesseractOCR = require('../../../tools/tesseract-ocr');
-        const tesseract = new TesseractOCR();
-
-        const batchPromise = tesseract.processBatch(imagePaths, (p) => {
-          const progress = 30 + (p.progress * 0.2);
-          wsServer.sendProgress(batchId, {
-            progress: Math.round(progress),
-            message: `Tesseract ${p.current}/${p.total}`
-          });
-        });
-
-        const timeoutPromise = new Promise((_, reject) =>
-          setTimeout(() => reject(new Error('Tesseract batch timeout (10 minutes) - Chinese OCR processing exceeded time limit')), 600000)
-        );
-
-        tesseractResults = await Promise.race([batchPromise, timeoutPromise]);
-
-        await tesseract.terminate();
-
-        const successCount = tesseractResults.filter(r => r.success).length;
-        console.log(`✅ Tesseract: ${successCount} successful\n`);
-        await logProcessing(batchId, 'info', 'tesseract_complete', `Tesseract completed: ${successCount} successful`);
-      } catch (error) {
-        console.error(`⚠️ [Tesseract] Failed, continuing with empty text:`, error.message);
-        await logProcessing(batchId, 'warning', 'tesseract_failed', `Tesseract failed: ${error.message}`);
-
-        tesseractResults = imagePaths.map(path => ({
-          success: false,
-          imagePath: path,
-          error: error.message,
-          boxes: [],
-          fullText: '',
-        }));
+        const fileResults = await processOneFile(filePath, originalName, batchId, fileIdx, wsServer);
+        allReceipts.push(...fileResults);
+      } catch (err) {
+        const errMsg = err.message || 'Unknown error';
+        await logProcessing(batchId, 'error', 'ocr_error', `Failed: ${originalName} — ${errMsg}`);
+        wsServer.sendProgress(batchId, { message: `Error on ${originalName}: ${errMsg}` });
+        allReceipts.push({ success: false, filename: originalName, error: errMsg });
       }
-    } else {
-      // CHECKPOINT 4A: Tesseract OCR - TEMPORARILY SKIPPED
-      console.log('✓ CHECKPOINT 4A: Skipping Tesseract (temporary)...');
-      await logProcessing(batchId, 'info', 'tesseract_skipped', 'Tesseract temporarily disabled for faster processing');
-      wsServer.sendProgress(batchId, { progress: 30, message: 'Skipping bounding box extraction (vision OCR only)...' });
 
-      // Create empty results (no bounding boxes)
-      tesseractResults = imagePaths.map(path => ({
-        success: false,
-        imagePath: path,
-        error: 'Tesseract temporarily disabled',
-        boxes: [],
-        fullText: '',
-      }));
-
-      console.log(`⏭️ Tesseract skipped, continuing to vision OCR\n`);
-    }
-
-    /* TESSERACT CODE DISABLED - UNCOMMENT WHEN READY TO DEBUG
-    let tesseractResults = [];
-    try {
-      const TesseractOCR = require('../../../tools/tesseract-ocr');
-      const tesseract = new TesseractOCR();
-
-      const imagePaths = downloadedFiles.map(f => f.path);
-
-      // Add overall timeout for batch processing (10 minutes for Chinese OCR)
-      const batchPromise = tesseract.processBatch(imagePaths, (p) => {
-        const progress = 30 + (p.progress * 0.2);
-        wsServer.sendProgress(batchId, {
-          progress: Math.round(progress),
-          message: `Tesseract ${p.current}/${p.total} (Chinese OCR may take 30-60s per receipt)`
-        });
-      });
-
-      const timeoutPromise = new Promise((_, reject) =>
-        setTimeout(() => reject(new Error('Tesseract batch timeout (10 minutes) - Chinese OCR processing exceeded time limit')), 600000)
+      // Update progress count
+      await db.query(
+        'UPDATE receipt_batches SET processed_receipts=$1 WHERE batch_id=$2',
+        [allReceipts.filter(r => r.success).length, batchId]
       );
-
-      tesseractResults = await Promise.race([batchPromise, timeoutPromise]);
-
-      // Terminate Tesseract worker to free resources
-      await tesseract.terminate();
-
-      console.log(`✅ Tesseract: ${tesseractResults.filter(r => r.success).length} successful\n`);
-      await logProcessing(batchId, 'info', 'tesseract_complete', `Tesseract completed: ${tesseractResults.filter(r => r.success).length} successful`);
-
-    } catch (error) {
-      console.error(`⚠️ [Tesseract] Failed, continuing without bounding boxes:`, error.message);
-      await logProcessing(batchId, 'warning', 'tesseract_failed', `Tesseract failed: ${error.message}`);
-
-      // Create empty results so processing can continue
-      tesseractResults = downloadedFiles.map(f => ({
-        success: false,
-        imagePath: f.path,
-        error: 'Tesseract timeout or failure',
-        boxes: []
-      }));
     }
-    */
 
-    // CHECKPOINT 4B: Vision OCR for structured data
-    console.log(`✓ CHECKPOINT 4B: Running ${ocrConfig.label} OCR...`);
-    await logProcessing(batchId, 'info', 'ocr_start', `Starting OCR (${ocrConfig.label})`, {
-      ocr_model: ocrConfig.modelKey,
-      provider: ocrConfig.provider,
-      model: ocrConfig.model,
-    });
-    wsServer.sendProgress(batchId, { progress: 50, message: `Processing with ${ocrConfig.label}...` });
+    // Update total receipt count (PDF pages expand the count)
+    await db.query(
+      'UPDATE receipt_batches SET total_receipts=$1 WHERE batch_id=$2',
+      [allReceipts.length, batchId]
+    );
 
-    const OCRProcessor = require('../../../tools/ocr-processor');
-    const ocr = new OCRProcessor({
-      provider: ocrConfig.provider,
-      model: ocrConfig.model,
-      apiKey: ocrConfig.provider === 'deepseek' ? process.env.DEEPSEEK_API_KEY : process.env.ANTHROPIC_API_KEY,
-    });
-
-    const ocrTextByPath = ocrConfig.provider === 'deepseek'
-      ? tesseractResults.reduce((acc, result) => {
-        if (result?.imagePath && result?.fullText) {
-          acc[result.imagePath] = result.fullText;
-        }
-        return acc;
-      }, {})
-      : {};
-
-    const ocrResults = await ocr.processBatch(imagePaths, (p) => {
-      const progress = 50 + (p.progress * 0.2);
-      wsServer.sendProgress(batchId, {
-        progress: Math.round(progress),
-        message: `${ocrConfig.label} OCR ${p.current}/${p.total}`
-      });
-
-      db.query(
-        'UPDATE receipt_batches SET processed_receipts = $1, failed_receipts = $2 WHERE batch_id = $3',
-        [p.successful, p.failed, batchId]
-      ).catch(console.error);
-    }, { ocrTextByPath });
-
-    console.log(`✅ ${ocrConfig.label} OCR: ${ocrResults.successful} successful\n`);
-
-    // CHECKPOINT 5: Save to database
-    console.log('✓ CHECKPOINT 5: Saving to database...');
-    wsServer.sendProgress(batchId, { progress: 70, message: 'Saving receipts...' });
+    // Step 5: Save to DB
+    wsServer.sendProgress(batchId, { progress: 72, message: 'Saving to database...' });
+    await logProcessing(batchId, 'info', 'save_start', `Saving ${allReceipts.filter(r => r.success).length} receipts`);
 
     let totalAmount = 0;
     let savedCount = 0;
+    let failedCount = 0;
 
-    for (const result of ocrResults.results) {
-      if (!result.success || !result.data) continue;
+    for (const item of allReceipts) {
+      if (!item.success) {
+        failedCount++;
+        continue;
+      }
+      const s = item.structured;
+      const categoryId = CATEGORY_MAP[s.category] || '5900';
+      const categoryName = s.category || 'Other';
+      const amount = typeof s.amount === 'number' ? s.amount : Number(s.amount) || 0;
+      const taxAmount = typeof s.tax_amount === 'number' ? s.tax_amount : Number(s.tax_amount) || 0;
+      const deductible = s.deductible !== false;
+      const imageDataUri = item.imageData ? `data:${item.imageMime};base64,${item.imageData}` : null;
 
       try {
-        const data = result.data;
-        const filename = path.basename(result.image_path);
-        const fileData = downloadedFiles.find(f => f.path === result.image_path);
-
-        // Find corresponding Tesseract result for bounding boxes
-        const tesseractResult = tesseractResults.find(tr => tr.imagePath === result.image_path);
-        const ocrBoxes = tesseractResult?.success ? tesseractResult.boxes : null;
-
         await db.query(
           `INSERT INTO receipts (
             batch_id, image_path, image_hash,
             receipt_date, vendor, description, amount, currency,
             tax_amount, receipt_number, payment_method,
             ocr_confidence, ocr_raw_text, ocr_boxes,
-            category_id, category_name, categorization_confidence,
-            deductible, deductible_amount, non_deductible_amount
-          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20)`,
+            category_id, category_name, categorization_confidence, categorization_reasoning,
+            deductible, deductible_amount, non_deductible_amount,
+            image_data
+          ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22)`,
           [
-            batchId, filename, fileData?.hash || '',
-            data.date || new Date().toISOString().split('T')[0],
-            data.vendor || 'Unknown', data.description || '',
-            data.amount || 0, data.currency || 'HKD',
-            data.tax_amount || 0, data.receipt_number || '',
-            data.payment_method || '', data.confidence || 0.8,
-            result.raw_text || '', ocrBoxes ? JSON.stringify(ocrBoxes) : null,
-            '5100', 'Office Expenses',
-            0.8, true, data.amount || 0, 0
+            batchId,
+            item.filename,
+            '',
+            s.date || new Date().toISOString().split('T')[0],
+            s.vendor || 'Unknown',
+            s.description || '',
+            amount,
+            s.currency || 'HKD',
+            taxAmount,
+            s.receipt_number || '',
+            s.payment_method || '',
+            s.confidence || 0.85,
+            item.page?.text || '',
+            item.page?.boxes ? JSON.stringify(item.page.boxes) : null,
+            categoryId,
+            categoryName,
+            s.confidence || 0.85,
+            '',
+            deductible,
+            amount,
+            0,
+            imageDataUri,
           ]
         );
-
-        totalAmount += (data.amount || 0);
+        totalAmount += amount;
         savedCount++;
       } catch (err) {
-        console.error(`Error saving receipt:`, err.message);
+        console.error(`Save error for ${item.filename}:`, err.message);
+        failedCount++;
       }
     }
 
     await db.query(
       `UPDATE receipt_batches
-       SET total_amount = $1, deductible_amount = $1,
-           processed_receipts = $2
-       WHERE batch_id = $3`,
-      [totalAmount, savedCount, batchId]
+       SET total_amount=$1, deductible_amount=$1,
+           processed_receipts=$2, failed_receipts=$3
+       WHERE batch_id=$4`,
+      [totalAmount, savedCount, failedCount, batchId]
     );
 
-    console.log(`✅ Saved ${savedCount} receipts (HKD ${totalAmount.toFixed(2)})\n`);
+    console.log(`✅ Saved ${savedCount} receipts (total ${totalAmount.toFixed(2)}), ${failedCount} failed`);
+    await logProcessing(batchId, 'info', 'save_complete', `${savedCount} receipts saved`);
 
-    // CHECKPOINT 6: Export Excel
-    console.log('✓ CHECKPOINT 6: Exporting Excel...');
-    await logProcessing(batchId, 'info', 'export_start', 'Exporting Excel report');
-    wsServer.sendProgress(batchId, { progress: 85, message: 'Exporting Excel...' });
+    // Step 6: Generate Excel
+    wsServer.sendProgress(batchId, { progress: 87, message: 'Generating Excel P&L...' });
+    await logProcessing(batchId, 'info', 'excel_start', 'Generating Excel export');
 
     const exportDir = process.env.EXCEL_OUTPUT_DIR || '/tmp/excel-exports';
     const outputPath = path.join(exportDir, `receipts_${batchId}.xlsx`);
-    const fs = require('fs').promises;
     await fs.mkdir(exportDir, { recursive: true });
 
     const receiptsResult = await db.query(
-      `SELECT
-        receipt_date, vendor, description, amount, currency, tax_amount,
-        receipt_number, payment_method, category_id, category_name,
-        deductible, deductible_amount, non_deductible_amount
-       FROM receipts
-       WHERE batch_id = $1
-       ORDER BY receipt_date ASC, vendor ASC`,
+      `SELECT receipt_date, vendor, description, amount, currency, tax_amount,
+              receipt_number, payment_method, category_id, category_name,
+              deductible, deductible_amount, non_deductible_amount, remarks
+       FROM receipts WHERE batch_id=$1 ORDER BY receipt_date ASC, vendor ASC`,
       [batchId]
     );
 
@@ -371,99 +409,66 @@ async function processReceiptBatch(batchId, dropboxUrl, clientName, uploadedFile
     workbook.creator = '5ML Agentic AI';
     workbook.created = new Date();
 
-    const sheet = workbook.addWorksheet('Receipts');
+    const sheet = workbook.addWorksheet('P&L');
     sheet.columns = [
-      { header: 'Date', key: 'receipt_date', width: 12 },
-      { header: 'Vendor', key: 'vendor', width: 24 },
-      { header: 'Description', key: 'description', width: 36 },
-      { header: 'Amount', key: 'amount', width: 12 },
-      { header: 'Currency', key: 'currency', width: 8 },
-      { header: 'Tax', key: 'tax_amount', width: 10 },
-      { header: 'Receipt #', key: 'receipt_number', width: 16 },
-      { header: 'Payment', key: 'payment_method', width: 12 },
-      { header: 'Category ID', key: 'category_id', width: 12 },
-      { header: 'Category', key: 'category_name', width: 20 },
-      { header: 'Deductible', key: 'deductible', width: 12 },
-      { header: 'Deductible Amount', key: 'deductible_amount', width: 18 },
-      { header: 'Non-Deductible', key: 'non_deductible_amount', width: 18 }
+      { header: 'Date',            key: 'receipt_date',          width: 12 },
+      { header: 'Vendor',          key: 'vendor',                width: 24 },
+      { header: 'Description',     key: 'description',           width: 36 },
+      { header: 'Amount',          key: 'amount',                width: 12 },
+      { header: 'Currency',        key: 'currency',              width: 8  },
+      { header: 'Tax',             key: 'tax_amount',            width: 10 },
+      { header: 'Receipt #',       key: 'receipt_number',        width: 16 },
+      { header: 'Payment',         key: 'payment_method',        width: 12 },
+      { header: 'Category ID',     key: 'category_id',           width: 12 },
+      { header: 'Category',        key: 'category_name',         width: 20 },
+      { header: 'Deductible',      key: 'deductible',            width: 12 },
+      { header: 'Ded. Amount',     key: 'deductible_amount',     width: 16 },
+      { header: 'Non-Ded. Amount', key: 'non_deductible_amount', width: 16 },
+      { header: 'Remarks',         key: 'remarks',               width: 30 },
     ];
 
-    receiptsResult.rows.forEach(row => {
-      sheet.addRow({
-        receipt_date: row.receipt_date,
-        vendor: row.vendor,
-        description: row.description,
-        amount: row.amount,
-        currency: row.currency,
-        tax_amount: row.tax_amount,
-        receipt_number: row.receipt_number,
-        payment_method: row.payment_method,
-        category_id: row.category_id,
-        category_name: row.category_name,
-        deductible: row.deductible,
-        deductible_amount: row.deductible_amount,
-        non_deductible_amount: row.non_deductible_amount
-      });
-    });
+    // Style header row
+    sheet.getRow(1).font = { bold: true };
+    sheet.getRow(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE2E8F0' } };
+
+    receiptsResult.rows.forEach(row => sheet.addRow(row));
 
     await workbook.xlsx.writeFile(outputPath);
-
     await db.query(
-      `UPDATE receipt_batches
-       SET excel_file_path = $1
-       WHERE batch_id = $2`,
+      'UPDATE receipt_batches SET excel_file_path=$1 WHERE batch_id=$2',
       [outputPath, batchId]
     );
+    await logProcessing(batchId, 'info', 'excel_complete', 'Excel export complete');
 
-    await logProcessing(batchId, 'info', 'export_complete', 'Excel export complete');
-
-    // CHECKPOINT 7: Complete
-    console.log('✓ CHECKPOINT 7: Finalizing...');
+    // Step 7: Complete
     await db.query(
-      `UPDATE receipt_batches
-       SET status = 'completed', completed_at = NOW()
-       WHERE batch_id = $1`,
+      "UPDATE receipt_batches SET status='completed', completed_at=NOW() WHERE batch_id=$1",
       [batchId]
     );
 
-    wsServer.sendStatus(batchId, {
-      status: 'completed',
-      progress: 100,
-      message: 'Complete!'
-    });
-
-    console.log(`✅ BATCH ${batchId} COMPLETE: ${savedCount} receipts, HKD ${totalAmount.toFixed(2)}\n`);
-    await logProcessing(batchId, 'info', 'batch_completed', 'Processing completed successfully');
+    wsServer.sendStatus(batchId, { status: 'completed', progress: 100, message: 'All done!' });
+    console.log(`✅ BATCH ${batchId} COMPLETE — ${savedCount} receipts`);
+    await logProcessing(batchId, 'info', 'batch_completed', 'Batch completed successfully');
 
   } catch (error) {
-    console.error(`\n❌ ERROR in batch ${batchId}:`, error);
-    console.error(error.stack);
+    console.error(`\n❌ BATCH ${batchId} ERROR:`, error.message);
 
     await db.query(
-      "UPDATE receipt_batches SET status = 'failed' WHERE batch_id = $1",
+      "UPDATE receipt_batches SET status='failed' WHERE batch_id=$1",
       [batchId]
-    );
+    ).catch(() => {});
 
-    wsServer.sendStatus(batchId, {
-      status: 'failed',
-      message: error.message
-    });
+    wsServer.sendStatus(batchId, { status: 'failed', message: error.message });
 
-    await logProcessing(batchId, 'error', 'batch_failed', `Failed: ${error.message}`, {
+    await logProcessing(batchId, 'error', 'batch_failed', `Batch failed: ${error.message}`, {
       error: error.message,
-      stack: error.stack
+      stack: error.stack,
     });
   } finally {
-    // Cleanup downloaded files
+    // Cleanup temp files
     if (downloadedFiles.length > 0) {
-      try {
-        const fs = require('fs').promises;
-        for (const file of downloadedFiles) {
-          await fs.unlink(file.path).catch(() => {});
-        }
-        console.log('🗑️  Cleaned up temporary files');
-      } catch (err) {
-        console.error('Cleanup warning:', err.message);
+      for (const file of downloadedFiles) {
+        await fs.unlink(file.path).catch(() => {});
       }
     }
   }
