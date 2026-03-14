@@ -17,7 +17,8 @@ import {
   LayoutDashboard, Layers, Activity, Home, Wifi, Calendar, GitBranch,
   BookOpen, DollarSign, ArrowRight, Users, Brain, MessageSquare,
   ChevronRight, Map, Zap, Send, Loader2, Sparkles, History,
-  Plus, Trash2, Clock, Monitor, TrendingUp, Shield, Printer,
+  Plus, Trash2, Clock, Monitor, TrendingUp, Shield, Printer, Mic,
+  ExternalLink, Key, Globe, Settings, Copy, CheckCircle2,
 } from 'lucide-react';
 import Link from 'next/link';
 import {
@@ -659,7 +660,6 @@ export default function Dashboard() {
             <AgenticWorkflows />
           </div>
         )}
-
       </main>
     </div>
   );

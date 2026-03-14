@@ -1,7 +1,19 @@
 require('./instrument.js');
 
+// ─── Global crash guards (Node.js 20 terminates on unhandled rejections) ─────
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('⚠️  Unhandled Rejection at:', promise, 'reason:', reason);
+  // Log but do NOT exit — keeps the server alive and health check passing
+});
+process.on('uncaughtException', (err) => {
+  console.error('⚠️  Uncaught Exception:', err);
+  // Log but do NOT exit for non-fatal errors
+});
+// ─────────────────────────────────────────────────────────────────────────────
+
 const express = require('express');
 const Anthropic = require('@anthropic-ai/sdk');
+const nodemailer = require('nodemailer');
 const fs = require('fs');
 const { spawn } = require('child_process');
 const { specs, swaggerUi } = require('./swagger');
@@ -4048,7 +4060,7 @@ try {
   const tedxXinyiRoutes = require('./use-cases/tedx-xinyi/api/routes');
   app.use('/api/tedx-xinyi', tedxXinyiRoutes);
   // Admin media library — password-protected
-  const ADMIN_PASS = process.env.TEDX_ADMIN_PASS || '5milesLab01@';
+  const ADMIN_PASS = process.env.TEDX_ADMIN_PASS || '5mileslab';
   // Password check API
   app.post('/api/tedx-xinyi/auth', express.json(), (req, res) => {
     if (req.body?.password === ADMIN_PASS) return res.json({ ok: true, token: ADMIN_PASS });
@@ -4065,6 +4077,20 @@ try {
   console.log('✅ TEDxXinyi routes loaded: /api/tedx-xinyi, admin: /vibe-demo/tedx-xinyi/admin');
 } catch (error) {
   console.warn('⚠️ TEDxXinyi routes not loaded:', error.message);
+}
+
+// Arrisonapps Cigar System Routes
+try {
+  const arrisonappsRoutes = require('./use-cases/arrisonapps/api/routes');
+  app.use('/api/arrisonapps/v1', arrisonappsRoutes);
+  if (process.env.DATABASE_URL) {
+    arrisonappsRoutes.initDb(pool).catch(err =>
+      console.warn('⚠️ Arrisonapps DB init error:', err.message)
+    );
+  }
+  console.log('✅ Arrisonapps routes loaded: /api/arrisonapps/v1');
+} catch (error) {
+  console.warn('⚠️ Arrisonapps routes not loaded:', error.message);
 }
 
 // Ads Performance Dashboard Routes
@@ -4146,6 +4172,15 @@ try {
   console.log('✅ Adaptive Learning routes loaded: /api/adaptive-learning');
 } catch (error) {
   console.warn('⚠️ Adaptive Learning routes not loaded:', error.message);
+}
+
+// Presentation Deck
+try {
+  const presentationDeckRoutes = require('./use-cases/presentation-deck/api/routes');
+  app.use('/api/presentation-deck', presentationDeckRoutes);
+  console.log('✅ Presentation Deck routes loaded: /api/presentation-deck');
+} catch (error) {
+  console.warn('⚠️ Presentation Deck routes not loaded:', error.message);
 }
 
 // Scheduler Service
@@ -4663,21 +4698,10 @@ const wsServer = require('./services/websocket-server');
 // Radiance PR Contact Form API
 // ==========================================
 
-// Multer config for Radiance media uploads (disk storage + proxied to external CDN)
+// Multer config for Radiance media uploads (memory storage → saved to Fly Postgres as BYTEA)
 const multer = require('multer');
-const radianceMediaStorage = multer.diskStorage({
-  destination: (req, file, cb) => {
-    const dir = path.join(__dirname, 'uploads', 'radiance');
-    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-    cb(null, dir);
-  },
-  filename: (req, file, cb) => {
-    const ext = path.extname(file.originalname);
-    cb(null, `${Date.now()}-${Math.random().toString(36).slice(2)}${ext}`);
-  },
-});
 const radianceUpload = multer({
-  storage: radianceMediaStorage,
+  storage: multer.memoryStorage(),
   limits: { fileSize: 10 * 1024 * 1024 },
   fileFilter: (req, file, cb) => {
     if (file.mimetype.startsWith('image/')) cb(null, true);
@@ -4685,7 +4709,7 @@ const radianceUpload = multer({
   },
 });
 
-const RADIANCE_ADMIN_PW = '5milesLab01@';
+const RADIANCE_ADMIN_PW = '5mileslab';
 
 // Simple in-memory rate limiter: max 5 submissions per IP per 15 min
 const _radianceRateLimitMap = new Map();
@@ -4831,7 +4855,7 @@ app.post('/api/radiance/contact', async (req, res) => {
 app.get('/api/radiance/contact/submissions', async (req, res) => {
   try {
     const { password } = req.query;
-    if (password !== '5milesLab01@') {
+    if (password !== '5mileslab') {
       return res.status(401).json({ error: 'Unauthorised' });
     }
     const limit = Math.min(parseInt(req.query.limit || '50'), 200);
@@ -4844,33 +4868,40 @@ app.get('/api/radiance/contact/submissions', async (req, res) => {
   }
 });
 
-// POST /api/radiance/admin/media/upload — proxy upload to external CDN
+// POST /api/radiance/admin/media/upload — store image in Fly Postgres as BYTEA
 app.post('/api/radiance/admin/media/upload', radianceUpload.single('file'), async (req, res) => {
   try {
     if (req.query.password !== RADIANCE_ADMIN_PW) return res.status(401).json({ error: 'Unauthorised' });
     if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
 
-    // Read file from disk (diskStorage saves to req.file.path) and convert to base64 for CDN
-    const fileBuffer = fs.readFileSync(req.file.path);
-    const base64 = `data:${req.file.mimetype};base64,${fileBuffer.toString('base64')}`;
-    const cdnRes = await fetch('http://5ml.mmdbfiles.com/api/upload', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ file_data: base64 }),
-    });
-    const cdnData = await cdnRes.json();
-    if (!cdnData.success) return res.status(502).json({ error: cdnData.error || 'CDN upload failed' });
+    const ext = path.extname(req.file.originalname);
+    const filename = `${Date.now()}-${Math.random().toString(36).slice(2)}${ext}`;
+    const publicUrl = `/api/radiance/media/${filename}`;
 
-    const { public_url, filename, mime, size } = cdnData;
     await pool.query(
-      `INSERT INTO radiance_media (filename, original_name, url, mime_type, size) VALUES ($1,$2,$3,$4,$5)`,
-      [filename, req.file.originalname, public_url, mime || req.file.mimetype, size || req.file.size]
+      `INSERT INTO radiance_media (filename, original_name, url, mime_type, size, data) VALUES ($1,$2,$3,$4,$5,$6)`,
+      [filename, req.file.originalname, publicUrl, req.file.mimetype, req.file.size, req.file.buffer]
     );
-    console.log(`[Radiance] Uploaded: ${req.file.originalname} → ${public_url} (${((size || req.file.size) / 1024).toFixed(0)} KB)`);
-    res.json({ success: true, url: public_url, filename, originalName: req.file.originalname });
+    console.log(`[Radiance] Uploaded to Postgres: ${req.file.originalname} (${(req.file.size / 1024).toFixed(0)} KB)`);
+    res.json({ success: true, url: publicUrl, filename, originalName: req.file.originalname });
   } catch (err) {
     console.error('[Radiance] Media upload error:', err);
     res.status(500).json({ error: 'Upload failed' });
+  }
+});
+
+// GET /api/radiance/media/:filename — serve image stored in Postgres
+app.get('/api/radiance/media/:filename', async (req, res) => {
+  try {
+    const result = await pool.query('SELECT data, mime_type FROM radiance_media WHERE filename=$1', [req.params.filename]);
+    if (result.rows.length === 0) return res.status(404).send('Not found');
+    const { data, mime_type } = result.rows[0];
+    res.set('Content-Type', mime_type);
+    res.set('Cache-Control', 'public, max-age=31536000');
+    res.send(data);
+  } catch (err) {
+    console.error('[Radiance] Media serve error:', err);
+    res.status(500).send('Error');
   }
 });
 
@@ -4896,7 +4927,7 @@ app.post('/api/radiance/admin/media/register', async (req, res) => {
 app.get('/api/radiance/admin/media', async (req, res) => {
   if (req.query.password !== RADIANCE_ADMIN_PW) return res.status(401).json({ error: 'Unauthorised' });
   try {
-    const result = await pool.query('SELECT * FROM radiance_media ORDER BY uploaded_at DESC LIMIT 200');
+    const result = await pool.query('SELECT id, filename, original_name, url, mime_type, size, uploaded_at FROM radiance_media ORDER BY uploaded_at DESC LIMIT 200');
     res.json({ success: true, media: result.rows });
   } catch (err) { res.status(500).json({ error: 'Failed to fetch media' }); }
 });
@@ -4915,6 +4946,94 @@ app.delete('/api/radiance/admin/media/:id', async (req, res) => {
     await pool.query('DELETE FROM radiance_media WHERE id=$1', [req.params.id]);
     res.json({ success: true });
   } catch (err) { res.status(500).json({ error: 'Delete failed' }); }
+});
+
+// GET /api/radiance/pr-gallery — public, returns event photo gallery
+app.get('/api/radiance/pr-gallery', async (req, res) => {
+  try {
+    const result = await pool.query('SELECT * FROM radiance_pr_gallery ORDER BY sort_order ASC, created_at ASC');
+    res.json({ success: true, photos: result.rows });
+  } catch (err) { res.status(500).json({ error: 'Failed to fetch gallery' }); }
+});
+
+// POST /api/radiance/admin/pr-gallery — admin add photo
+app.post('/api/radiance/admin/pr-gallery', async (req, res) => {
+  if (req.query.password !== RADIANCE_ADMIN_PW) return res.status(401).json({ error: 'Unauthorised' });
+  try {
+    const { url, alt, caption_en, caption_zh, sort_order } = req.body;
+    if (!url) return res.status(400).json({ error: 'url is required' });
+    const result = await pool.query(
+      'INSERT INTO radiance_pr_gallery (url, alt, caption_en, caption_zh, sort_order) VALUES ($1,$2,$3,$4,$5) RETURNING *',
+      [url, alt || '', caption_en || '', caption_zh || '', sort_order ?? 0]
+    );
+    res.json({ success: true, photo: result.rows[0] });
+  } catch (err) { res.status(500).json({ error: 'Failed to add photo' }); }
+});
+
+// PUT /api/radiance/admin/pr-gallery/:id — admin update caption/sort
+app.put('/api/radiance/admin/pr-gallery/:id', async (req, res) => {
+  if (req.query.password !== RADIANCE_ADMIN_PW) return res.status(401).json({ error: 'Unauthorised' });
+  try {
+    const { alt, caption_en, caption_zh, sort_order } = req.body;
+    await pool.query(
+      'UPDATE radiance_pr_gallery SET alt=$1, caption_en=$2, caption_zh=$3, sort_order=$4 WHERE id=$5',
+      [alt, caption_en, caption_zh, sort_order, req.params.id]
+    );
+    res.json({ success: true });
+  } catch (err) { res.status(500).json({ error: 'Failed to update photo' }); }
+});
+
+// DELETE /api/radiance/admin/pr-gallery/:id — admin delete photo
+app.delete('/api/radiance/admin/pr-gallery/:id', async (req, res) => {
+  if (req.query.password !== RADIANCE_ADMIN_PW) return res.status(401).json({ error: 'Unauthorised' });
+  try {
+    await pool.query('DELETE FROM radiance_pr_gallery WHERE id=$1', [req.params.id]);
+    res.json({ success: true });
+  } catch (err) { res.status(500).json({ error: 'Failed to delete photo' }); }
+});
+
+// GET /api/radiance/news-clippings — public, returns press clippings gallery
+app.get('/api/radiance/news-clippings', async (req, res) => {
+  try {
+    const result = await pool.query('SELECT * FROM radiance_news_clippings ORDER BY sort_order ASC, created_at ASC');
+    res.json({ success: true, clippings: result.rows });
+  } catch (err) { res.status(500).json({ error: 'Failed to fetch clippings' }); }
+});
+
+// POST /api/radiance/admin/news-clippings — admin add clipping
+app.post('/api/radiance/admin/news-clippings', async (req, res) => {
+  if (req.query.password !== RADIANCE_ADMIN_PW) return res.status(401).json({ error: 'Unauthorised' });
+  try {
+    const { url, alt, outlet, headline, sort_order } = req.body;
+    if (!url) return res.status(400).json({ error: 'url is required' });
+    const result = await pool.query(
+      'INSERT INTO radiance_news_clippings (url, alt, outlet, headline, sort_order) VALUES ($1,$2,$3,$4,$5) RETURNING *',
+      [url, alt || '', outlet || '', headline || '', sort_order ?? 0]
+    );
+    res.json({ success: true, clipping: result.rows[0] });
+  } catch (err) { res.status(500).json({ error: 'Failed to add clipping' }); }
+});
+
+// PUT /api/radiance/admin/news-clippings/:id — admin update
+app.put('/api/radiance/admin/news-clippings/:id', async (req, res) => {
+  if (req.query.password !== RADIANCE_ADMIN_PW) return res.status(401).json({ error: 'Unauthorised' });
+  try {
+    const { alt, outlet, headline, sort_order } = req.body;
+    await pool.query(
+      'UPDATE radiance_news_clippings SET alt=$1, outlet=$2, headline=$3, sort_order=$4 WHERE id=$5',
+      [alt, outlet, headline, sort_order, req.params.id]
+    );
+    res.json({ success: true });
+  } catch (err) { res.status(500).json({ error: 'Failed to update clipping' }); }
+});
+
+// DELETE /api/radiance/admin/news-clippings/:id — admin delete
+app.delete('/api/radiance/admin/news-clippings/:id', async (req, res) => {
+  if (req.query.password !== RADIANCE_ADMIN_PW) return res.status(401).json({ error: 'Unauthorised' });
+  try {
+    await pool.query('DELETE FROM radiance_news_clippings WHERE id=$1', [req.params.id]);
+    res.json({ success: true });
+  } catch (err) { res.status(500).json({ error: 'Failed to delete clipping' }); }
 });
 
 // GET /api/radiance/admin/image-slots — catalog of all image placeholders across the Radiance site
@@ -5426,7 +5545,7 @@ app.post('/api/recruitai/chat', async (req, res) => {
 // GET /api/recruitai/admin/leads — list all leads (password-protected)
 app.get('/api/recruitai/admin/leads', async (req, res) => {
   const { password } = req.query;
-  if (password !== '5milesLab01@') {
+  if (password !== '5mileslab') {
     return res.status(401).json({ error: 'Unauthorized' });
   }
   try {
@@ -5445,7 +5564,7 @@ app.get('/api/recruitai/admin/leads', async (req, res) => {
 // PATCH /api/recruitai/admin/leads/:id — update editable fields
 app.patch('/api/recruitai/admin/leads/:id', async (req, res) => {
   const { password, ...fields } = req.body;
-  if (password !== '5milesLab01@') return res.status(401).json({ error: 'Unauthorized' });
+  if (password !== '5mileslab') return res.status(401).json({ error: 'Unauthorized' });
   const { id } = req.params;
   if (!/^\d+$/.test(id)) return res.status(400).json({ error: 'Invalid id' });
   const EDITABLE = ['name', 'email', 'phone', 'company', 'industry', 'headcount', 'message'];
@@ -5472,7 +5591,7 @@ app.patch('/api/recruitai/admin/leads/:id', async (req, res) => {
 // DELETE /api/recruitai/admin/leads/:id — delete a lead
 app.delete('/api/recruitai/admin/leads/:id', async (req, res) => {
   const { password } = req.query;
-  if (password !== '5milesLab01@') return res.status(401).json({ error: 'Unauthorized' });
+  if (password !== '5mileslab') return res.status(401).json({ error: 'Unauthorized' });
   const { id } = req.params;
   if (!/^\d+$/.test(id)) return res.status(400).json({ error: 'Invalid id' });
   try {
@@ -5487,7 +5606,7 @@ app.delete('/api/recruitai/admin/leads/:id', async (req, res) => {
 // POST /api/recruitai/admin/leads/:id/analyze — AI analysis of a lead
 app.post('/api/recruitai/admin/leads/:id/analyze', async (req, res) => {
   const { password } = req.body;
-  if (password !== '5milesLab01@') return res.status(401).json({ error: 'Unauthorized' });
+  if (password !== '5mileslab') return res.status(401).json({ error: 'Unauthorized' });
   const { id } = req.params;
   if (!/^\d+$/.test(id)) return res.status(400).json({ error: 'Invalid id' });
   try {
@@ -5537,7 +5656,7 @@ Return this exact JSON structure:
 // GET /api/admin/media-library — aggregate all managed images across all sites
 app.get('/api/admin/media-library', (req, res) => {
   const { password } = req.query;
-  if (password !== '5milesLab01@') return res.status(401).json({ error: 'Unauthorized' });
+  if (password !== '5mileslab') return res.status(401).json({ error: 'Unauthorized' });
 
   const fs = require('fs');
   const path = require('path');
@@ -5635,7 +5754,7 @@ app.get('/api/admin/media-library', (req, res) => {
 // POST /api/admin/media-library/generate — trigger Gemini generation for one image
 app.post('/api/admin/media-library/generate', async (req, res) => {
   const { password, site, id } = req.body;
-  if (password !== '5milesLab01@') return res.status(401).json({ error: 'Unauthorized' });
+  if (password !== '5mileslab') return res.status(401).json({ error: 'Unauthorized' });
   if (!site || !id) return res.status(400).json({ error: 'site and id required' });
 
   const endpointMap = {
@@ -5679,7 +5798,7 @@ app.post('/api/admin/media-library/generate', async (req, res) => {
 // GET /api/recruitai/admin/sessions — list all chat sessions
 app.get('/api/recruitai/admin/sessions', async (req, res) => {
   const { password } = req.query;
-  if (password !== '5milesLab01@') {
+  if (password !== '5mileslab') {
     return res.status(401).json({ error: 'Unauthorized' });
   }
   try {
@@ -5703,7 +5822,7 @@ app.get('/api/recruitai/admin/sessions', async (req, res) => {
 // GET /api/recruitai/admin/sessions/:sessionId/messages
 app.get('/api/recruitai/admin/sessions/:sessionId/messages', async (req, res) => {
   const { password } = req.query;
-  if (password !== '5milesLab01@') {
+  if (password !== '5mileslab') {
     return res.status(401).json({ error: 'Unauthorized' });
   }
   try {
@@ -8647,6 +8766,79 @@ app.post('/api/print-finance/import/preview', pfUpload.single('file'), async (re
   } catch (err) { res.status(400).json({ error: err.message }); }
 });
 
+// POST /api/print-finance/import/dry-run — parse all rows + detect issues, NO DB writes
+app.post('/api/print-finance/import/dry-run', pfUpload.single('file'), async (req, res) => {
+  if (!pfDbCheck(res)) return;
+  if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
+  const type = req.body.type || 'costs';
+  let aiMapping = null;
+  try { aiMapping = req.body.field_mapping ? JSON.parse(req.body.field_mapping) : null; } catch {}
+  try {
+    const { rows } = await parseUploadedFile(req.file);
+    const norm = s => String(s).toLowerCase().replace(/[\s_-]/g, '');
+    const annotated = rows.map(r => {
+      const sheet = r._sheet || '?';
+      const row_num = r._row || '?';
+      const issues = [];
+      // Build clean data map
+      const data = {};
+      for (const [k, v] of Object.entries(r)) {
+        if (!k.startsWith('_')) data[k] = v;
+      }
+      if (aiMapping) {
+        for (const [field, colName] of Object.entries(aiMapping)) {
+          if (colName && r[colName] !== undefined) data[field] = r[colName];
+        }
+      }
+      // Date format detection on any date-like column
+      const DATE_PATTERNS = [
+        { re: /^\d{8}$/, fmt: 'YYYYMMDD', suggest: 'YYYY-MM-DD e.g. 2026-03-01' },
+        { re: /^\d{4}\/\d{1,2}\/\d{1,2}$/, fmt: 'YYYY/MM/DD', suggest: 'Use - instead of /' },
+        { re: /^\d{1,2}\/\d{1,2}\/\d{4}$/, fmt: 'MM/DD/YYYY or DD/MM/YYYY', suggest: 'Reformat to YYYY-MM-DD' },
+        { re: /^\d{6}$/, fmt: 'YYYYMM', suggest: 'Acceptable as period, e.g. 202603' },
+      ];
+      for (const [k, v] of Object.entries(data)) {
+        if (!v) continue;
+        const sv = String(v).trim();
+        if (/date|period|month|日期|年月/.test(k.toLowerCase())) {
+          for (const p of DATE_PATTERNS) {
+            if (p.re.test(sv) && p.fmt !== 'YYYYMM') {
+              issues.push({ field: k, type: 'date_format', message: `"${sv}" looks like ${p.fmt}`, suggestion: p.suggest });
+              break;
+            }
+          }
+        }
+      }
+      // Type-specific checks
+      if (type === 'costs') {
+        const cat = String(data.category || data['類別'] || data['Category'] || '').trim();
+        if (!cat) issues.push({ field: 'category', type: 'missing', message: 'Missing category', suggestion: 'Row will be skipped without a category' });
+        const amt = parseFloat(String(data.amount || data['金額'] || data['Amount'] || '0'));
+        if (amt === 0) issues.push({ field: 'amount', type: 'zero', message: 'Amount is 0 or missing', suggestion: 'Check if this row has an actual cost value' });
+        const tv = String(data.type || data['類型'] || '').toLowerCase().trim();
+        if (tv && !['direct','overhead','fixed'].includes(tv)) {
+          issues.push({ field: 'type', type: 'invalid_value', message: `Type "${tv}" not recognized`, suggestion: 'Expected: direct, overhead, or fixed' });
+        }
+      } else if (type === 'revenue') {
+        const ch = String(data.channel || data['渠道'] || '').trim();
+        const rev = parseFloat(String(data.revenue || data['收入'] || '0'));
+        if (!ch) issues.push({ field: 'channel', type: 'missing', message: 'Missing channel', suggestion: 'Defaults to "Import" if blank' });
+        if (rev === 0) issues.push({ field: 'revenue', type: 'zero', message: 'Revenue is 0 or missing', suggestion: 'Check if this row has revenue' });
+      }
+      const isSkip = issues.some(i => i.message.includes('will be skipped'));
+      const status = isSkip ? 'skip' : issues.length > 0 ? 'warn' : 'ok';
+      return { sheet, row_num, data, issues, status };
+    });
+    res.json({
+      total: annotated.length,
+      ok: annotated.filter(r => r.status === 'ok').length,
+      warn: annotated.filter(r => r.status === 'warn').length,
+      skip: annotated.filter(r => r.status === 'skip').length,
+      rows: annotated,
+    });
+  } catch (err) { res.status(400).json({ error: err.message }); }
+});
+
 // POST /api/print-finance/import/confirm — re-upload + type → actually import
 app.post('/api/print-finance/import/confirm', pfUpload.single('file'), async (req, res) => {
   if (!pfDbCheck(res)) return;
@@ -8656,6 +8848,7 @@ app.post('/api/print-finance/import/confirm', pfUpload.single('file'), async (re
   if (!validTypes.includes(type)) {
     return res.status(400).json({ error: `Invalid type: ${type}` });
   }
+  const skipWarnings = req.body.skip_warnings === 'true';
   // Accept AI field_mapping, category, cost_type from request body (sent by frontend after analyze step)
   let aiMapping = null;
   let aiCategory = null;
@@ -8664,13 +8857,51 @@ app.post('/api/print-finance/import/confirm', pfUpload.single('file'), async (re
   try { aiCategory = req.body.category || null; } catch {}
   try { aiCostType = req.body.cost_type || null; } catch {}
   try {
-    const { rows } = await parseUploadedFile(req.file);
+    let { rows } = await parseUploadedFile(req.file);
+    // If skip_warnings, annotate rows with dry-run logic and keep only 'ok' ones
+    if (skipWarnings) {
+      const norm = s => String(s).toLowerCase().replace(/[\s_-]/g, '');
+      const DATE_PATTERNS = [
+        { re: /^\d{8}$/, fmt: 'YYYYMMDD' }, { re: /^\d{4}\/\d{1,2}\/\d{1,2}$/, fmt: 'YYYY/MM/DD' },
+        { re: /^\d{1,2}\/\d{1,2}\/\d{4}$/, fmt: 'MM/DD/YYYY' },
+      ];
+      rows = rows.filter(r => {
+        const data = {};
+        for (const [k, v] of Object.entries(r)) { if (!k.startsWith('_')) data[k] = v; }
+        if (aiMapping) { for (const [f, col] of Object.entries(aiMapping)) { if (col && r[col] !== undefined) data[f] = r[col]; } }
+        const issues = [];
+        for (const [k, v] of Object.entries(data)) {
+          if (!v) continue;
+          const sv = String(v).trim();
+          if (/date|period|month|日期|年月/.test(k.toLowerCase())) {
+            for (const p of DATE_PATTERNS) { if (p.re.test(sv)) { issues.push('date_format'); break; } }
+          }
+        }
+        if (type === 'costs') {
+          const cat = String(data.category || data['類別'] || data['Category'] || '').trim();
+          if (!cat) issues.push('missing_category');
+          const amt = parseFloat(String(data.amount || data['金額'] || data['Amount'] || '0'));
+          if (amt === 0) issues.push('zero_amount');
+          const tv = String(data.type || data['類型'] || '').toLowerCase().trim();
+          if (tv && !['direct','overhead','fixed'].includes(tv)) issues.push('invalid_type');
+        } else if (type === 'revenue') {
+          const ch = String(data.channel || data['渠道'] || '').trim();
+          const rev = parseFloat(String(data.revenue || data['收入'] || '0'));
+          if (!ch) issues.push('missing_channel');
+          if (rev === 0) issues.push('zero_revenue');
+        }
+        const isSkip = issues.includes('missing_category');
+        return !isSkip && issues.length === 0; // keep only ok rows
+      });
+    }
     const result = await importRows(type, rows, aiMapping, aiCategory, aiCostType);
+    // Decode filename from latin1 → utf-8 (multer reads it as latin1 by default)
+    const originalFilename = Buffer.from(req.file.originalname, 'latin1').toString('utf8');
     // Save file to DB for later download/reference
     await pool.query(
       `INSERT INTO pf_uploaded_files (filename, mimetype, size_bytes, imported_as, rows_inserted, data)
        VALUES ($1,$2,$3,$4,$5,$6)`,
-      [req.file.originalname, req.file.mimetype, req.file.size, type, result.inserted, req.file.buffer]
+      [originalFilename, req.file.mimetype, req.file.size, type, result.inserted, req.file.buffer]
     ).catch(err => console.warn('[print-finance] file save:', err.message));
     res.json(result);
   } catch (err) { res.status(500).json({ error: err.message }); }
@@ -8683,7 +8914,18 @@ app.get('/api/print-finance/uploads', async (req, res) => {
     const { rows } = await pool.query(
       'SELECT id, filename, mimetype, size_bytes, imported_as, rows_inserted, uploaded_at FROM pf_uploaded_files ORDER BY uploaded_at DESC'
     );
-    res.json(rows);
+    // Attempt to recover mojibaked filenames (latin1-encoded UTF-8) stored before this fix
+    const fixed = rows.map(r => {
+      try {
+        const recovered = Buffer.from(r.filename, 'latin1').toString('utf8');
+        // Only use recovered version if it looks better (contains valid non-ASCII)
+        if (recovered !== r.filename && /[\u0080-\uffff]/.test(recovered)) {
+          return { ...r, filename: recovered };
+        }
+      } catch {}
+      return r;
+    });
+    res.json(fixed);
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
@@ -9211,6 +9453,345 @@ app.post('/api/print-finance/allocate-overhead', async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
+// ─────────────────────────────────────────────────────────────────────────────
+// QR & Barcode Generator Module
+// ─────────────────────────────────────────────────────────────────────────────
+{
+  const QRCode = require('qrcode');
+  const bwipjs = require('bwip-js');
+  const bcrypt = require('bcryptjs');
+  const jwt = require('jsonwebtoken');
+  const sharp = require('sharp');
+
+  const QR_JWT_SECRET = process.env.QR_JWT_SECRET || process.env.JWT_SECRET || 'qr-generator-secret-change-in-prod';
+  const QR_FREE_DAILY_LIMIT = 10;
+
+  // ── Middleware ──────────────────────────────────────────────────────────────
+  function qrAuth(req, res, next) {
+    const auth = req.headers.authorization;
+    if (!auth || !auth.startsWith('Bearer ')) return res.status(401).json({ error: 'Unauthorised' });
+    try {
+      req.qrUser = jwt.verify(auth.slice(7), QR_JWT_SECRET);
+      next();
+    } catch {
+      res.status(401).json({ error: 'Invalid or expired token' });
+    }
+  }
+
+  function qrAuthOptional(req, res, next) {
+    const auth = req.headers.authorization;
+    if (auth && auth.startsWith('Bearer ')) {
+      try { req.qrUser = jwt.verify(auth.slice(7), QR_JWT_SECRET); } catch {}
+    }
+    next();
+  }
+
+  // ── DB init (called from server.listen) ────────────────────────────────────
+  async function initQrDb() {
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS qr_users (
+        id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        email       VARCHAR(255) UNIQUE NOT NULL,
+        password_hash VARCHAR(255) NOT NULL,
+        name        VARCHAR(255),
+        plan        VARCHAR(50) DEFAULT 'free',
+        credits     INTEGER DEFAULT 0,
+        free_gens_today INTEGER DEFAULT 0,
+        free_reset_date DATE DEFAULT CURRENT_DATE,
+        created_at  TIMESTAMPTZ DEFAULT NOW(),
+        updated_at  TIMESTAMPTZ DEFAULT NOW()
+      )
+    `);
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS qr_generations (
+        id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        user_id     UUID REFERENCES qr_users(id) ON DELETE SET NULL,
+        type        VARCHAR(50) NOT NULL,
+        content     TEXT NOT NULL,
+        options     JSONB DEFAULT '{}',
+        credits_used INTEGER DEFAULT 0,
+        created_at  TIMESTAMPTZ DEFAULT NOW()
+      )
+    `);
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS qr_topups (
+        id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        user_id     UUID REFERENCES qr_users(id) ON DELETE CASCADE,
+        credits     INTEGER NOT NULL,
+        amount_usd  DECIMAL(10,2) NOT NULL,
+        payment_ref VARCHAR(255),
+        status      VARCHAR(50) DEFAULT 'completed',
+        created_at  TIMESTAMPTZ DEFAULT NOW()
+      )
+    `);
+    console.log('✅ QR Generator tables ready');
+  }
+
+  // ── Helpers ─────────────────────────────────────────────────────────────────
+  async function getOrResetFreeGens(userId) {
+    const r = await pool.query(`SELECT free_gens_today, free_reset_date FROM qr_users WHERE id=$1`, [userId]);
+    if (!r.rows[0]) return 0;
+    const { free_gens_today, free_reset_date } = r.rows[0];
+    const today = new Date().toISOString().slice(0, 10);
+    if (free_reset_date < today) {
+      await pool.query(`UPDATE qr_users SET free_gens_today=0, free_reset_date=$1, updated_at=NOW() WHERE id=$2`, [today, userId]);
+      return 0;
+    }
+    return free_gens_today;
+  }
+
+  function calcCreditCost(opts) {
+    let cost = 0;
+    if (opts.logoData) cost += 2;
+    if (opts.format === 'svg') cost += 1;
+    if (opts.size > 500) cost += 1;
+    return cost;
+  }
+
+  async function generateQR(content, opts = {}) {
+    const { size = 300, fgColor = '#000000', bgColor = '#ffffff', errorLevel = 'M', format = 'png', logoData } = opts;
+    if (format === 'svg') {
+      const svg = await QRCode.toString(content, {
+        type: 'svg', width: size,
+        color: { dark: fgColor, light: bgColor },
+        errorCorrectionLevel: errorLevel,
+      });
+      return { data: Buffer.from(svg).toString('base64'), mimeType: 'image/svg+xml', ext: 'svg' };
+    }
+    let buf = await QRCode.toBuffer(content, {
+      width: size,
+      color: { dark: fgColor, light: bgColor },
+      errorCorrectionLevel: errorLevel,
+    });
+    if (logoData) {
+      const logoBase64 = logoData.includes(',') ? logoData.split(',')[1] : logoData;
+      const logoBuf = Buffer.from(logoBase64, 'base64');
+      const logoSize = Math.floor(size * 0.22);
+      const resizedLogo = await sharp(logoBuf).resize(logoSize, logoSize, { fit: 'contain', background: { r: 255, g: 255, b: 255, alpha: 1 } }).png().toBuffer();
+      buf = await sharp(buf).composite([{ input: resizedLogo, gravity: 'centre' }]).png().toBuffer();
+    }
+    return { data: buf.toString('base64'), mimeType: 'image/png', ext: 'png' };
+  }
+
+  const BWIP_TYPE_MAP = {
+    ean13: 'ean13', ean8: 'ean8', upca: 'upca', code128: 'code128',
+    code39: 'code39', qr: 'qrcode',
+  };
+
+  async function generateBarcode(type, content, opts = {}) {
+    const { height = 80, scale = 3, showText = true, fgColor = '#000000', bgColor = '#ffffff' } = opts;
+    const fg = fgColor.replace('#', '');
+    const bg = bgColor.replace('#', '');
+    const bcid = BWIP_TYPE_MAP[type] || 'code128';
+    const buf = await bwipjs.toBuffer({
+      bcid, text: content,
+      scale, height: Math.floor(height / 4),
+      includetext: showText,
+      textxalign: 'center',
+      barcolor: fg,
+      backgroundcolor: bg,
+    });
+    return { data: buf.toString('base64'), mimeType: 'image/png', ext: 'png' };
+  }
+
+  // ── Auth Endpoints ──────────────────────────────────────────────────────────
+  app.post('/api/qr/auth/register', async (req, res) => {
+    const { email, password, name } = req.body;
+    if (!email || !password) return res.status(400).json({ error: 'Email and password required' });
+    if (password.length < 8) return res.status(400).json({ error: 'Password must be at least 8 characters' });
+    try {
+      const hash = await bcrypt.hash(password, 12);
+      const r = await pool.query(
+        `INSERT INTO qr_users (email, password_hash, name) VALUES ($1,$2,$3) RETURNING id, email, name, plan, credits, free_gens_today`,
+        [email.toLowerCase().trim(), hash, name || '']
+      );
+      const user = r.rows[0];
+      const token = jwt.sign({ id: user.id, email: user.email }, QR_JWT_SECRET, { expiresIn: '30d' });
+      res.json({ token, user: { id: user.id, email: user.email, name: user.name, plan: user.plan, credits: user.credits, freeGensToday: user.free_gens_today } });
+    } catch (err) {
+      if (err.code === '23505') return res.status(409).json({ error: 'Email already registered' });
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.post('/api/qr/auth/login', async (req, res) => {
+    const { email, password } = req.body;
+    if (!email || !password) return res.status(400).json({ error: 'Email and password required' });
+    try {
+      const r = await pool.query(`SELECT * FROM qr_users WHERE email=$1`, [email.toLowerCase().trim()]);
+      const user = r.rows[0];
+      if (!user) return res.status(401).json({ error: 'Invalid email or password' });
+      const ok = await bcrypt.compare(password, user.password_hash);
+      if (!ok) return res.status(401).json({ error: 'Invalid email or password' });
+      const freeGens = await getOrResetFreeGens(user.id);
+      const token = jwt.sign({ id: user.id, email: user.email }, QR_JWT_SECRET, { expiresIn: '30d' });
+      res.json({ token, user: { id: user.id, email: user.email, name: user.name, plan: user.plan, credits: user.credits, freeGensToday: freeGens } });
+    } catch (err) { res.status(500).json({ error: err.message }); }
+  });
+
+  app.get('/api/qr/auth/me', qrAuth, async (req, res) => {
+    try {
+      const r = await pool.query(`SELECT id, email, name, plan, credits, free_gens_today, free_reset_date FROM qr_users WHERE id=$1`, [req.qrUser.id]);
+      if (!r.rows[0]) return res.status(404).json({ error: 'User not found' });
+      const user = r.rows[0];
+      const freeGens = await getOrResetFreeGens(user.id);
+      res.json({ id: user.id, email: user.email, name: user.name, plan: user.plan, credits: user.credits, freeGensToday: freeGens, freeLimit: QR_FREE_DAILY_LIMIT });
+    } catch (err) { res.status(500).json({ error: err.message }); }
+  });
+
+  // ── Generate Endpoint ───────────────────────────────────────────────────────
+  app.post('/api/qr/generate', qrAuthOptional, async (req, res) => {
+    const { type = 'qr', content, size = 300, fgColor = '#000000', bgColor = '#ffffff',
+            errorLevel = 'M', format = 'png', logoData, showText = true, height = 80 } = req.body;
+    if (!content || !content.trim()) return res.status(400).json({ error: 'Content is required' });
+
+    const isQR = type === 'qr';
+    const premiumCost = calcCreditCost({ logoData, format, size });
+    const isFreeGen = premiumCost === 0;
+
+    // Unauthenticated: only basic QR/barcode, max 300px, no logo
+    if (!req.qrUser) {
+      if (logoData) return res.status(402).json({ error: 'Logo embedding requires an account', code: 'LOGIN_REQUIRED' });
+      if (format === 'svg') return res.status(402).json({ error: 'SVG export requires an account', code: 'LOGIN_REQUIRED' });
+      const capSize = Math.min(size, 300);
+      try {
+        const result = isQR
+          ? await generateQR(content.trim(), { size: capSize, fgColor, bgColor, errorLevel, format: 'png' })
+          : await generateBarcode(type, content.trim(), { height, scale: 3, showText, fgColor, bgColor });
+        return res.json({ ...result, creditsUsed: 0, freeGen: true });
+      } catch (err) { return res.status(400).json({ error: err.message }); }
+    }
+
+    // Authenticated user
+    const freeGens = await getOrResetFreeGens(req.qrUser.id);
+    let creditsUsed = premiumCost;
+    let isFree = false;
+
+    if (isFreeGen && freeGens < QR_FREE_DAILY_LIMIT) {
+      // Use free allowance
+      isFree = true;
+      creditsUsed = 0;
+    } else if (creditsUsed > 0 || freeGens >= QR_FREE_DAILY_LIMIT) {
+      if (isFreeGen) creditsUsed = 1; // beyond free limit costs 1 credit
+      // Check credits
+      const ur = await pool.query(`SELECT credits FROM qr_users WHERE id=$1`, [req.qrUser.id]);
+      if (ur.rows[0].credits < creditsUsed) {
+        return res.status(402).json({ error: 'Insufficient credits', code: 'INSUFFICIENT_CREDITS', creditsNeeded: creditsUsed, creditsAvailable: ur.rows[0].credits });
+      }
+    }
+
+    try {
+      const result = isQR
+        ? await generateQR(content.trim(), { size, fgColor, bgColor, errorLevel, format, logoData })
+        : await generateBarcode(type, content.trim(), { height, scale: Math.max(2, Math.floor(size / 100)), showText, fgColor, bgColor });
+
+      // Deduct credits / increment free count
+      if (isFree) {
+        await pool.query(`UPDATE qr_users SET free_gens_today=free_gens_today+1, updated_at=NOW() WHERE id=$1`, [req.qrUser.id]);
+      } else {
+        await pool.query(`UPDATE qr_users SET credits=credits-$1, updated_at=NOW() WHERE id=$2`, [creditsUsed, req.qrUser.id]);
+      }
+
+      // Log generation
+      await pool.query(
+        `INSERT INTO qr_generations (user_id, type, content, options, credits_used) VALUES ($1,$2,$3,$4,$5)`,
+        [req.qrUser.id, type, content.trim(), JSON.stringify({ size, fgColor, bgColor, format, hasLogo: !!logoData }), creditsUsed]
+      );
+
+      const updatedUser = await pool.query(`SELECT credits, free_gens_today FROM qr_users WHERE id=$1`, [req.qrUser.id]);
+      res.json({ ...result, creditsUsed, freeGen: isFree, credits: updatedUser.rows[0].credits, freeGensToday: updatedUser.rows[0].free_gens_today });
+    } catch (err) { res.status(400).json({ error: err.message }); }
+  });
+
+  // ── Batch Generate ──────────────────────────────────────────────────────────
+  app.post('/api/qr/batch', qrAuth, async (req, res) => {
+    const { items, type = 'qr', size = 300, fgColor = '#000000', bgColor = '#ffffff',
+            errorLevel = 'M', showText = true, height = 80 } = req.body;
+    if (!Array.isArray(items) || items.length === 0) return res.status(400).json({ error: 'Items array required' });
+    if (items.length > 100) return res.status(400).json({ error: 'Max 100 items per batch' });
+
+    const creditsNeeded = items.length;
+    const ur = await pool.query(`SELECT credits FROM qr_users WHERE id=$1`, [req.qrUser.id]);
+    if (ur.rows[0].credits < creditsNeeded) {
+      return res.status(402).json({ error: 'Insufficient credits', code: 'INSUFFICIENT_CREDITS', creditsNeeded, creditsAvailable: ur.rows[0].credits });
+    }
+
+    const results = [];
+    for (const item of items) {
+      if (!item || !item.trim()) { results.push({ content: item, error: 'Empty content' }); continue; }
+      try {
+        const isQR = type === 'qr';
+        const result = isQR
+          ? await generateQR(item.trim(), { size, fgColor, bgColor, errorLevel })
+          : await generateBarcode(type, item.trim(), { height, scale: 3, showText, fgColor, bgColor });
+        results.push({ content: item, ...result });
+      } catch (err) {
+        results.push({ content: item, error: err.message });
+      }
+    }
+
+    const successCount = results.filter(r => !r.error).length;
+    await pool.query(`UPDATE qr_users SET credits=credits-$1, updated_at=NOW() WHERE id=$2`, [successCount, req.qrUser.id]);
+    await pool.query(
+      `INSERT INTO qr_generations (user_id, type, content, options, credits_used) VALUES ($1,$2,$3,$4,$5)`,
+      [req.qrUser.id, `batch_${type}`, `batch:${items.length}`, JSON.stringify({ size, fgColor, bgColor }), successCount]
+    );
+
+    const updatedUser = await pool.query(`SELECT credits FROM qr_users WHERE id=$1`, [req.qrUser.id]);
+    res.json({ results, creditsUsed: successCount, credits: updatedUser.rows[0].credits });
+  });
+
+  // ── History ─────────────────────────────────────────────────────────────────
+  app.get('/api/qr/history', qrAuth, async (req, res) => {
+    try {
+      const r = await pool.query(
+        `SELECT id, type, content, options, credits_used, created_at FROM qr_generations WHERE user_id=$1 ORDER BY created_at DESC LIMIT 50`,
+        [req.qrUser.id]
+      );
+      res.json({ history: r.rows });
+    } catch (err) { res.status(500).json({ error: err.message }); }
+  });
+
+  // ── Topup Packages ──────────────────────────────────────────────────────────
+  app.get('/api/qr/topup/packages', (req, res) => {
+    res.json({ packages: [
+      { id: 'starter', name: 'Starter', credits: 50,   price: 5.00,  popular: false, description: 'Great for personal use' },
+      { id: 'popular', name: 'Popular', credits: 200,  price: 15.00, popular: true,  description: 'Best value for small teams' },
+      { id: 'business',name: 'Business',credits: 500,  price: 30.00, popular: false, description: 'For growing businesses' },
+      { id: 'enterprise',name:'Enterprise',credits:2000,price: 99.00, popular: false, description: 'Unlimited scale' },
+    ]});
+  });
+
+  // ── Simulate Topup (replace with Stripe later) ─────────────────────────────
+  app.post('/api/qr/topup', qrAuth, async (req, res) => {
+    const PACKAGES = { starter: { credits: 50, price: 5.00 }, popular: { credits: 200, price: 15.00 }, business: { credits: 500, price: 30.00 }, enterprise: { credits: 2000, price: 99.00 } };
+    const { packageId } = req.body;
+    const pkg = PACKAGES[packageId];
+    if (!pkg) return res.status(400).json({ error: 'Invalid package' });
+    try {
+      const ref = `SIM-${Date.now()}`;
+      await pool.query(`INSERT INTO qr_topups (user_id, credits, amount_usd, payment_ref) VALUES ($1,$2,$3,$4)`, [req.qrUser.id, pkg.credits, pkg.price, ref]);
+      await pool.query(`UPDATE qr_users SET credits=credits+$1, updated_at=NOW() WHERE id=$2`, [pkg.credits, req.qrUser.id]);
+      const ur = await pool.query(`SELECT credits FROM qr_users WHERE id=$1`, [req.qrUser.id]);
+      res.json({ success: true, creditsAdded: pkg.credits, totalCredits: ur.rows[0].credits, ref });
+    } catch (err) { res.status(500).json({ error: err.message }); }
+  });
+
+  // Register DB init
+  const _origListen = server.listen.bind(server);
+  if (!global.__qrDbInitRegistered) {
+    global.__qrDbInitRegistered = true;
+    // Init tables on startup (attached to pool ready)
+    setImmediate(async () => {
+      if (process.env.DATABASE_URL) {
+        try { await initQrDb(); } catch (e) { console.error('⚠️ QR DB init failed:', e.message); }
+      }
+    });
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+
 const errorHandler = (err, req, res, next) => {
   const status = err.status || err.statusCode || 500;
   console.error('❌ Unhandled error:', err.message || err);
@@ -9250,9 +9831,12 @@ server.listen(port, '0.0.0.0', async () => {
         url TEXT NOT NULL,
         mime_type TEXT NOT NULL,
         size INTEGER NOT NULL,
+        data BYTEA,
         uploaded_at TIMESTAMPTZ DEFAULT NOW()
       )
     `);
+    // Add data column for Postgres BYTEA storage if not already present
+    await pool.query(`ALTER TABLE radiance_media ADD COLUMN IF NOT EXISTS data BYTEA`);
     console.log('✅ radiance_media table ready');
   } catch (err) {
     console.error('⚠️  radiance_media table init failed:', err.message);

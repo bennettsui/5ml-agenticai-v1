@@ -312,6 +312,10 @@ async function updatePaperCdnUrl(paperId, cdnUrl) {
   await pool.query('UPDATE papers SET cdn_url=$1, updated_at=NOW() WHERE id=$2', [cdnUrl, paperId]);
 }
 
+async function updatePaperPipelineLog(paperId, log) {
+  await pool.query('UPDATE papers SET pipeline_log=$1, updated_at=NOW() WHERE id=$2', [JSON.stringify(log), paperId]);
+}
+
 async function createDraftQuestion({ paperId, stemEn, stemZh, hasImage, imageUrl, suggestedType, suggestedDifficulty, candidateObjectives, rawOcrText }) {
   const { rows } = await pool.query(
     `INSERT INTO draft_questions
@@ -373,6 +377,7 @@ module.exports = {
   getPaper,
   updatePaperStatus,
   updatePaperCdnUrl,
+  updatePaperPipelineLog,
   createDraftQuestion,
   getDraftQuestions,
   // Teacher dashboard

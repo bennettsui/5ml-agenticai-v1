@@ -1128,59 +1128,113 @@ async function initDatabase() {
         created_at TIMESTAMPTZ DEFAULT NOW()
       );
 
-      CREATE TABLE IF NOT EXISTS pf_work_units (
+      CREATE TABLE IF NOT EXISTS radiance_pr_gallery (
         id SERIAL PRIMARY KEY,
-        job_id TEXT UNIQUE DEFAULT ('WU-' || to_char(NOW(), 'YYYYMMDD') || '-' || substr(md5(random()::text), 1, 4)),
-        name TEXT NOT NULL,
-        material TEXT,
-        grams NUMERIC(10,2) DEFAULT 0,
-        hours NUMERIC(10,2) DEFAULT 0,
-        status TEXT DEFAULT 'queued',
-        revenue NUMERIC(12,2) DEFAULT 0,
-        direct_cost NUMERIC(12,2) DEFAULT 0,
-        overhead_alloc NUMERIC(12,2) DEFAULT 0,
-        notes TEXT,
-        created_at TIMESTAMPTZ DEFAULT NOW(),
-        updated_at TIMESTAMPTZ DEFAULT NOW()
-      );
-
-      CREATE TABLE IF NOT EXISTS pf_revenue_entries (
-        id SERIAL PRIMARY KEY,
-        channel TEXT NOT NULL,
-        period TEXT NOT NULL,
-        jobs INTEGER DEFAULT 0,
-        units_grams NUMERIC(12,2) DEFAULT 0,
-        revenue NUMERIC(12,2) DEFAULT 0,
-        cogs NUMERIC(12,2) DEFAULT 0,
-        notes TEXT,
+        url TEXT NOT NULL,
+        alt TEXT,
+        caption_en TEXT,
+        caption_zh TEXT,
+        sort_order INTEGER DEFAULT 0,
         created_at TIMESTAMPTZ DEFAULT NOW()
       );
 
-      CREATE TABLE IF NOT EXISTS pf_cost_entries (
+      CREATE TABLE IF NOT EXISTS radiance_news_clippings (
         id SERIAL PRIMARY KEY,
-        category TEXT NOT NULL,
-        type TEXT NOT NULL CHECK (type IN ('direct','overhead')),
-        amount NUMERIC(12,2) DEFAULT 0,
-        period TEXT,
-        notes TEXT,
-        created_at TIMESTAMPTZ DEFAULT NOW(),
-        updated_at TIMESTAMPTZ DEFAULT NOW()
+        url TEXT NOT NULL,
+        alt TEXT,
+        outlet TEXT,
+        headline TEXT,
+        sort_order INTEGER DEFAULT 0,
+        created_at TIMESTAMPTZ DEFAULT NOW()
       );
 
-      CREATE TABLE IF NOT EXISTS pf_inventory_items (
-        id SERIAL PRIMARY KEY,
-        sku TEXT UNIQUE DEFAULT ('INV-' || to_char(NOW(), 'YYYYMMDD') || '-' || substr(md5(random()::text), 1, 4)),
-        name TEXT NOT NULL,
-        type TEXT DEFAULT 'filament',
-        unit TEXT DEFAULT 'kg',
-        stock_qty NUMERIC(10,3) DEFAULT 0,
-        reorder_point NUMERIC(10,3) DEFAULT 0,
-        unit_cost NUMERIC(12,4) DEFAULT 0,
-        supplier TEXT,
-        notes TEXT,
-        created_at TIMESTAMPTZ DEFAULT NOW(),
-        updated_at TIMESTAMPTZ DEFAULT NOW()
+      -- ── Presentation Deck ──────────────────────────────────────────
+      CREATE TABLE IF NOT EXISTS presentation_decks (
+        id           SERIAL PRIMARY KEY,
+        slug         VARCHAR(100) UNIQUE NOT NULL,
+        title        TEXT NOT NULL,
+        title_cn     TEXT,
+        client       TEXT,
+        sections     JSONB NOT NULL DEFAULT '[]',
+        metadata     JSONB NOT NULL DEFAULT '{}',
+        created_at   TIMESTAMPTZ DEFAULT NOW(),
+        updated_at   TIMESTAMPTZ DEFAULT NOW()
       );
+
+      CREATE TABLE IF NOT EXISTS presentation_slides (
+        id           SERIAL PRIMARY KEY,
+        deck_slug    VARCHAR(100) NOT NULL REFERENCES presentation_decks(slug) ON DELETE CASCADE,
+        slide_number INTEGER NOT NULL,
+        section      VARCHAR(50),
+        title        TEXT,
+        subtitle     TEXT,
+        layout_type  VARCHAR(50),
+        content      JSONB NOT NULL DEFAULT '{}',
+        visual_prompts JSONB NOT NULL DEFAULT '[]',
+        notes        TEXT,
+        created_at   TIMESTAMPTZ DEFAULT NOW(),
+        UNIQUE (deck_slug, slide_number)
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_pslides_deck ON presentation_slides(deck_slug);
+
+      CREATE TABLE IF NOT EXISTS slide_assets (
+        id           SERIAL PRIMARY KEY,
+        slide_id     INTEGER REFERENCES presentation_slides(id) ON DELETE CASCADE,
+        deck_slug    VARCHAR(100),
+        asset_type   VARCHAR(50) DEFAULT 'image',
+        prompt_index INTEGER,
+        prompt_used  TEXT,
+        image_data   TEXT,
+        mime_type    VARCHAR(50) DEFAULT 'image/png',
+        file_path    TEXT,
+        public_url   TEXT,
+        metadata     JSONB NOT NULL DEFAULT '{}',
+        generated_at TIMESTAMPTZ DEFAULT NOW()
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_slide_assets_slide ON slide_assets(slide_id);
+      CREATE INDEX IF NOT EXISTS idx_slide_assets_deck  ON slide_assets(deck_slug);
+
+      -- safe migrations for existing deployments
+      ALTER TABLE slide_assets ADD COLUMN IF NOT EXISTS image_data TEXT;
+      ALTER TABLE slide_assets ADD COLUMN IF NOT EXISTS mime_type  VARCHAR(50) DEFAULT 'image/png';
+      ALTER TABLE slide_assets ADD COLUMN IF NOT EXISTS deck_slug  VARCHAR(100);
+
+      -- ── Presentation Settings ───────────────────────────────────────
+      CREATE TABLE IF NOT EXISTS presentation_settings (
+        presentation_slug VARCHAR(100) PRIMARY KEY REFERENCES presentation_decks(slug) ON DELETE CASCADE,
+        theme             TEXT DEFAULT 'dark',
+        font_primary      TEXT DEFAULT 'Inter',
+        font_secondary    TEXT DEFAULT 'Crimson Pro',
+        color_primary     TEXT DEFAULT '#ef4444',
+        color_secondary   TEXT DEFAULT '#1e293b',
+        updated_at        TIMESTAMPTZ DEFAULT NOW()
+      );
+
+      -- ── Image Manifests ─────────────────────────────────────────────
+      CREATE TABLE IF NOT EXISTS image_manifests (
+        id                UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        presentation_slug VARCHAR(100) NOT NULL REFERENCES presentation_decks(slug) ON DELETE CASCADE,
+        slide_id          INTEGER REFERENCES presentation_slides(id) ON DELETE CASCADE,
+        slide_number      INTEGER NOT NULL,
+        section           TEXT,
+        slide_title       TEXT,
+        usage             TEXT,
+        layout_type       TEXT,
+        original_prompt   TEXT NOT NULL,
+        override_prompt   TEXT,
+        status            TEXT NOT NULL DEFAULT 'pending',
+        priority          TEXT NOT NULL DEFAULT 'normal',
+        notes             TEXT,
+        asset_id          INTEGER REFERENCES slide_assets(id) ON DELETE SET NULL,
+        created_at        TIMESTAMPTZ DEFAULT NOW(),
+        updated_at        TIMESTAMPTZ DEFAULT NOW()
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_image_manifest_slug   ON image_manifests(presentation_slug);
+      CREATE INDEX IF NOT EXISTS idx_image_manifest_status ON image_manifests(status);
+      CREATE INDEX IF NOT EXISTS idx_image_manifest_slide  ON image_manifests(slide_id);
     `);
 
     console.log('✅ Database schema initialized (including CRM tables)');

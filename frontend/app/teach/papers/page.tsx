@@ -4,11 +4,25 @@ import Link from 'next/link';
 import {
   FileText, Upload, RefreshCw, CheckCircle, Clock, AlertCircle,
   Loader2, ArrowRight, Cloud, Cpu, PackageCheck, ChevronRight,
-  Pencil, Trash2, X, Save, RotateCcw, Coins,
+  Pencil, Trash2, X, Save, RotateCcw, Coins, Wand2,
+  ChevronDown, ChevronUp, Activity,
 } from 'lucide-react';
 import { useTeacherAuth } from '@/components/adaptive/useTeacherAuth';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
+
+interface PipelineLogEntry {
+  time: string;
+  message: string;
+  level: 'info' | 'warn' | 'error' | 'success';
+}
+
+interface LiveProgress {
+  stage: string;
+  detail: string;
+  questions_found: number;
+  questions_analysed: number;
+}
 
 interface Paper {
   id: string;
@@ -26,11 +40,12 @@ interface Paper {
 type View = 'list' | 'upload' | 'processing';
 
 const STATUS_CFG: Record<string, { label: string; color: string; icon: typeof Clock }> = {
-  UPLOADED:     { label: 'Processing',   color: 'text-blue-400 bg-blue-500/10 border-blue-500/20',    icon: Clock },
+  UPLOADED:     { label: 'Processing',   color: 'text-blue-400 bg-blue-500/10 border-blue-500/20',       icon: Clock },
   OCR_RUNNING:  { label: 'AI Reading',   color: 'text-purple-400 bg-purple-500/10 border-purple-500/20', icon: Cpu },
-  DRAFT_READY:  { label: 'Needs Review', color: 'text-amber-400 bg-amber-500/10 border-amber-500/20', icon: AlertCircle },
+  DRAFT_READY:  { label: 'Needs Review', color: 'text-amber-400 bg-amber-500/10 border-amber-500/20',    icon: AlertCircle },
   CONFIRMED:    { label: 'Live',         color: 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20', icon: CheckCircle },
-  NEEDS_REVIEW: { label: 'OCR Issue',    color: 'text-red-400 bg-red-500/10 border-red-500/20',       icon: AlertCircle },
+  NEEDS_REVIEW: { label: 'Needs Review', color: 'text-amber-400 bg-amber-500/10 border-amber-500/20',    icon: AlertCircle },
+  OCR_ISSUE:    { label: 'OCR Failed',   color: 'text-red-400 bg-red-500/10 border-red-500/20',          icon: AlertCircle },
 };
 
 // ─── HK time formatter ────────────────────────────────────────────────────────
@@ -135,15 +150,24 @@ function ProcessingPanel({
   paperId: string; fileName: string; fileSizeMb: number;
   onDone: (paperId: string) => void; onCancel: () => void;
 }) {
-  const [paperStatus, setPaperStatus] = useState('UPLOADED');
-  const [draftCount, setDraftCount]   = useState(0);
-  const [cdnDone, setCdnDone]         = useState(false);
-  const tries = useRef(0);
+  const [paperStatus, setPaperStatus]   = useState('UPLOADED');
+  const [draftCount, setDraftCount]     = useState(0);
+  const [cdnDone, setCdnDone]           = useState(false);
+  const [pipelineLog, setPipelineLog]   = useState<PipelineLogEntry[]>([]);
+  const [liveProgress, setLiveProgress] = useState<LiveProgress | null>(null);
+  const [logExpanded, setLogExpanded]   = useState(true);
+  const tries      = useRef(0);
+  const logBottomRef = useRef<HTMLDivElement>(null);
+
+  // Auto-scroll log to bottom as entries arrive
+  useEffect(() => {
+    if (logExpanded) logBottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [pipelineLog, logExpanded]);
 
   useEffect(() => {
     const poll = setInterval(async () => {
       tries.current++;
-      if (tries.current > 36) { clearInterval(poll); onDone(paperId); return; }
+      if (tries.current > 60) { clearInterval(poll); onDone(paperId); return; }
       try {
         const r = await fetch(`/api/adaptive-learning/teachers/papers/${paperId}/draft-questions`);
         const d = await r.json();
@@ -151,43 +175,75 @@ function ProcessingPanel({
         setPaperStatus(d.status);
         if (d.draft_questions?.length) setDraftCount(d.draft_questions.length);
         if (d.cdn_url) setCdnDone(true);
+        if (d.pipeline_log)  setPipelineLog(d.pipeline_log);
+        if (d.live_progress) setLiveProgress(d.live_progress);
+        else setLiveProgress(null);
+
         if (d.status === 'DRAFT_READY' || d.status === 'CONFIRMED') {
           clearInterval(poll);
-          setTimeout(() => onDone(paperId), 1200);
-        } else if (d.status === 'NEEDS_REVIEW') {
+          setTimeout(() => onDone(paperId), 2000); // brief pause so user can see "Done"
+        }
+        // OCR_ISSUE / NEEDS_REVIEW — stop polling but stay on panel so user sees log
+        if (d.status === 'OCR_ISSUE' || d.status === 'NEEDS_REVIEW') {
           clearInterval(poll);
-          setTimeout(() => onDone(paperId), 3000); // show failure state briefly then go to list
         }
       } catch {}
-    }, 5000);
+    }, 3000);
     return () => clearInterval(poll);
   }, [paperId, onDone]);
 
-  const steps = buildSteps(paperStatus, draftCount, fileSizeMb, cdnDone);
-  const isDone  = paperStatus === 'DRAFT_READY' || paperStatus === 'CONFIRMED';
-  const isFail  = paperStatus === 'NEEDS_REVIEW';
+  const steps  = buildSteps(paperStatus, draftCount, fileSizeMb, cdnDone);
+  const isDone = paperStatus === 'DRAFT_READY' || paperStatus === 'CONFIRMED';
+  const isFail = paperStatus === 'OCR_ISSUE' || paperStatus === 'NEEDS_REVIEW';
+  const isRunning = !isDone && !isFail;
+
+  const levelDot = (level: string) => {
+    if (level === 'error')   return 'bg-red-500';
+    if (level === 'warn')    return 'bg-amber-500';
+    if (level === 'success') return 'bg-emerald-500';
+    return 'bg-slate-600';
+  };
+  const levelText = (level: string) => {
+    if (level === 'error')   return 'text-red-400';
+    if (level === 'warn')    return 'text-amber-400';
+    if (level === 'success') return 'text-emerald-400';
+    return 'text-slate-400';
+  };
 
   return (
     <div className="bg-slate-800/60 border border-slate-700/50 rounded-2xl p-6 space-y-5">
+      {/* Header */}
       <div className="flex items-start justify-between gap-3">
         <div className="flex items-start gap-3">
-          <div className="w-10 h-10 rounded-xl bg-purple-500/10 flex items-center justify-center shrink-0">
-            <Cpu className="w-5 h-5 text-purple-400" />
+          <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${
+            isDone ? 'bg-emerald-500/10' : isFail ? 'bg-red-500/10' : 'bg-purple-500/10'
+          }`}>
+            {isDone
+              ? <CheckCircle className="w-5 h-5 text-emerald-400" />
+              : isFail
+                ? <AlertCircle className="w-5 h-5 text-red-400" />
+                : <Cpu className="w-5 h-5 text-purple-400" />}
           </div>
           <div>
             <p className="text-white font-medium text-sm">{fileName}</p>
-            <p className="text-slate-500 text-xs mt-0.5">
-              {isFail ? 'OCR failed — returning to list…' : 'Processing — usually takes 15–60 s'}
+            <p className={`text-xs mt-0.5 ${isDone ? 'text-emerald-400' : isFail ? 'text-red-400' : 'text-slate-500'}`}>
+              {isDone
+                ? `${draftCount} questions extracted — redirecting to validate…`
+                : isFail
+                  ? 'OCR pipeline failed — see log below'
+                  : `Processing (${Math.round(fileSizeMb * 10) / 10} MB) — usually 15–60 s`}
             </p>
           </div>
         </div>
-        {!isDone && !isFail && (
-          <button onClick={onCancel} className="text-slate-600 hover:text-slate-400 text-xs transition-colors">
+        {isRunning && (
+          <button onClick={onCancel} className="text-slate-600 hover:text-slate-400 text-xs transition-colors shrink-0">
             Cancel
           </button>
         )}
       </div>
-      <div className="space-y-3">
+
+      {/* Abstract steps */}
+      <div className="space-y-2.5">
         {steps.map((step, i) => (
           <div key={i} className="flex items-center gap-3">
             <StepDot state={step.state} />
@@ -195,18 +251,80 @@ function ProcessingPanel({
               <p className={`text-sm font-medium ${
                 step.state === 'done'   ? 'text-white' :
                 step.state === 'active' ? 'text-purple-300' :
-                step.state === 'error'  ? 'text-red-300' :
-                'text-slate-600'
+                step.state === 'error'  ? 'text-red-300' : 'text-slate-600'
               }`}>{step.label}</p>
               {step.detail && <p className="text-xs text-slate-500 mt-0.5">{step.detail}</p>}
             </div>
           </div>
         ))}
       </div>
+
+      {/* Live progress bar (shown while questions are being analysed) */}
+      {liveProgress && liveProgress.questions_found > 0 && (
+        <div className="space-y-1.5">
+          <div className="flex justify-between text-xs text-slate-500">
+            <span>{liveProgress.detail}</span>
+            <span>{liveProgress.questions_analysed} / {liveProgress.questions_found} questions</span>
+          </div>
+          <div className="h-1.5 bg-slate-700 rounded-full overflow-hidden">
+            <div
+              className="h-full bg-purple-500 rounded-full transition-all duration-500"
+              style={{ width: `${(liveProgress.questions_analysed / liveProgress.questions_found) * 100}%` }}
+            />
+          </div>
+        </div>
+      )}
+
+      {/* Pipeline log */}
+      {pipelineLog.length > 0 && (
+        <div className="border border-slate-700/50 rounded-xl overflow-hidden">
+          <button
+            onClick={() => setLogExpanded(e => !e)}
+            className="w-full flex items-center gap-2 px-3 py-2.5 bg-white/[0.02] hover:bg-white/[0.04] transition-colors"
+          >
+            <Activity className="w-3.5 h-3.5 text-slate-500 shrink-0" />
+            <span className="text-xs font-medium text-slate-400 flex-1 text-left">Pipeline Log</span>
+            <span className="text-[10px] text-slate-600">{pipelineLog.length} entries</span>
+            {logExpanded
+              ? <ChevronUp className="w-3.5 h-3.5 text-slate-600" />
+              : <ChevronDown className="w-3.5 h-3.5 text-slate-600" />}
+          </button>
+          {logExpanded && (
+            <div className="max-h-56 overflow-y-auto px-3 py-2 space-y-1 font-mono border-t border-slate-700/50">
+              {pipelineLog.map((entry, i) => (
+                <div key={i} className="flex items-start gap-2 text-[10px] leading-relaxed">
+                  <span className={`w-1.5 h-1.5 rounded-full mt-1 shrink-0 ${levelDot(entry.level)}`} />
+                  <span className="text-slate-600 shrink-0 tabular-nums">
+                    {new Date(entry.time).toLocaleTimeString('en-HK', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+                  </span>
+                  <span className={levelText(entry.level)}>{entry.message}</span>
+                </div>
+              ))}
+              {isRunning && (
+                <div className="flex items-center gap-2 text-[10px] text-slate-600 py-0.5">
+                  <Loader2 className="w-3 h-3 animate-spin shrink-0" />
+                  <span>Waiting for next update…</span>
+                </div>
+              )}
+              <div ref={logBottomRef} />
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Waiting for first log entry */}
+      {pipelineLog.length === 0 && isRunning && (
+        <div className="flex items-center gap-2 text-xs text-slate-600">
+          <Loader2 className="w-3.5 h-3.5 animate-spin shrink-0" />
+          Waiting for pipeline to start — CDN upload may still be in progress…
+        </div>
+      )}
+
+      {/* Done CTA */}
       {isDone && (
         <div className="pt-2 border-t border-slate-700/50 flex items-center justify-between">
           <p className="text-emerald-400 text-sm font-medium flex items-center gap-1.5">
-            <CheckCircle className="w-4 h-4" /> Questions ready!
+            <CheckCircle className="w-4 h-4" /> {draftCount} questions ready
           </p>
           <Link href={`/teach/validate?paper_id=${paperId}`}
             className="flex items-center gap-1.5 text-sm text-purple-300 hover:text-purple-200 font-medium transition-colors">
@@ -214,9 +332,15 @@ function ProcessingPanel({
           </Link>
         </div>
       )}
+
+      {/* Fail CTA */}
       {isFail && (
-        <div className="pt-2 border-t border-slate-700/50">
-          <p className="text-red-300 text-sm">OCR could not extract questions — check the PDF quality or try re-uploading.</p>
+        <div className="pt-2 border-t border-slate-700/50 flex items-center justify-between gap-3">
+          <p className="text-red-300 text-sm">Pipeline failed — check the log above for details.</p>
+          <button onClick={onCancel}
+            className="shrink-0 flex items-center gap-1.5 text-xs text-slate-400 hover:text-white transition-colors">
+            Back to list
+          </button>
         </div>
       )}
     </div>
@@ -497,6 +621,7 @@ export default function PapersPage() {
   const [editPaper, setEditPaper]       = useState<Paper | null>(null);
   const [deletingId, setDeletingId]     = useState<string | null>(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+  const [reprocessingId, setReprocessingId]   = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -546,6 +671,19 @@ export default function PapersPage() {
       });
       load();
     } catch {}
+  };
+
+  const handleReprocess = async (paperId: string) => {
+    setReprocessingId(paperId);
+    try {
+      const res  = await fetch(`/api/adaptive-learning/teachers/papers/${paperId}/reprocess`, { method: 'POST' });
+      const data = await res.json();
+      if (data.success) {
+        // paper is now back in OCR_RUNNING — refresh list so status updates
+        await load();
+      }
+    } catch {}
+    finally { setReprocessingId(null); }
   };
 
   const now = Date.now();
@@ -715,6 +853,9 @@ export default function PapersPage() {
                               }`}>{step.label}{step.detail ? ` — ${step.detail}` : ''}</span>
                             </div>
                           ))}
+                          <p className="text-[10px] text-slate-600 pl-7">
+                            Upload a paper to see live pipeline log during processing
+                          </p>
                         </div>
                       )}
 
@@ -758,6 +899,18 @@ export default function PapersPage() {
                       {p.draft_count > 0 && (
                         <CostBadge draftCount={p.draft_count} />
                       )}
+                      {/* Re-run OCR — useful for papers extracted with old pipeline */}
+                      <button
+                        onClick={() => handleReprocess(p.id)}
+                        disabled={reprocessingId === p.id}
+                        title="Re-extract questions with latest OCR pipeline"
+                        className="inline-flex items-center gap-1 text-xs text-slate-600 hover:text-purple-400 transition-colors disabled:opacity-40"
+                      >
+                        {reprocessingId === p.id
+                          ? <Loader2 className="w-3 h-3 animate-spin" />
+                          : <Wand2 className="w-3 h-3" />}
+                        {reprocessingId === p.id ? 'Re-extracting…' : 'Re-run OCR'}
+                      </button>
                     </div>
                   )}
                 </div>

@@ -398,6 +398,18 @@ export const USE_CASES: UseCaseConfig[] = [
     features: ['Parallax Effects', 'Mouse Tracking', 'Click Animations'],
   },
   {
+    id: 'arrisonapps',
+    name: 'Arrisonapps Fine Cigars',
+    description: 'Multi-region prestige cigar product catalogue, enquiry CRM, and inventory system with 5ML Agentic integration',
+    solutionLine: 'TechNexus',
+    status: 'in_progress',
+    progress: 0.6,
+    priority: 'high',
+    path: '/vibe-demo/arrisonapps',
+    agentCount: 3,
+    features: ['Product Catalogue', 'Enquiry Cart', 'CRM Pipeline', 'Inventory', 'Agent Tools', 'Multi-Region HK/SG/EU'],
+  },
+  {
     id: 'ecom-channels',
     name: 'eCom Channels',
     description: 'Multi-channel eCommerce management: product listing optimization and channel performance',
@@ -584,7 +596,7 @@ export const USE_CASES: UseCaseConfig[] = [
     status: 'live',
     progress: 1.0,
     priority: 'high',
-    path: '/dashboard?tab=image-compression',
+    path: '/use-cases/image-compressor',
     agentCount: 0,
     features: ['5 Compression Profiles (auto/web/lossless/thumbnail/aggressive)', 'WebP + AVIF + JPEG + PNG Output', 'Max-KB Budget Enforcement', 'Tag-based Overrides (social/tender/client_review)', 'File Upload + URL + Local Path Sources', 'Detailed Compression Logs'],
   },
@@ -714,7 +726,7 @@ export const USE_CASES: UseCaseConfig[] = [
     status: 'in_progress',
     progress: 0.65,
     priority: 'high',
-    path: '/dashboard?tab=pdf-compression',
+    path: '/use-cases/pdf-compressor',
     agentCount: 3,
     features: ['Lossless (pdfsizeopt)', 'Balanced (Ghostscript)', 'Web/Small Profiles', 'Auto Strategy', 'Tool Chain Fallback', 'JSON API', 'Docker Ready'],
   },
@@ -750,6 +762,31 @@ export const USE_CASES: UseCaseConfig[] = [
       'GamificationAgent (badges · missions · nudges)',
       'AdminReportAgent (term · grade · class reports)',
       'HK EDB S1–S2 Curriculum · Bilingual EN / ZH',
+    ],
+  },
+
+  // ========================================================================
+  // PRESENTATION DECK BUILDER — FrontierVentures
+  // ========================================================================
+  {
+    id: 'presentation-deck',
+    name: 'Presentation Deck Builder',
+    description: 'AI-generated tender and pitch decks: structured slide-by-slide content with visual prompts, DB-backed persistence, browser presentation mode, and PPTX/PDF export.',
+    solutionLine: 'FrontierVentures',
+    status: 'in_progress',
+    progress: 0.55,
+    priority: 'high',
+    path: '/presentation-deck/2603CLPtender',
+    agentCount: 1,
+    features: [
+      '40-slide structured deck (CLP tender 2603)',
+      'Section-by-section layout: cover · statement · two-column · timeline · split-metrics',
+      'Visual prompts → Gemini image generation (nanobanana)',
+      'Fly Postgres persistence (presentations · slides · slide_assets)',
+      'Browser presentation mode (keyboard nav, speaker notes, thumbnails)',
+      'PPTX export via pptxgenjs (roadmap)',
+      'PDF export via Puppeteer (roadmap)',
+      'Reusable across any future tender / pitch',
     ],
   },
 
