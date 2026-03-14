@@ -9837,6 +9837,499 @@ app.post('/api/print-finance/allocate-overhead', async (req, res) => {
 
 // ─────────────────────────────────────────────────────────────────────────────
 
+// ==========================================
+// LINK SHORTENER — DB Init
+// ==========================================
+if (pool) {
+  const crypto = require('crypto');
+
+  pool.query(`
+    CREATE TABLE IF NOT EXISTS ls_campaigns (
+      id SERIAL PRIMARY KEY,
+      name VARCHAR(200) NOT NULL,
+      description TEXT,
+      color VARCHAR(20) DEFAULT '#6366f1',
+      created_at TIMESTAMPTZ DEFAULT NOW()
+    )
+  `).catch(err => console.warn('[ls] campaigns table:', err.message));
+
+  pool.query(`
+    CREATE TABLE IF NOT EXISTS ls_links (
+      id SERIAL PRIMARY KEY,
+      slug VARCHAR(100) UNIQUE NOT NULL,
+      original_url TEXT NOT NULL,
+      title VARCHAR(300),
+      campaign_id INTEGER REFERENCES ls_campaigns(id) ON DELETE SET NULL,
+      is_active BOOLEAN DEFAULT true,
+      expires_at TIMESTAMPTZ,
+      redirect_type INTEGER DEFAULT 302,
+      password_hash TEXT,
+      tags TEXT[],
+      utm_source VARCHAR(100),
+      utm_medium VARCHAR(100),
+      utm_campaign VARCHAR(100),
+      utm_term VARCHAR(100),
+      utm_content VARCHAR(100),
+      total_clicks INTEGER DEFAULT 0,
+      tier VARCHAR(20) DEFAULT 'free',
+      created_at TIMESTAMPTZ DEFAULT NOW(),
+      updated_at TIMESTAMPTZ DEFAULT NOW()
+    )
+  `).catch(err => console.warn('[ls] links table:', err.message));
+
+  pool.query(`
+    CREATE TABLE IF NOT EXISTS ls_clicks (
+      id SERIAL PRIMARY KEY,
+      link_id INTEGER NOT NULL REFERENCES ls_links(id) ON DELETE CASCADE,
+      clicked_at TIMESTAMPTZ DEFAULT NOW(),
+      ip_hash VARCHAR(64),
+      country VARCHAR(50),
+      city VARCHAR(100),
+      device_type VARCHAR(20),
+      browser VARCHAR(50),
+      os VARCHAR(50),
+      referrer TEXT,
+      referrer_domain VARCHAR(200),
+      user_agent TEXT,
+      is_bot BOOLEAN DEFAULT false
+    )
+  `).catch(err => console.warn('[ls] clicks table:', err.message));
+
+  pool.query(`
+    CREATE TABLE IF NOT EXISTS ls_audit_log (
+      id SERIAL PRIMARY KEY,
+      entity_type VARCHAR(50),
+      entity_id INTEGER,
+      action VARCHAR(50) NOT NULL,
+      details JSONB,
+      created_at TIMESTAMPTZ DEFAULT NOW()
+    )
+  `).catch(err => console.warn('[ls] audit_log table:', err.message));
+
+  pool.query(`
+    CREATE TABLE IF NOT EXISTS ls_error_log (
+      id SERIAL PRIMARY KEY,
+      endpoint VARCHAR(200),
+      method VARCHAR(10),
+      error_message TEXT,
+      stack_trace TEXT,
+      request_body JSONB,
+      created_at TIMESTAMPTZ DEFAULT NOW()
+    )
+  `).catch(err => console.warn('[ls] error_log table:', err.message));
+
+  // ── helpers ────────────────────────────────────────────────────────────────
+  function lsParseUA(ua = '') {
+    const bot = /bot|crawl|spider|slurp|bingpreview|facebookexternalhit|twitterbot|linkedinbot|whatsapp|telegram|discord/i.test(ua);
+    let device = 'desktop';
+    if (/Mobi|Android(?!.*Tablet)|iPhone|iPod/i.test(ua)) device = 'mobile';
+    else if (/iPad|Tablet|tablet/i.test(ua)) device = 'tablet';
+    let browser = 'Other';
+    if (/Edg\//i.test(ua)) browser = 'Edge';
+    else if (/OPR|Opera/i.test(ua)) browser = 'Opera';
+    else if (/Chrome/i.test(ua)) browser = 'Chrome';
+    else if (/Firefox/i.test(ua)) browser = 'Firefox';
+    else if (/Safari/i.test(ua)) browser = 'Safari';
+    let os = 'Other';
+    if (/Windows/i.test(ua)) os = 'Windows';
+    else if (/Mac OS X/i.test(ua)) os = 'macOS';
+    else if (/Android/i.test(ua)) os = 'Android';
+    else if (/iPhone|iPad|iPod/i.test(ua)) os = 'iOS';
+    else if (/Linux/i.test(ua)) os = 'Linux';
+    return { bot, device, browser, os };
+  }
+
+  function lsReferrerDomain(ref = '') {
+    try { return new URL(ref).hostname.replace(/^www\./, ''); } catch { return null; }
+  }
+
+  async function lsAudit(entityType, entityId, action, details) {
+    try {
+      await pool.query(
+        `INSERT INTO ls_audit_log (entity_type, entity_id, action, details) VALUES ($1,$2,$3,$4)`,
+        [entityType, entityId, action, JSON.stringify(details)]
+      );
+    } catch {}
+  }
+
+  async function lsLogError(endpoint, method, error, reqBody) {
+    try {
+      await pool.query(
+        `INSERT INTO ls_error_log (endpoint, method, error_message, stack_trace, request_body) VALUES ($1,$2,$3,$4,$5)`,
+        [endpoint, method, error.message, error.stack, JSON.stringify(reqBody || {})]
+      );
+    } catch {}
+  }
+
+  function lsSlug(len = 7) {
+    const chars = 'abcdefghijkmnpqrstuvwxyz23456789';
+    return Array.from({ length: len }, () => chars[Math.floor(Math.random() * chars.length)]).join('');
+  }
+
+  // ==========================================
+  // LINK SHORTENER — Redirect
+  // ==========================================
+  app.get('/s/:slug', async (req, res) => {
+    const { slug } = req.params;
+    try {
+      const { rows } = await pool.query(
+        `SELECT id, original_url, is_active, expires_at, redirect_type, utm_source, utm_medium, utm_campaign, utm_term, utm_content
+         FROM ls_links WHERE slug=$1`, [slug]
+      );
+      if (!rows.length || !rows[0].is_active) {
+        return res.status(404).send('Link not found or inactive.');
+      }
+      const link = rows[0];
+      if (link.expires_at && new Date(link.expires_at) < new Date()) {
+        return res.status(410).send('This link has expired.');
+      }
+      // Build final URL with UTM params if set
+      let dest = link.original_url;
+      try {
+        const u = new URL(dest);
+        if (link.utm_source) u.searchParams.set('utm_source', link.utm_source);
+        if (link.utm_medium) u.searchParams.set('utm_medium', link.utm_medium);
+        if (link.utm_campaign) u.searchParams.set('utm_campaign', link.utm_campaign);
+        if (link.utm_term) u.searchParams.set('utm_term', link.utm_term);
+        if (link.utm_content) u.searchParams.set('utm_content', link.utm_content);
+        dest = u.toString();
+      } catch {}
+
+      res.redirect(link.redirect_type || 302, dest);
+
+      // Async click tracking (fire-and-forget)
+      setImmediate(async () => {
+        try {
+          const ua = req.headers['user-agent'] || '';
+          const ref = req.headers['referer'] || req.headers['referrer'] || '';
+          const ip = req.headers['x-forwarded-for']?.split(',')[0]?.trim() || req.ip || '';
+          const ipHash = crypto.createHash('sha256').update(ip).digest('hex');
+          const { bot, device, browser, os } = lsParseUA(ua);
+          const refDomain = lsReferrerDomain(ref);
+          await pool.query(
+            `INSERT INTO ls_clicks (link_id, ip_hash, device_type, browser, os, referrer, referrer_domain, user_agent, is_bot)
+             VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
+            [link.id, ipHash, device, browser, os, ref || null, refDomain, ua, bot]
+          );
+          await pool.query(`UPDATE ls_links SET total_clicks = total_clicks + 1 WHERE id=$1`, [link.id]);
+        } catch (e) {
+          console.warn('[ls] click tracking error:', e.message);
+        }
+      });
+    } catch (err) {
+      await lsLogError('/s/:slug', 'GET', err, {});
+      res.status(500).send('Server error');
+    }
+  });
+
+  // ==========================================
+  // LINK SHORTENER — API Routes
+  // ==========================================
+
+  // Overview stats
+  app.get('/api/links/stats/overview', async (req, res) => {
+    try {
+      const [totals, today, topLinks, deviceBreak, refBreak] = await Promise.all([
+        pool.query(`SELECT COUNT(*) AS total_links, SUM(total_clicks) AS total_clicks FROM ls_links WHERE is_active=true`),
+        pool.query(`SELECT COUNT(*) AS today_clicks FROM ls_clicks WHERE clicked_at >= NOW() - INTERVAL '24h' AND is_bot=false`),
+        pool.query(`SELECT l.id, l.slug, l.title, l.original_url, l.total_clicks FROM ls_links l ORDER BY l.total_clicks DESC LIMIT 5`),
+        pool.query(`SELECT device_type, COUNT(*) AS cnt FROM ls_clicks WHERE is_bot=false GROUP BY device_type ORDER BY cnt DESC`),
+        pool.query(`SELECT referrer_domain, COUNT(*) AS cnt FROM ls_clicks WHERE referrer_domain IS NOT NULL AND is_bot=false GROUP BY referrer_domain ORDER BY cnt DESC LIMIT 8`),
+      ]);
+      res.json({
+        totalLinks: parseInt(totals.rows[0].total_links) || 0,
+        totalClicks: parseInt(totals.rows[0].total_clicks) || 0,
+        todayClicks: parseInt(today.rows[0].today_clicks) || 0,
+        topLinks: topLinks.rows,
+        deviceBreakdown: deviceBreak.rows,
+        referrerBreakdown: refBreak.rows,
+      });
+    } catch (err) {
+      await lsLogError('/api/links/stats/overview', 'GET', err, {});
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // List all links
+  app.get('/api/links', async (req, res) => {
+    try {
+      const { search, campaign_id } = req.query;
+      let q = `SELECT l.*, c.name AS campaign_name, c.color AS campaign_color
+               FROM ls_links l LEFT JOIN ls_campaigns c ON l.campaign_id=c.id`;
+      const params = [];
+      const wheres = [];
+      if (search) { params.push(`%${search}%`); wheres.push(`(l.slug ILIKE $${params.length} OR l.title ILIKE $${params.length} OR l.original_url ILIKE $${params.length})`); }
+      if (campaign_id) { params.push(campaign_id); wheres.push(`l.campaign_id=$${params.length}`); }
+      if (wheres.length) q += ' WHERE ' + wheres.join(' AND ');
+      q += ' ORDER BY l.created_at DESC';
+      const { rows } = await pool.query(q, params);
+      res.json(rows);
+    } catch (err) {
+      await lsLogError('/api/links', 'GET', err, {});
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // Create link
+  app.post('/api/links', async (req, res) => {
+    try {
+      let { slug, original_url, title, campaign_id, expires_at, redirect_type, tags,
+            utm_source, utm_medium, utm_campaign, utm_term, utm_content } = req.body;
+      if (!original_url) return res.status(400).json({ error: 'original_url required' });
+      if (!slug) {
+        // Auto-generate unique slug
+        let attempts = 0;
+        do {
+          slug = lsSlug(7);
+          const exists = await pool.query(`SELECT id FROM ls_links WHERE slug=$1`, [slug]);
+          if (!exists.rows.length) break;
+          attempts++;
+        } while (attempts < 10);
+      } else {
+        // Check uniqueness
+        const exists = await pool.query(`SELECT id FROM ls_links WHERE slug=$1`, [slug]);
+        if (exists.rows.length) return res.status(409).json({ error: 'Slug already taken' });
+      }
+      const { rows } = await pool.query(
+        `INSERT INTO ls_links (slug, original_url, title, campaign_id, expires_at, redirect_type, tags, utm_source, utm_medium, utm_campaign, utm_term, utm_content)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) RETURNING *`,
+        [slug, original_url, title || null, campaign_id || null, expires_at || null,
+         redirect_type || 302, tags || null, utm_source || null, utm_medium || null,
+         utm_campaign || null, utm_term || null, utm_content || null]
+      );
+      await lsAudit('link', rows[0].id, 'create', { slug, original_url, title });
+      res.status(201).json(rows[0]);
+    } catch (err) {
+      await lsLogError('/api/links', 'POST', err, req.body);
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // Update link
+  app.put('/api/links/:id', async (req, res) => {
+    try {
+      const { id } = req.params;
+      const { title, original_url, campaign_id, is_active, expires_at, redirect_type,
+              utm_source, utm_medium, utm_campaign, utm_term, utm_content, tags } = req.body;
+      const { rows } = await pool.query(
+        `UPDATE ls_links SET
+          title=COALESCE($1,title), original_url=COALESCE($2,original_url),
+          campaign_id=$3, is_active=COALESCE($4,is_active),
+          expires_at=$5, redirect_type=COALESCE($6,redirect_type),
+          utm_source=$7, utm_medium=$8, utm_campaign=$9, utm_term=$10, utm_content=$11,
+          tags=COALESCE($12,tags), updated_at=NOW()
+         WHERE id=$13 RETURNING *`,
+        [title, original_url, campaign_id || null, is_active, expires_at || null,
+         redirect_type, utm_source || null, utm_medium || null, utm_campaign || null,
+         utm_term || null, utm_content || null, tags || null, id]
+      );
+      if (!rows.length) return res.status(404).json({ error: 'Not found' });
+      await lsAudit('link', parseInt(id), 'update', req.body);
+      res.json(rows[0]);
+    } catch (err) {
+      await lsLogError(`/api/links/${req.params.id}`, 'PUT', err, req.body);
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // Delete link
+  app.delete('/api/links/:id', async (req, res) => {
+    try {
+      const { id } = req.params;
+      const { rows } = await pool.query(`DELETE FROM ls_links WHERE id=$1 RETURNING slug`, [id]);
+      if (!rows.length) return res.status(404).json({ error: 'Not found' });
+      await lsAudit('link', parseInt(id), 'delete', { slug: rows[0].slug });
+      res.json({ ok: true });
+    } catch (err) {
+      await lsLogError(`/api/links/${req.params.id}`, 'DELETE', err, {});
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // Analytics for a single link
+  app.get('/api/links/:id/analytics', async (req, res) => {
+    try {
+      const { id } = req.params;
+      const { days = 30 } = req.query;
+      const [link, daily, devices, browsers, referrers, recentClicks] = await Promise.all([
+        pool.query(`SELECT * FROM ls_links WHERE id=$1`, [id]),
+        pool.query(
+          `SELECT DATE(clicked_at) AS date, COUNT(*) AS clicks
+           FROM ls_clicks WHERE link_id=$1 AND clicked_at >= NOW() - ($2 || ' days')::INTERVAL AND is_bot=false
+           GROUP BY DATE(clicked_at) ORDER BY date ASC`,
+          [id, days]
+        ),
+        pool.query(`SELECT device_type, COUNT(*) AS cnt FROM ls_clicks WHERE link_id=$1 AND is_bot=false GROUP BY device_type ORDER BY cnt DESC`, [id]),
+        pool.query(`SELECT browser, COUNT(*) AS cnt FROM ls_clicks WHERE link_id=$1 AND is_bot=false GROUP BY browser ORDER BY cnt DESC`, [id]),
+        pool.query(
+          `SELECT referrer_domain, COUNT(*) AS cnt FROM ls_clicks WHERE link_id=$1 AND referrer_domain IS NOT NULL AND is_bot=false
+           GROUP BY referrer_domain ORDER BY cnt DESC LIMIT 10`,
+          [id]
+        ),
+        pool.query(
+          `SELECT clicked_at, device_type, browser, os, referrer_domain, is_bot
+           FROM ls_clicks WHERE link_id=$1 ORDER BY clicked_at DESC LIMIT 50`,
+          [id]
+        ),
+      ]);
+      if (!link.rows.length) return res.status(404).json({ error: 'Not found' });
+      res.json({
+        link: link.rows[0],
+        daily: daily.rows,
+        devices: devices.rows,
+        browsers: browsers.rows,
+        referrers: referrers.rows,
+        recentClicks: recentClicks.rows,
+      });
+    } catch (err) {
+      await lsLogError(`/api/links/${req.params.id}/analytics`, 'GET', err, {});
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // QR code for a link
+  app.get('/api/links/:id/qr', async (req, res) => {
+    try {
+      const { id } = req.params;
+      const { rows } = await pool.query(`SELECT slug FROM ls_links WHERE id=$1`, [id]);
+      if (!rows.length) return res.status(404).json({ error: 'Not found' });
+      const QRCode = require('qrcode');
+      const baseUrl = process.env.APP_URL || `${req.protocol}://${req.get('host')}`;
+      const shortUrl = `${baseUrl}/s/${rows[0].slug}`;
+      const dataUrl = await QRCode.toDataURL(shortUrl, { width: 400, margin: 2, color: { dark: '#0f172a', light: '#ffffff' } });
+      res.json({ qr: dataUrl, url: shortUrl });
+    } catch (err) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // AI: suggest slug
+  app.post('/api/links/ai-slug', async (req, res) => {
+    try {
+      const { url, title } = req.body;
+      const msg = await client.messages.create({
+        model: 'claude-haiku-4-5-20251001',
+        max_tokens: 100,
+        messages: [{
+          role: 'user',
+          content: `Suggest 5 short, memorable, URL-safe slugs (3-12 chars, lowercase letters/numbers/hyphens only) for a link shortener.
+URL: ${url}
+Title: ${title || 'none'}
+Reply with ONLY a JSON array of 5 strings, no explanation. Example: ["go-now","launch24","coollink","ad-magic","bright7"]`
+        }]
+      });
+      const text = msg.content[0].text.trim();
+      const match = text.match(/\[.*\]/s);
+      const slugs = match ? JSON.parse(match[0]) : [];
+      res.json({ slugs });
+    } catch (err) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // AI: performance summary
+  app.post('/api/links/ai-summary', async (req, res) => {
+    try {
+      const { linkId, days = 30 } = req.body;
+      const [link, daily, devices, referrers] = await Promise.all([
+        pool.query(`SELECT slug, title, total_clicks, created_at FROM ls_links WHERE id=$1`, [linkId]),
+        pool.query(
+          `SELECT DATE(clicked_at) AS date, COUNT(*) AS clicks FROM ls_clicks WHERE link_id=$1 AND clicked_at >= NOW() - ($2 || ' days')::INTERVAL AND is_bot=false GROUP BY DATE(clicked_at) ORDER BY date`,
+          [linkId, days]
+        ),
+        pool.query(`SELECT device_type, COUNT(*) AS cnt FROM ls_clicks WHERE link_id=$1 AND is_bot=false GROUP BY device_type`, [linkId]),
+        pool.query(`SELECT referrer_domain, COUNT(*) AS cnt FROM ls_clicks WHERE link_id=$1 AND referrer_domain IS NOT NULL AND is_bot=false GROUP BY referrer_domain ORDER BY cnt DESC LIMIT 5`, [linkId]),
+      ]);
+      if (!link.rows.length) return res.status(404).json({ error: 'Not found' });
+      const data = { link: link.rows[0], daily: daily.rows, devices: devices.rows, referrers: referrers.rows };
+      const msg = await client.messages.create({
+        model: 'claude-haiku-4-5-20251001',
+        max_tokens: 400,
+        messages: [{
+          role: 'user',
+          content: `You are a marketing analytics AI. Analyze this link's performance and provide a 3-5 sentence insight summary for an ad/marketing professional. Include trends, top traffic sources, device split, and one actionable recommendation.
+
+Data: ${JSON.stringify(data, null, 2)}
+
+Respond in plain text, no markdown headers.`
+        }]
+      });
+      res.json({ summary: msg.content[0].text });
+    } catch (err) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // Campaigns CRUD
+  app.get('/api/campaigns', async (req, res) => {
+    try {
+      const { rows } = await pool.query(
+        `SELECT c.*, COUNT(l.id) AS link_count, SUM(l.total_clicks) AS total_clicks
+         FROM ls_campaigns c LEFT JOIN ls_links l ON l.campaign_id=c.id
+         GROUP BY c.id ORDER BY c.created_at DESC`
+      );
+      res.json(rows);
+    } catch (err) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.post('/api/campaigns', async (req, res) => {
+    try {
+      const { name, description, color } = req.body;
+      if (!name) return res.status(400).json({ error: 'name required' });
+      const { rows } = await pool.query(
+        `INSERT INTO ls_campaigns (name, description, color) VALUES ($1,$2,$3) RETURNING *`,
+        [name, description || null, color || '#6366f1']
+      );
+      await lsAudit('campaign', rows[0].id, 'create', { name });
+      res.status(201).json(rows[0]);
+    } catch (err) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.delete('/api/campaigns/:id', async (req, res) => {
+    try {
+      await pool.query(`DELETE FROM ls_campaigns WHERE id=$1`, [req.params.id]);
+      await lsAudit('campaign', parseInt(req.params.id), 'delete', {});
+      res.json({ ok: true });
+    } catch (err) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // Admin — audit log
+  app.get('/api/admin/link-audit', async (req, res) => {
+    try {
+      const { limit = 100, offset = 0 } = req.query;
+      const { rows } = await pool.query(
+        `SELECT * FROM ls_audit_log ORDER BY created_at DESC LIMIT $1 OFFSET $2`,
+        [limit, offset]
+      );
+      res.json(rows);
+    } catch (err) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // Admin — error log
+  app.get('/api/admin/link-errors', async (req, res) => {
+    try {
+      const { limit = 100, offset = 0 } = req.query;
+      const { rows } = await pool.query(
+        `SELECT * FROM ls_error_log ORDER BY created_at DESC LIMIT $1 OFFSET $2`,
+        [limit, offset]
+      );
+      res.json(rows);
+    } catch (err) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+
 const errorHandler = (err, req, res, next) => {
   const status = err.status || err.statusCode || 500;
   console.error('❌ Unhandled error:', err.message || err);
