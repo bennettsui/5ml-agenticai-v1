@@ -372,7 +372,7 @@ function AIPanel({ slide, totalSlides, hasOverride, onApplied, onClose }: AIPane
         }),
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Review failed');
+      if (!res.ok) throw new Error(data.usage_hint || data.error || 'Review failed');
 
       const review: AIReview = data.review;
       const model: string = data.model || 'deepseek-chat';
@@ -380,8 +380,10 @@ function AIPanel({ slide, totalSlides, hasOverride, onApplied, onClose }: AIPane
       setLatestModel(model);
       setAiState('done');
 
-      // Add AI response to local chat
-      const aiMsg: ChatMessage = { role: 'assistant', content: JSON.stringify(review), model, created_at: new Date().toISOString() };
+      // Add AI response to local chat (include token usage for debugging)
+      const usage = data.usage;
+      const usageStr = usage ? ` · ${usage.prompt_tokens}↑ ${usage.completion_tokens}↓ tokens` : '';
+      const aiMsg: ChatMessage = { role: 'assistant', content: JSON.stringify(review), model: model + usageStr, created_at: new Date().toISOString() };
       setMessages(prev => [...prev, aiMsg]);
 
       // Persist both messages (non-blocking)
