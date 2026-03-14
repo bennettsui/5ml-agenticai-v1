@@ -710,13 +710,13 @@ export const USE_CASES: UseCaseConfig[] = [
   {
     id: 'barcode-qr-generator',
     name: 'Barcode & QR Generator',
-    description: 'Generate QR codes and barcodes (EAN, UPC, Code128) with logo embedding, batch export, and brand colour customisation',
+    description: 'Generate QR codes and barcodes (EAN, UPC, Code128) up to 2000px with logo embedding, SVG export, batch export, and 3D+NFC ordering.',
     solutionLine: 'FrontierVentures',
-    status: 'planned',
-    progress: 0,
+    status: 'live',
+    progress: 1,
     priority: 'medium',
-    path: '#',
-    features: ['QR Code Generator', 'Barcode (EAN/UPC/Code128)', 'Logo Embedding', 'Brand Colours', 'Batch Export'],
+    path: '/qr-generator',
+    features: ['Hi-Res up to 2000px', 'Logo Overlay', 'EAN / UPC / Code128', 'SVG Export', 'Batch Export', '3D + NFC ordering'],
   },
   {
     id: 'pdf-compressor',
