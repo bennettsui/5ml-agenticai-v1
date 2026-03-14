@@ -1,31 +1,48 @@
 // ─────────────────────────────────────────────────────────────────────────────
-// Cantonese Transcription & Analysis — Express API Routes
-// Base path: /api/cantonese-transcription
+// Transcription & Analysis — Express API Routes
+// Base path: /api/transcription
+// Supports Cantonese (primary), Mandarin, English, and other languages.
 // ─────────────────────────────────────────────────────────────────────────────
 
 const express    = require('express');
 const Anthropic  = require('@anthropic-ai/sdk');
 const multer     = require('multer');
+const path       = require('path');
+const fs         = require('fs');
+const { v4: uuidv4 } = require('uuid');
 const deepseekService = require('../../../services/deepseekService');
 const db         = require('./db');
 const sttService = require('./stt-service');
 
-// multer: memory storage so we can forward audio bytes to Google STT
-const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 100 * 1024 * 1024 } });
+// Audio storage directory
+const AUDIO_DIR = path.join(__dirname, '../../../uploads/cantonese-audio');
+if (!fs.existsSync(AUDIO_DIR)) fs.mkdirSync(AUDIO_DIR, { recursive: true });
+
+// multer: disk storage to persist audio files for history review
+const audioStorage = multer.diskStorage({
+  destination: (_req, _file, cb) => cb(null, AUDIO_DIR),
+  filename: (_req, file, cb) => {
+    const ext = path.extname(file.originalname) || '.audio';
+    cb(null, `${uuidv4()}${ext}`);
+  },
+});
+const upload = multer({ storage: audioStorage, limits: { fileSize: 200 * 1024 * 1024 } });
 
 const router = express.Router();
 
 const VALID_TASKS = ['clean_transcript', 'meeting_minutes', 'summary_zh', 'summary_en', 'action_items'];
 
 // ── System prompt ────────────────────────────────────────────────────────────
-const CANTONESE_SYSTEM_PROMPT = `You are an expert Cantonese speech transcription and analysis assistant.
+const CANTONESE_SYSTEM_PROMPT = `You are an expert speech transcription and analysis assistant.
+
+Language support:
+- Primary specialisation: Cantonese (粵語), including colloquial speech, 粵語口語字（例：「佢哋」、「冇」、「嗰啲」、「噉」）, and Chinese-English code-switching.
+- Also supported: Mandarin Chinese, English, and other languages produced by the upstream ASR model.
+- Detect the dominant language from the transcript and respond in that language by default.
 
 Context:
-- Upstream, a Whisper v3 Cantonese ASR model (khleeloo/whisper-large-v3-cantonese) converts raw audio into text.
-- The ASR output may contain:
-  - Colloquial Cantonese, 粵語口語字（例：「佢哋」、「冇」、「嗰啲」、「噉」）
-  - Mixed Chinese-English code-switching
-  - Minor recognition errors, duplicated words, or incomplete sentences
+- Upstream, a speech-to-text (STT) model converts raw audio into text (e.g. Whisper v3 for Cantonese, Google STT for other languages).
+- The ASR output may contain minor recognition errors, duplicated words, or incomplete sentences.
 - You never have access to raw audio, only to the ASR transcript and optional word/segment timestamps.
 
 Your jobs:
@@ -33,12 +50,11 @@ Your jobs:
    - Treat the ASR transcript as the only ground truth of what was said.
    - You may fix obvious ASR glitches (repeated characters, broken words), but you must not invent new content.
 
-2. Preserve Cantonese style unless explicitly asked to "標準書面中文" or "English".
-   - Default: keep spoken Cantonese tone, but correct very obvious recognition mistakes.
-   - When user asks for:
-     - 「轉做書面中文」: rewrite into formal written Chinese, keep meaning intact.
-     - 「英文摘要」: produce a concise English summary, not a literal translation.
-     - 「逐字稿」: keep as close to original wording as possible, only clean glitches.
+2. Preserve the original language style unless explicitly asked to change it.
+   - For Cantonese: keep spoken Cantonese tone; correct very obvious recognition mistakes.
+   - When user asks for 「轉做書面中文」: rewrite into formal written Chinese, keep meaning intact.
+   - When user asks for 「英文摘要」 or "English summary": produce a concise English summary.
+   - When user asks for 「逐字稿」 or "verbatim": keep as close to original wording as possible, only clean glitches.
 
 3. Robustness to code-switching:
    - Keep English terms as-is if they are business / technical jargon.
@@ -55,7 +71,7 @@ Your jobs:
 
 Output style:
 - Be concise and information‑dense.
-- When the user works in Cantonese, respond mainly in written Chinese (Traditional) and keep some Cantonese flavour when appropriate.
+- Match the output language to the transcript language, unless the user requests a specific output language.
 - When the user requests English, respond in clear, professional English.
 
 You must:
@@ -84,7 +100,7 @@ function emit(res, data) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// POST /api/cantonese-transcription/analyze  (SSE streaming)
+// POST /api/transcription/analyze  (SSE streaming)
 // ─────────────────────────────────────────────────────────────────────────────
 router.post('/analyze', async (req, res) => {
   const startTime = Date.now();
@@ -102,6 +118,9 @@ router.post('/analyze', async (req, res) => {
     task = 'clean_transcript',
     extra_instructions = '',
     model = 'haiku',
+    audio_filename,
+    audio_size,
+    audio_duration_s,
   } = req.body;
 
   // ── Step 1: validate input ─────────────────────────────────────────────
@@ -145,6 +164,9 @@ router.post('/analyze', async (req, res) => {
       task,
       model,
       extra_instructions: extra_instructions.trim() || null,
+      audio_filename: audio_filename || null,
+      audio_size: audio_size || null,
+      audio_duration_s: audio_duration_s || null,
     });
     emit(res, { type: 'job_created', job_id: job.job_id });
   } catch (err) {
@@ -481,7 +503,7 @@ async function classifyTranscript(transcript) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// POST /api/cantonese-transcription/orchestrate  (SSE streaming)
+// POST /api/transcription/orchestrate  (SSE streaming)
 // Classifies transcript → routes to type-specific prompt → streams result
 // ─────────────────────────────────────────────────────────────────────────────
 router.post('/orchestrate', async (req, res) => {
@@ -670,7 +692,7 @@ router.post('/orchestrate', async (req, res) => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-// GET /api/cantonese-transcription/jobs
+// GET /api/transcription/jobs
 // ─────────────────────────────────────────────────────────────────────────────
 router.get('/jobs', async (req, res) => {
   try {
@@ -685,7 +707,7 @@ router.get('/jobs', async (req, res) => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-// GET /api/cantonese-transcription/jobs/:jobId
+// GET /api/transcription/jobs/:jobId
 // ─────────────────────────────────────────────────────────────────────────────
 router.get('/jobs/:jobId', async (req, res) => {
   try {
@@ -699,7 +721,7 @@ router.get('/jobs/:jobId', async (req, res) => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-// GET /api/cantonese-transcription/errors
+// GET /api/transcription/errors
 // ─────────────────────────────────────────────────────────────────────────────
 router.get('/errors', async (req, res) => {
   try {
@@ -714,7 +736,7 @@ router.get('/errors', async (req, res) => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-// GET /api/cantonese-transcription/stats
+// GET /api/transcription/stats
 // ─────────────────────────────────────────────────────────────────────────────
 router.get('/stats', async (req, res) => {
   try {
@@ -727,7 +749,7 @@ router.get('/stats', async (req, res) => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-// GET /api/cantonese-transcription/error-codes
+// GET /api/transcription/error-codes
 // ─────────────────────────────────────────────────────────────────────────────
 router.get('/error-codes', (_req, res) => {
   const table = Object.entries(db.ERROR_MESSAGES).map(([code, message]) => ({ code, message }));
@@ -735,7 +757,7 @@ router.get('/error-codes', (_req, res) => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-// GET /api/cantonese-transcription/providers
+// GET /api/transcription/providers
 // Returns available STT providers and the current default.
 // ─────────────────────────────────────────────────────────────────────────────
 router.get('/providers', (_req, res) => {
@@ -745,7 +767,7 @@ router.get('/providers', (_req, res) => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-// POST /api/cantonese-transcription/transcribe
+// POST /api/transcription/transcribe
 // Audio file → STT provider → { provider, transcript, segments, language,
 //                               confidence?, fallbackFrom?, autoSegmented?, segmentCount? }
 //
@@ -920,12 +942,15 @@ router.post('/transcribe', upload.single('audio'), async (req, res) => {
   }
 
   if (!sttService.defaultProvider()) {
+    // Clean up saved file if no STT provider
+    fs.unlink(req.file.path, () => {});
     return res.status(503).json({ ok: false, error_code: 'CT-016', error: db.ERROR_MESSAGES['CT-016'] });
   }
 
   const mimeType = req.file.mimetype || 'audio/webm';
   const language = req.body.language || 'yue-Hant-HK';
   const provider = req.body.provider || 'auto';
+  const savedFilename = req.file.filename; // UUID-based filename saved to disk
 
   // Stream NDJSON progress events back to the client
   res.setHeader('Content-Type', 'application/x-ndjson');
@@ -941,9 +966,18 @@ router.post('/transcribe', upload.single('audio'), async (req, res) => {
 
   onProgress(`收到音訊（${(req.file.size / 1024 / 1024).toFixed(1)} MB，${mimeType}）`, 5);
 
+  // Read file from disk into buffer for STT processing
+  let fileBuffer;
+  try {
+    fileBuffer = fs.readFileSync(req.file.path);
+  } catch (readErr) {
+    push({ type: 'error', ok: false, error_code: 'CT-013', error: '無法讀取音訊檔案' });
+    return res.end();
+  }
+
   try {
     const result = await autoTranscribeBuffer({
-      fileBuffer: req.file.buffer,
+      fileBuffer,
       mimeType,
       language,
       filename: req.file.originalname,
@@ -963,7 +997,7 @@ router.post('/transcribe', upload.single('audio'), async (req, res) => {
       try {
         onProgress('正在識別說話者（pyannote-audio）...', 90);
         const diarSegments = await sttService.diarizeAudio({
-          fileBuffer: req.file.buffer,
+          fileBuffer,
           mimeType,
           filename:   req.file.originalname,
         });
@@ -980,7 +1014,7 @@ router.post('/transcribe', upload.single('audio'), async (req, res) => {
       }
     }
 
-    push({ type: 'done', ok: true, ...result });
+    push({ type: 'done', ok: true, savedFilename, originalFilename: req.file.originalname, fileSize: req.file.size, ...result });
     return res.end();
   } catch (err) {
     if (err.name === 'TimeoutError' || err.name === 'AbortError') {
@@ -1093,12 +1127,34 @@ ${transcript}`;
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
+// GET /audio/:job_id  — stream saved audio file for a job
+// ─────────────────────────────────────────────────────────────────────────────
+router.get('/audio/:job_id', async (req, res) => {
+  try {
+    const job = await db.getJob(req.params.job_id);
+    if (!job || !job.audio_filename) {
+      return res.status(404).json({ ok: false, error: '找不到音訊檔案' });
+    }
+    const filePath = path.join(AUDIO_DIR, job.audio_filename);
+    if (!fs.existsSync(filePath)) {
+      return res.status(404).json({ ok: false, error: '音訊檔案已刪除' });
+    }
+    const ext = path.extname(job.audio_filename).toLowerCase();
+    const mimeMap = { '.mp3': 'audio/mpeg', '.wav': 'audio/wav', '.m4a': 'audio/mp4', '.ogg': 'audio/ogg', '.webm': 'audio/webm', '.flac': 'audio/flac' };
+    res.setHeader('Content-Type', mimeMap[ext] || 'audio/octet-stream');
+    res.setHeader('Content-Disposition', `inline; filename="${job.audio_filename}"`);
+    fs.createReadStream(filePath).pipe(res);
+  } catch (err) {
+    console.error('[ct-audio] serve error:', err.message);
+    res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
 // POST /convert  — convert / trim / split audio or video file
 // ─────────────────────────────────────────────────────────────────────────────
 const ffmpeg = require('fluent-ffmpeg');
 const os     = require('os');
-const path   = require('path');
-const fs     = require('fs');
 
 const FORMAT_MIME = { wav: 'audio/wav', mp3: 'audio/mpeg', m4a: 'audio/mp4' };
 

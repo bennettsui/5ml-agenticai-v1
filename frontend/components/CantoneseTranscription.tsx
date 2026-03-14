@@ -105,7 +105,7 @@ export default function CantoneseTranscription() {
     setError(null);
 
     try {
-      const res = await fetch('/api/cantonese-transcription/analyze', {
+      const res = await fetch('/api/transcription/analyze', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -144,8 +144,8 @@ export default function CantoneseTranscription() {
           <Mic className="w-5 h-5 text-indigo-400" />
         </div>
         <div>
-          <h2 className="text-lg font-bold text-white">粵語逐字稿分析</h2>
-          <p className="text-xs text-slate-400">Cantonese ASR Transcript Analysis · Whisper v3</p>
+          <h2 className="text-lg font-bold text-white">逐字稿分析</h2>
+          <p className="text-xs text-slate-400">Transcription Analysis · Cantonese, Mandarin & English</p>
         </div>
       </div>
 
@@ -311,7 +311,7 @@ export default function CantoneseTranscription() {
       <div className="flex items-start gap-2 p-3 rounded-lg bg-white/[0.02] border border-slate-700/30">
         <Mic className="w-3.5 h-3.5 text-slate-500 mt-0.5 shrink-0" />
         <p className="text-[11px] text-slate-500 leading-relaxed">
-          此工具處理來自 Whisper v3 Cantonese ASR 模型（khleeloo/whisper-large-v3-cantonese）嘅逐字稿輸出。
+          此工具處理來自 Whisper v3（粵語優先）或 Google STT 嘅逐字稿輸出。支援粵語、普通話及英語。
           AI 只會清理明顯錯誤，唔會自行添加內容。
         </p>
       </div>
