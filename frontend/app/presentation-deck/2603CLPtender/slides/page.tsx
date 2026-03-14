@@ -285,6 +285,7 @@ function AIPanel({ slide, totalSlides, hasOverride, onApplied, onClose }: AIPane
 
   // AI analysis state
   const [aiState, setAiState] = useState<'idle' | 'loading' | 'done' | 'error'>('idle');
+  const [aiError, setAiError] = useState('');
   const [latestReview, setLatestReview] = useState<AIReview | null>(null);
   const [latestModel, setLatestModel] = useState('');
 
@@ -304,6 +305,7 @@ function AIPanel({ slide, totalSlides, hasOverride, onApplied, onClose }: AIPane
     setMessages([]);
     setLatestReview(null);
     setAiState('idle');
+    setAiError('');
     setApplyState('idle');
     setApplyError('');
     fetch(`/api/presentation-deck/${SLUG}/slides/${slide.slide_number}/chat`)
@@ -344,6 +346,7 @@ function AIPanel({ slide, totalSlides, hasOverride, onApplied, onClose }: AIPane
   async function handleAnalyse() {
     const instruction = userComment.trim() || 'Analyse this slide and suggest improvements.';
     setAiState('loading');
+    setAiError('');
     setLatestReview(null);
     setUserComment('');
 
@@ -369,7 +372,7 @@ function AIPanel({ slide, totalSlides, hasOverride, onApplied, onClose }: AIPane
         }),
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Review failed');
+      if (!res.ok) throw new Error(data.usage_hint || data.error || 'Review failed');
 
       const review: AIReview = data.review;
       const model: string = data.model || 'deepseek-chat';
@@ -377,8 +380,10 @@ function AIPanel({ slide, totalSlides, hasOverride, onApplied, onClose }: AIPane
       setLatestModel(model);
       setAiState('done');
 
-      // Add AI response to local chat
-      const aiMsg: ChatMessage = { role: 'assistant', content: JSON.stringify(review), model, created_at: new Date().toISOString() };
+      // Add AI response to local chat (include token usage for debugging)
+      const usage = data.usage;
+      const usageStr = usage ? ` · ${usage.prompt_tokens}↑ ${usage.completion_tokens}↓ tokens` : '';
+      const aiMsg: ChatMessage = { role: 'assistant', content: JSON.stringify(review), model: model + usageStr, created_at: new Date().toISOString() };
       setMessages(prev => [...prev, aiMsg]);
 
       // Persist both messages (non-blocking)
@@ -388,6 +393,8 @@ function AIPanel({ slide, totalSlides, hasOverride, onApplied, onClose }: AIPane
         body: JSON.stringify({ messages: [userMsg, aiMsg] }),
       }).catch(() => {});
     } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : 'Unknown error';
+      setAiError(msg);
       setAiState('error');
       // Remove optimistic user message
       setMessages(prev => prev.filter(m => m !== userMsg));
@@ -452,6 +459,7 @@ function AIPanel({ slide, totalSlides, hasOverride, onApplied, onClose }: AIPane
     setMessages([]);
     setLatestReview(null);
     setAiState('idle');
+    setAiError('');
     setApplyState('idle');
     setApplyError('');
   }
@@ -589,8 +597,12 @@ function AIPanel({ slide, totalSlides, hasOverride, onApplied, onClose }: AIPane
             )}
             {aiState === 'error' && (
               <div className="flex justify-start">
-                <div className="bg-red-500/5 border border-red-500/20 rounded-lg px-3 py-2">
-                  <p className="text-[11px] text-red-400">Analysis failed. Check DeepSeek API key.</p>
+                <div className="bg-red-500/5 border border-red-500/20 rounded-lg px-3 py-2.5 space-y-1.5 max-w-[92%]">
+                  <p className="text-[11px] text-red-400 font-medium">Analysis failed</p>
+                  {aiError && <p className="text-[10px] text-red-400/70 break-all">{aiError}</p>}
+                  <button onClick={handleAnalyse} className="text-[10px] text-red-400 hover:text-red-300 underline">
+                    Retry
+                  </button>
                 </div>
               </div>
             )}

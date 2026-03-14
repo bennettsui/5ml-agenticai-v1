@@ -911,12 +911,25 @@ Slide context for this session:
 Current content:
 ${JSON.stringify(slide.content, null, 2)}`;
 
-    // Build conversation: system + prior turns (max 6) + current user message
+    // Build conversation: system + prior turns (max 4, with updated_content stripped from AI messages)
     const messages = [{ role: 'system', content: systemContent }];
-    for (const msg of chatHistory.slice(-6)) {
-      messages.push({ role: msg.role === 'assistant' ? 'assistant' : 'user', content: msg.content });
+    for (const msg of chatHistory.slice(-4)) {
+      if (msg.role === 'assistant') {
+        // Strip updated_content from AI history to avoid token overflow
+        let content = msg.content;
+        try {
+          const parsed = JSON.parse(msg.content);
+          content = `Previous analysis:\nOverall: ${parsed.overall || ''}\nSuggestions: ${(parsed.suggestions || []).join('; ')}\nChange: ${parsed.change_summary || ''}`;
+        } catch { /* not JSON, use as-is */ }
+        messages.push({ role: 'assistant', content });
+      } else {
+        messages.push({ role: 'user', content: msg.content });
+      }
     }
     messages.push({ role: 'user', content: userComment || 'Please analyse this slide and suggest improvements.' });
+
+    const estTokens = messages.reduce((sum, m) => sum + Math.ceil(m.content.length / 4), 0);
+    console.log(`[ai-review] slide=${slideNumber} turns=${chatHistory.length} est_tokens≈${estTokens}`);
 
     const response = await axios.post(
       'https://api.deepseek.com/chat/completions',
@@ -925,16 +938,27 @@ ${JSON.stringify(slide.content, null, 2)}`;
     );
 
     const raw = response.data.choices[0]?.message?.content || '';
+    const usage = response.data.usage || {};
+    console.log(`[ai-review] success slide=${slideNumber} tokens=${JSON.stringify(usage)}`);
     let review;
     try {
       review = JSON.parse(raw.replace(/^```(?:json)?\n?|\n?```$/g, '').trim());
     } catch {
       review = { overall: raw, issues: [], suggestions: [], change_summary: 'AI review', updated_content: slide.content };
     }
-    res.json({ review, model: response.data.model || MODEL, usage: response.data.usage });
+    res.json({ review, model: response.data.model || MODEL, usage });
   } catch (err) {
-    console.error('[presentation-deck] ai-review error', err.message);
-    res.status(500).json({ error: err.message });
+    // Expose DeepSeek's actual error body (rate limit, invalid key, etc.)
+    const deepseekErr = err.response?.data?.error;
+    const detail = deepseekErr
+      ? `DeepSeek ${err.response.status}: ${deepseekErr.message || JSON.stringify(deepseekErr)}`
+      : err.message;
+    console.error('[presentation-deck] ai-review error', detail, err.response?.status);
+    res.status(500).json({
+      error: detail,
+      status: err.response?.status,
+      usage_hint: err.response?.status === 429 ? 'Rate limit hit — wait a moment and retry' : null,
+    });
   }
 });
 
