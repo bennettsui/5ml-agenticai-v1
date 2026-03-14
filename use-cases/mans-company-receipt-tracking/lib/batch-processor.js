@@ -41,15 +41,43 @@ async function logProcessing(batchId, level, step, message, details = null) {
 }
 
 // ---------------------------------------------------------------------------
+// Load previous learning (remarks) from DB to inject as context
+// ---------------------------------------------------------------------------
+async function loadPreviousLearning(limit = 40) {
+  try {
+    const result = await db.query(
+      `SELECT vendor, category_name, remarks
+       FROM receipts
+       WHERE remarks IS NOT NULL AND trim(remarks) <> ''
+       ORDER BY created_at DESC
+       LIMIT $1`,
+      [limit]
+    );
+    if (result.rows.length === 0) return null;
+    return result.rows
+      .map(r => `- ${r.vendor} (${r.category_name || 'uncategorised'}): ${r.remarks}`)
+      .join('\n');
+  } catch {
+    return null; // non-fatal — proceed without learning context
+  }
+}
+
+// ---------------------------------------------------------------------------
 // DeepSeek: structure raw OCR text into receipt fields
 // ---------------------------------------------------------------------------
-async function structureWithDeepSeek(rawText, filename) {
+async function structureWithDeepSeek(rawText, filename, learningContext = null) {
   const fetch = require('node-fetch');
   const apiKey = process.env.DEEPSEEK_API_KEY;
   if (!apiKey) throw new Error('DEEPSEEK_API_KEY not configured');
 
-  const prompt = `You are a receipt data extraction specialist. Extract structured data from this receipt OCR text.
+  const learningSection = learningContext
+    ? `\nPrevious categorisation learning (apply these rules when they match):
+${learningContext}
+`
+    : '';
 
+  const prompt = `You are a receipt data extraction specialist. Extract structured data from this receipt OCR text.
+${learningSection}
 Receipt filename: ${filename}
 OCR text:
 ---
@@ -137,7 +165,7 @@ const CATEGORY_MAP = {
 // ---------------------------------------------------------------------------
 // Process a single receipt file (image or PDF page)
 // ---------------------------------------------------------------------------
-async function processOneFile(filePath, originalFilename, batchId, pageNumber, wsServer) {
+async function processOneFile(filePath, originalFilename, batchId, pageNumber, wsServer, learningContext = null) {
   const GoogleVisionOCR = require('./google-vision-ocr');
 
   if (!process.env.GEMINI_API_KEY) {
@@ -186,7 +214,7 @@ async function processOneFile(filePath, originalFilename, batchId, pageNumber, w
 
     let structured;
     try {
-      structured = await structureWithDeepSeek(page.text, label);
+      structured = await structureWithDeepSeek(page.text, label, learningContext);
     } catch (err) {
       wsServer.sendProgress(batchId, { message: `DeepSeek warning for ${label}: ${err.message}` });
       structured = {
@@ -271,7 +299,16 @@ async function processReceiptBatch(batchId, dropboxUrl, clientName, uploadedFile
     }
 
     await logProcessing(batchId, 'info', 'files_ready', `${downloadedFiles.length} file(s) ready for OCR`);
-    wsServer.sendProgress(batchId, { progress: 20, message: `${downloadedFiles.length} file(s) collected — starting OCR` });
+
+    // Load previous learning to guide DeepSeek categorisation
+    const learningContext = await loadPreviousLearning(40);
+    if (learningContext) {
+      const count = learningContext.split('\n').length;
+      await logProcessing(batchId, 'info', 'learning_loaded', `Loaded ${count} previous learning note(s) for context`);
+      wsServer.sendProgress(batchId, { progress: 20, message: `${downloadedFiles.length} file(s) ready — ${count} learning notes applied` });
+    } else {
+      wsServer.sendProgress(batchId, { progress: 20, message: `${downloadedFiles.length} file(s) collected — starting OCR` });
+    }
 
     // Step 4: OCR each file
     const allReceipts = [];   // { success, filename, structured, page, imageData, imageMime, error }
@@ -290,7 +327,7 @@ async function processReceiptBatch(batchId, dropboxUrl, clientName, uploadedFile
       await logProcessing(batchId, 'info', 'ocr_file', `Processing: ${originalName}`);
 
       try {
-        const fileResults = await processOneFile(filePath, originalName, batchId, fileIdx, wsServer);
+        const fileResults = await processOneFile(filePath, originalName, batchId, fileIdx, wsServer, learningContext);
         allReceipts.push(...fileResults);
       } catch (err) {
         const errMsg = err.message || 'Unknown error';
