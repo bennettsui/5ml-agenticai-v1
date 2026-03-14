@@ -86,7 +86,7 @@ export const USE_CASES: Record<string, { label: string; color: string; href: str
   'sme-growth':            { label: 'SME Growth',      color: 'amber',   href: '/use-cases/sme-growth' },
   'government-tenders':    { label: 'Tenders',         color: 'sky',     href: '/use-cases/government-tenders' },
   'hk-sg-tender-intel':    { label: 'HK/SG Tenders',  color: 'cyan',    href: '/use-cases/hk-sg-tender-intel' },
-  'mans-accounting':       { label: 'Accounting',      color: 'orange',  href: '/use-cases/mans-accounting' },
+  'receipt-ocr':           { label: 'Receipt OCR',     color: 'orange',  href: '/use-cases/receipt-ocr' },
 };
 
 export interface Deliverable {

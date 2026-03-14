@@ -2787,7 +2787,7 @@ Manage deliverables on the current project page (only when page_context.pageType
 {"type": "update_form", "data": {"_deliverableDelete": {"id": "DELIVERABLE_ID"}}, "label": "Delete deliverable"}
 \`\`\`
 Deliverable fields: title, deadline (YYYY-MM-DD|null), status ("pending"|"in_progress"|"done"), priority ("critical"|"high"|"medium"|"low"|null), notes (string|null), use_case (slug|null).
-Valid use_case slugs: "social-content-ops", "growth-architect", "growth-hacking-studio", "ai-media-generation", "sme-growth", "government-tenders", "hk-sg-tender-intel", "mans-accounting".
+Valid use_case slugs: "social-content-ops", "growth-architect", "growth-hacking-studio", "ai-media-generation", "sme-growth", "government-tenders", "hk-sg-tender-intel", "receipt-ocr".
 Current deliverables are in page_context.formData.deliverables (each has id, title, status, priority, deadline, use_case).
 
 Available pages: /use-cases/crm (Dashboard), /use-cases/crm/brands (Brands list), /use-cases/crm/brands/new (New Brand form), /use-cases/crm/brands/detail?id=BRAND_ID (Brand detail with projects and feedback), /use-cases/crm/projects (Projects list), /use-cases/crm/projects/new (New Project form), /use-cases/crm/projects/detail?id=PROJECT_ID (Project detail), /use-cases/crm/feedback (Feedback), /use-cases/crm/integrations (Integrations)
