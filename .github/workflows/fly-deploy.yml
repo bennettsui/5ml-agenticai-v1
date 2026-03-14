@@ -20,38 +20,11 @@ jobs:
       - name: Setup Flyctl
         uses: superfly/flyctl-actions/setup-flyctl@master
 
-      - name: Build image once
-        id: build
+      - name: Deploy to Fly.io (with retry)
         run: |
-          # Build and push the Docker image to Fly's registry once.
-          # Capture the image reference so retries reuse the same build.
-          IMAGE=$(flyctl deploy --remote-only --build-only --json 2>/dev/null \
-            | grep -o '"image":"[^"]*"' | head -1 | cut -d'"' -f4)
-
-          if [ -z "$IMAGE" ]; then
-            # Fallback: build-only without JSON and parse the pushed image ref
-            OUTPUT=$(flyctl deploy --remote-only --build-only 2>&1)
-            echo "$OUTPUT"
-            IMAGE=$(echo "$OUTPUT" | grep -oP 'registry\.fly\.io/[^\s]+' | tail -1)
-          fi
-
-          if [ -z "$IMAGE" ]; then
-            echo "::error::Could not determine built image reference"
-            exit 1
-          fi
-
-          echo "image=$IMAGE" >> "$GITHUB_OUTPUT"
-          echo "Built image: $IMAGE"
-        env:
-          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
-
-      - name: Deploy to Fly.io (with retry for lease conflicts)
-        run: |
-          IMAGE="${{ steps.build.outputs.image }}"
-
           for i in 1 2 3; do
             echo "Deployment attempt $i..."
-            if flyctl deploy --remote-only --strategy rolling --lease-timeout=5m --wait-timeout=10m; then
+            if flyctl deploy --remote-only --strategy rolling --wait-timeout=10m; then
               echo "Deployment successful!"
               exit 0
             fi
