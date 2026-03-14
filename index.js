@@ -9524,6 +9524,24 @@ app.post('/api/print-finance/allocate-overhead', async (req, res) => {
         created_at  TIMESTAMPTZ DEFAULT NOW()
       )
     `);
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS qr_nfc_orders (
+        id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        use_case      VARCHAR(100),
+        material      VARCHAR(50),
+        nfc_chip      VARCHAR(50),
+        quantity      INTEGER DEFAULT 1,
+        custom_colour VARCHAR(20),
+        accent_colour VARCHAR(20),
+        name          VARCHAR(255) NOT NULL,
+        email         VARCHAR(255) NOT NULL,
+        phone         VARCHAR(100),
+        notes         TEXT,
+        qr_content    TEXT,
+        status        VARCHAR(50) DEFAULT 'pending',
+        created_at    TIMESTAMPTZ DEFAULT NOW()
+      )
+    `);
     console.log('✅ QR Generator tables ready');
   }
 
@@ -9641,22 +9659,24 @@ app.post('/api/print-finance/allocate-overhead', async (req, res) => {
 
   // ── Generate Endpoint ───────────────────────────────────────────────────────
   app.post('/api/qr/generate', qrAuthOptional, async (req, res) => {
-    const { type = 'qr', content, size = 300, fgColor = '#000000', bgColor = '#ffffff',
+    const { type = 'qr', content, fgColor = '#000000', bgColor = '#ffffff',
             errorLevel = 'M', format = 'png', logoData, showText = true, height = 80 } = req.body;
+    // Clamp size: guests max 300, authenticated max 2000
+    const rawSize = Math.min(Math.max(Number(req.body.size) || 300, 100), 2000);
+    const size = req.qrUser ? rawSize : Math.min(rawSize, 300);
     if (!content || !content.trim()) return res.status(400).json({ error: 'Content is required' });
 
     const isQR = type === 'qr';
     const premiumCost = calcCreditCost({ logoData, format, size });
     const isFreeGen = premiumCost === 0;
 
-    // Unauthenticated: only basic QR/barcode, max 300px, no logo
+    // Unauthenticated: only basic QR/barcode, max 300px (already clamped above), no logo/SVG
     if (!req.qrUser) {
       if (logoData) return res.status(402).json({ error: 'Logo embedding requires an account', code: 'LOGIN_REQUIRED' });
       if (format === 'svg') return res.status(402).json({ error: 'SVG export requires an account', code: 'LOGIN_REQUIRED' });
-      const capSize = Math.min(size, 300);
       try {
         const result = isQR
-          ? await generateQR(content.trim(), { size: capSize, fgColor, bgColor, errorLevel, format: 'png' })
+          ? await generateQR(content.trim(), { size, fgColor, bgColor, errorLevel, format: 'png' })
           : await generateBarcode(type, content.trim(), { height, scale: 3, showText, fgColor, bgColor });
         return res.json({ ...result, creditsUsed: 0, freeGen: true });
       } catch (err) { return res.status(400).json({ error: err.message }); }
@@ -9777,11 +9797,23 @@ app.post('/api/print-finance/allocate-overhead', async (req, res) => {
     } catch (err) { res.status(500).json({ error: err.message }); }
   });
 
-  // Register DB init
-  const _origListen = server.listen.bind(server);
+  // ── NFC 3D Print Order Endpoint ─────────────────────────────────────────────
+  app.post('/api/qr/nfc-order', async (req, res) => {
+    const { useCase, material, nfcChip, quantity, customColour, accentColour, name, email, phone, notes, qrContent } = req.body;
+    if (!name || !email) return res.status(400).json({ error: 'Name and email are required' });
+    try {
+      await pool.query(`
+        INSERT INTO qr_nfc_orders
+          (use_case, material, nfc_chip, quantity, custom_colour, accent_colour, name, email, phone, notes, qr_content)
+        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
+      `, [useCase, material, nfcChip, quantity || 1, customColour, accentColour, name.trim(), email.trim().toLowerCase(), phone?.trim() || '', notes?.trim() || '', qrContent || '']);
+      res.json({ success: true, message: 'Order enquiry received. We will be in touch within 24 hours.' });
+    } catch (err) { res.status(500).json({ error: err.message }); }
+  });
+
+  // ── Register DB init ─────────────────────────────────────────────────────────
   if (!global.__qrDbInitRegistered) {
     global.__qrDbInitRegistered = true;
-    // Init tables on startup (attached to pool ready)
     setImmediate(async () => {
       if (process.env.DATABASE_URL) {
         try { await initQrDb(); } catch (e) { console.error('⚠️ QR DB init failed:', e.message); }
