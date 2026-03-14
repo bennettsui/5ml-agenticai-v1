@@ -358,7 +358,14 @@ function AIPanel({ slide, totalSlides, hasOverride, onApplied, onClose }: AIPane
         body: JSON.stringify({
           slide: { ...slide, total: totalSlides },
           userComment: instruction,
-          chatHistory: messages.slice(-6).map(m => ({ role: m.role, content: m.content })),
+          // Strip updated_content from AI messages to avoid blowing up token count
+          chatHistory: messages.slice(-4).map(m => {
+            if (m.role !== 'assistant') return { role: m.role, content: m.content };
+            try {
+              const r = JSON.parse(m.content);
+              return { role: 'assistant', content: `Overall: ${r.overall}\nChanges: ${r.change_summary}` };
+            } catch { return { role: 'assistant', content: m.content }; }
+          }),
         }),
       });
       const data = await res.json();
@@ -494,7 +501,7 @@ function AIPanel({ slide, totalSlides, hasOverride, onApplied, onClose }: AIPane
                   return (
                     <div key={i} className="flex justify-end">
                       <div className="max-w-[85%] bg-slate-700/60 border border-slate-600/40 rounded-lg rounded-br-sm px-3 py-2">
-                        <p className="text-xs text-slate-200 leading-relaxed">{msg.content}</p>
+                        <p className="text-xs text-slate-200 leading-relaxed break-all">{msg.content}</p>
                         <p className="text-[10px] text-slate-600 mt-1 text-right">
                           {new Date(msg.created_at).toLocaleString('en-HK', { hour: '2-digit', minute: '2-digit' })}
                         </p>
