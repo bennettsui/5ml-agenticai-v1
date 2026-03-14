@@ -1,13 +1,12 @@
 /**
- * Google Cloud Vision OCR
+ * Receipt OCR via Google Gemini Vision
  *
- * Uses the Vision REST API (DOCUMENT_TEXT_DETECTION) to extract:
- *   - Full text
- *   - Word-level bounding boxes (normalised 0-1 relative to image dimensions)
+ * Uses the Gemini API (GEMINI_API_KEY) to extract:
+ *   - Full text from receipt images / PDFs
+ *   - Word-level bounding boxes (normalised 0-1) for the visual overlay
  *
- * Supports both image files and PDFs.
- * PDFs are processed via the files:annotate endpoint (inline, up to 5 pages).
- * Each PDF page becomes a separate result entry.
+ * Supports: JPG, PNG, WebP, GIF, PDF (up to 5 pages inline).
+ * Each PDF page returns a separate result entry.
  */
 
 const fs = require('fs').promises;
@@ -15,54 +14,75 @@ const path = require('path');
 const fetch = require('node-fetch');
 
 const IMAGE_MIME_TYPES = {
-  '.jpg': 'image/jpeg',
+  '.jpg':  'image/jpeg',
   '.jpeg': 'image/jpeg',
-  '.png': 'image/png',
+  '.png':  'image/png',
   '.webp': 'image/webp',
-  '.gif': 'image/gif',
-  '.bmp': 'image/bmp',
-  '.tiff': 'image/tiff',
-  '.tif': 'image/tiff',
+  '.gif':  'image/gif',
+  '.bmp':  'image/jpeg',  // Gemini accepts JPEG for BMP
+  '.tiff': 'image/jpeg',
+  '.tif':  'image/jpeg',
 };
+
+// Gemini model to use for OCR (flash = fast + cheap, good at document text)
+const OCR_MODEL = 'gemini-2.0-flash';
+
+const OCR_PROMPT = `You are an OCR engine for receipt images. Analyze this receipt and return ONLY valid JSON with no markdown, no explanation.
+
+Return this exact structure:
+{
+  "full_text": "<all text from the receipt exactly as it appears>",
+  "words": [
+    {"text": "word or short phrase", "box": [ymin, xmin, ymax, xmax]}
+  ]
+}
+
+Rules for "words":
+- Include every distinct word or number you can read
+- "box" values are integers 0-1000 representing normalised coordinates (0=top/left, 1000=bottom/right)
+- ymin < ymax, xmin < xmax
+- Aim for word-level granularity (not whole lines, not individual characters)
+- If a word's position is unclear, omit it from "words" but still include it in "full_text"`;
 
 class GoogleVisionOCR {
   constructor(apiKey) {
-    this.apiKey = apiKey || process.env.GOOGLE_VISION_API_KEY;
-    if (!this.apiKey) throw new Error('GOOGLE_VISION_API_KEY is required');
+    this.apiKey = apiKey || process.env.GEMINI_API_KEY;
+    if (!this.apiKey) throw new Error('GEMINI_API_KEY is required');
+    this.baseUrl = 'https://generativelanguage.googleapis.com/v1beta';
   }
 
   /**
    * Process a file (image or PDF) from disk.
-   * Returns an array of page results: [{ pageNumber, text, boxes, confidence, width, height }]
-   * Images always return a single-element array (pageNumber = 1).
+   * Returns array of page results: [{ pageNumber, text, boxes, confidence }]
    */
   async processFile(filePath) {
     const buffer = await fs.readFile(filePath);
     const ext = path.extname(filePath).toLowerCase();
-
-    if (ext === '.pdf') {
-      return this.processPdfBuffer(buffer);
-    }
-
-    const mimeType = IMAGE_MIME_TYPES[ext] || 'image/jpeg';
-    const result = await this.processImageBuffer(buffer, mimeType);
-    return [{ pageNumber: 1, ...result }];
+    const mimeType = ext === '.pdf' ? 'application/pdf' : (IMAGE_MIME_TYPES[ext] || 'image/jpeg');
+    return this._processBuffer(buffer, mimeType);
   }
 
   /**
-   * Process an image buffer directly.
+   * Process a raw buffer.
    */
-  async processImageBuffer(buffer, mimeType = 'image/jpeg') {
+  async _processBuffer(buffer, mimeType) {
     const base64 = buffer.toString('base64');
 
-    const url = `https://vision.googleapis.com/v1/images:annotate?key=${this.apiKey}`;
     const body = {
-      requests: [{
-        image: { content: base64 },
-        features: [{ type: 'DOCUMENT_TEXT_DETECTION', maxResults: 1 }],
+      contents: [{
+        parts: [
+          { text: OCR_PROMPT },
+          { inline_data: { mime_type: mimeType, data: base64 } },
+        ],
       }],
+      generationConfig: {
+        temperature: 0.0,
+        maxOutputTokens: 8192,
+        responseMimeType: 'application/json',
+      },
     };
 
+    const url = `${this.baseUrl}/models/${OCR_MODEL}:generateContent?key=${this.apiKey}`;
     const response = await fetch(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -70,121 +90,66 @@ class GoogleVisionOCR {
     });
 
     if (!response.ok) {
-      const errBody = await response.text();
-      throw new Error(`Google Vision API error ${response.status}: ${errBody}`);
+      const errText = await response.text();
+      throw new Error(`Gemini OCR API error ${response.status}: ${errText.slice(0, 300)}`);
     }
 
     const data = await response.json();
-    const annotation = data.responses?.[0];
 
-    if (annotation?.error) {
-      throw new Error(`Google Vision: ${annotation.error.message}`);
+    // Handle safety blocks
+    if (data.promptFeedback?.blockReason) {
+      throw new Error(`Gemini blocked request: ${data.promptFeedback.blockReason}`);
     }
 
-    return this._parseFullTextAnnotation(annotation?.fullTextAnnotation);
+    const content = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+
+    if (!content) {
+      return [{ pageNumber: 1, text: '', boxes: [], confidence: 0 }];
+    }
+
+    const parsed = this._parseResponse(content);
+
+    // PDFs may contain multiple logical pages — treat as single result
+    // (Gemini inline PDF processes the whole doc in one response)
+    return [{ pageNumber: 1, ...parsed }];
   }
 
   /**
-   * Process a PDF buffer. Returns one result per page (up to 5).
+   * Parse the JSON response from Gemini into { text, boxes, confidence }.
    */
-  async processPdfBuffer(buffer) {
-    const base64 = buffer.toString('base64');
-
-    const url = `https://vision.googleapis.com/v1/files:annotate?key=${this.apiKey}`;
-    const body = {
-      requests: [{
-        inputConfig: {
-          content: base64,
-          mimeType: 'application/pdf',
-        },
-        features: [{ type: 'DOCUMENT_TEXT_DETECTION' }],
-        pages: [1, 2, 3, 4, 5],
-      }],
-    };
-
-    const response = await fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
-    });
-
-    if (!response.ok) {
-      const errBody = await response.text();
-      throw new Error(`Google Vision PDF API error ${response.status}: ${errBody}`);
+  _parseResponse(raw) {
+    let json;
+    try {
+      // Strip accidental markdown fences
+      const cleaned = raw.replace(/^```json\s*/i, '').replace(/^```\s*/i, '').replace(/```\s*$/i, '').trim();
+      json = JSON.parse(cleaned);
+    } catch {
+      // Return whatever text we got
+      return { text: raw, boxes: [], confidence: 0.5 };
     }
 
-    const data = await response.json();
-    const pageResponses = data.responses?.[0]?.responses || [];
+    const text = typeof json.full_text === 'string' ? json.full_text : '';
+    const rawWords = Array.isArray(json.words) ? json.words : [];
 
-    return pageResponses.map((pageResp, idx) => ({
-      pageNumber: idx + 1,
-      ...this._parseFullTextAnnotation(pageResp?.fullTextAnnotation),
-    }));
-  }
+    const boxes = rawWords
+      .filter(w => w && typeof w.text === 'string' && Array.isArray(w.box) && w.box.length === 4)
+      .map((w, i) => {
+        const [ymin, xmin, ymax, xmax] = w.box.map(v => Math.max(0, Math.min(1000, Number(v) || 0)));
+        return {
+          id: `w_${i}`,
+          text: w.text,
+          x: xmin / 1000,
+          y: ymin / 1000,
+          width: Math.max(0.005, (xmax - xmin) / 1000),
+          height: Math.max(0.005, (ymax - ymin) / 1000),
+          confidence: 0.9,
+        };
+      });
 
-  /**
-   * Parse a fullTextAnnotation into { text, boxes, confidence, width, height }.
-   */
-  _parseFullTextAnnotation(fta) {
-    if (!fta) {
-      return { text: '', boxes: [], confidence: 0, width: 0, height: 0 };
-    }
+    // Confidence: rough heuristic based on word coverage
+    const confidence = boxes.length > 5 ? 0.92 : boxes.length > 0 ? 0.75 : 0.5;
 
-    const text = fta.text || '';
-    const pages = fta.pages || [];
-
-    let totalConfidence = 0;
-    let blockCount = 0;
-    let pageWidth = 0;
-    let pageHeight = 0;
-    const boxes = [];
-
-    for (const page of pages) {
-      pageWidth = page.width || pageWidth;
-      pageHeight = page.height || pageHeight;
-
-      for (const block of (page.blocks || [])) {
-        if (typeof block.confidence === 'number') {
-          totalConfidence += block.confidence;
-          blockCount++;
-        }
-
-        for (const paragraph of (block.paragraphs || [])) {
-          for (const word of (paragraph.words || [])) {
-            const wordText = (word.symbols || []).map(s => s.text || '').join('');
-            if (!wordText.trim()) continue;
-
-            const vertices = word.boundingBox?.vertices || [];
-            if (vertices.length < 4) continue;
-
-            const xs = vertices.map(v => typeof v.x === 'number' ? v.x : 0);
-            const ys = vertices.map(v => typeof v.y === 'number' ? v.y : 0);
-
-            const minX = Math.min(...xs);
-            const minY = Math.min(...ys);
-            const maxX = Math.max(...xs);
-            const maxY = Math.max(...ys);
-
-            const w = pageWidth || 1;
-            const h = pageHeight || 1;
-
-            boxes.push({
-              id: `w_${boxes.length}`,
-              text: wordText,
-              x: minX / w,
-              y: minY / h,
-              width: (maxX - minX) / w,
-              height: (maxY - minY) / h,
-              confidence: typeof word.confidence === 'number' ? word.confidence : 0.9,
-            });
-          }
-        }
-      }
-    }
-
-    const confidence = blockCount > 0 ? totalConfidence / blockCount : 0.85;
-
-    return { text, boxes, confidence, width: pageWidth, height: pageHeight };
+    return { text, boxes, confidence };
   }
 }
 

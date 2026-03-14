@@ -141,11 +141,11 @@ const CATEGORY_MAP = {
 async function processOneFile(filePath, originalFilename, batchId, pageNumber, wsServer) {
   const GoogleVisionOCR = require('./google-vision-ocr');
 
-  if (!process.env.GOOGLE_VISION_API_KEY) {
-    throw new Error('GOOGLE_VISION_API_KEY not configured');
+  if (!process.env.GEMINI_API_KEY) {
+    throw new Error('GEMINI_API_KEY not configured');
   }
 
-  const vision = new GoogleVisionOCR(process.env.GOOGLE_VISION_API_KEY);
+  const vision = new GoogleVisionOCR(process.env.GEMINI_API_KEY);
   const ext = path.extname(filePath).toLowerCase();
 
   let pages;
@@ -246,8 +246,8 @@ async function processReceiptBatch(batchId, dropboxUrl, clientName, uploadedFile
     if (!useUploads && !process.env.DROPBOX_ACCESS_TOKEN) {
       throw new Error('DROPBOX_ACCESS_TOKEN not configured');
     }
-    if (!process.env.GOOGLE_VISION_API_KEY) {
-      throw new Error('GOOGLE_VISION_API_KEY not configured');
+    if (!process.env.GEMINI_API_KEY) {
+      throw new Error('GEMINI_API_KEY not configured');
     }
     if (!process.env.DEEPSEEK_API_KEY) {
       throw new Error('DEEPSEEK_API_KEY not configured');

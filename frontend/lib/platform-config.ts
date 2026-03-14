@@ -487,7 +487,7 @@ export const USE_CASES: UseCaseConfig[] = [
     status: 'live',
     progress: 0.9,
     priority: 'high',
-    path: '/use-cases/mans-accounting',
+    path: '/use-cases/receipt-ocr',
     agentCount: 1,
     features: ['OCR Processing', 'Auto-Categorization', 'Excel Export', 'HK Compliance'],
   },

@@ -98,14 +98,9 @@ const parseBooleanField = (value, fallback = null) => {
   return fallback;
 };
 
-const normalizeOcrModel = (value) => {
-  if (!value) return 'claude-haiku';
-  if (typeof value !== 'string') return null;
-  const normalized = value.trim().toLowerCase();
-  if (['claude', 'claude-haiku', 'haiku'].includes(normalized)) return 'claude-haiku';
-  if (normalized === 'deepseek') return 'deepseek';
-  return null;
-};
+// All batches now use the Google Vision (Gemini) + DeepSeek pipeline.
+// The ocr_model param is accepted for backwards compatibility but ignored.
+const normalizeOcrModel = (_value) => 'google-vision';
 
 const regenerateExcelForBatch = async (batchId) => {
   const batchResult = await db.query(
@@ -214,37 +209,14 @@ router.post('/process', async (req, res) => {
       });
     }
 
-    if (!ocrModel) {
-      return res.status(400).json({
-        success: false,
-        error: 'Unsupported ocr_model. Use "claude-haiku" or "deepseek".',
-      });
-    }
-
-    // Check if database is configured
     if (!process.env.DATABASE_URL) {
-      return res.status(503).json({
-        success: false,
-        error: 'Database not configured',
-        details: 'DATABASE_URL environment variable is not set. Please configure PostgreSQL database.',
-        help: 'Run: fly postgres create && fly postgres attach <postgres-app-name>',
-      });
+      return res.status(503).json({ success: false, error: 'Database not configured' });
     }
-
-    if (ocrModel === 'deepseek') {
-      if (!process.env.DEEPSEEK_API_KEY) {
-        return res.status(503).json({
-          success: false,
-          error: 'OCR not configured',
-          details: 'DEEPSEEK_API_KEY environment variable is not set.',
-        });
-      }
-    } else if (!process.env.ANTHROPIC_API_KEY) {
-      return res.status(503).json({
-        success: false,
-        error: 'OCR not configured',
-        details: 'ANTHROPIC_API_KEY environment variable is not set.',
-      });
+    if (!process.env.GEMINI_API_KEY) {
+      return res.status(503).json({ success: false, error: 'GEMINI_API_KEY not configured' });
+    }
+    if (!process.env.DEEPSEEK_API_KEY) {
+      return res.status(503).json({ success: false, error: 'DEEPSEEK_API_KEY not configured' });
     }
 
     // Create new batch in database
@@ -314,36 +286,14 @@ router.post('/process-upload', async (req, res) => {
       });
     }
 
-    if (!ocrModel) {
-      return res.status(400).json({
-        success: false,
-        error: 'Unsupported ocr_model. Use "claude-haiku" or "deepseek".',
-      });
-    }
-
     if (!process.env.DATABASE_URL) {
-      return res.status(503).json({
-        success: false,
-        error: 'Database not configured',
-        details: 'DATABASE_URL environment variable is not set. Please configure PostgreSQL database.',
-        help: 'Run: fly postgres create && fly postgres attach <postgres-app-name>',
-      });
+      return res.status(503).json({ success: false, error: 'Database not configured' });
     }
-
-    if (ocrModel === 'deepseek') {
-      if (!process.env.DEEPSEEK_API_KEY) {
-        return res.status(503).json({
-          success: false,
-          error: 'OCR not configured',
-          details: 'DEEPSEEK_API_KEY environment variable is not set.',
-        });
-      }
-    } else if (!process.env.ANTHROPIC_API_KEY) {
-      return res.status(503).json({
-        success: false,
-        error: 'OCR not configured',
-        details: 'ANTHROPIC_API_KEY environment variable is not set.',
-      });
+    if (!process.env.GEMINI_API_KEY) {
+      return res.status(503).json({ success: false, error: 'GEMINI_API_KEY not configured' });
+    }
+    if (!process.env.DEEPSEEK_API_KEY) {
+      return res.status(503).json({ success: false, error: 'DEEPSEEK_API_KEY not configured' });
     }
 
     const batchResult = await db.query(
@@ -1189,8 +1139,8 @@ router.post('/upload-multipart', receiptUpload.array('files', 50), async (req, r
     if (!process.env.DATABASE_URL) {
       return res.status(503).json({ success: false, error: 'Database not configured' });
     }
-    if (!process.env.GOOGLE_VISION_API_KEY) {
-      return res.status(503).json({ success: false, error: 'GOOGLE_VISION_API_KEY not configured' });
+    if (!process.env.GEMINI_API_KEY) {
+      return res.status(503).json({ success: false, error: 'GEMINI_API_KEY not configured' });
     }
     if (!process.env.DEEPSEEK_API_KEY) {
       return res.status(503).json({ success: false, error: 'DEEPSEEK_API_KEY not configured' });
