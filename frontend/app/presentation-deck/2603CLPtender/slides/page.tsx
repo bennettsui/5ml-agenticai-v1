@@ -423,11 +423,15 @@ function AIPanel({ slide, totalSlides, hasOverride, onApplied, onClose }: AIPane
         `/api/presentation-deck/${SLUG}/slides/${slide.slide_number}/restore/${v.id}`,
         { method: 'POST' }
       );
-      if (!res.ok) {
-        const d = await res.json().catch(() => ({ error: 'Restore failed' }));
-        throw new Error(d.error || 'Restore failed');
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || `Restore failed (HTTP ${res.status})`);
+      if (!data.ok) throw new Error('Restore returned unexpected response');
+      // Use content from server response (authoritative) — fall back to cached v.content
+      const restoredContent = data.content ?? v.content;
+      if (!restoredContent || Object.keys(restoredContent).length === 0) {
+        throw new Error('Restored content is empty — version may be corrupt');
       }
-      onApplied(v.content);
+      onApplied(restoredContent);
       setTab('review');
       setHistory([]);
     } catch (e: unknown) {
