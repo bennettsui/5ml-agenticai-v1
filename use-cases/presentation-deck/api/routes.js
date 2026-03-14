@@ -1071,7 +1071,7 @@ router.post('/:slug/slides/:slideNum/restore/:versionId', async (req, res) => {
        DO UPDATE SET title=$3, subtitle=$4, content=$5, notes=$6, updated_at=NOW()`,
       [slug, slideNumber, v.title, v.subtitle, JSON.stringify(v.content), v.notes]
     );
-    res.json({ ok: true });
+    res.json({ ok: true, content: v.content, title: v.title, subtitle: v.subtitle, notes: v.notes });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
