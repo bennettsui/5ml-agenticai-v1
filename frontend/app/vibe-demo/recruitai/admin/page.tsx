@@ -17,7 +17,7 @@ const API_BASE = (() => {
     ? (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080')
     : (process.env.NEXT_PUBLIC_API_URL || '');
 })();
-const ADMIN_PASSWORD = '5milesLab01@';
+const ADMIN_PASSWORD = '5mileslab';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 

@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import { useRef, useEffect } from 'react';
 import { SiteNav, SiteFooter, Section, SectionLabel, FadeIn, globalStyles, TED_RED, WARM_GRAY, WARM_AMBER } from '../components';
 
 /* ── SVG icon helpers ── */
@@ -122,7 +123,49 @@ const SALON_ACTIONS = [
   '將 AI 視為磨刀石，而不是主角——我們要練的，是人的感受力與策展力',
 ];
 
+
+// ── TED AI Vienna content ──
+const TALKS = [
+  { title: 'Will AI make us the last generation to read and write?', speaker: 'Victor Riparbelli' },
+  { title: 'How a deepfake almost ruined my political career', speaker: 'Cara Hunter' },
+  { title: 'How AI is decoding ancient scrolls', speaker: 'Julian Schilliger and Youssef Nader' },
+  { title: 'What if AI could spot your lies?', speaker: 'Riccardo Loconte' },
+  { title: "The AI breakthroughs we've overlooked — and how they're transforming science", speaker: 'Raia Hadsell' },
+];
+
+const PHENOMENA = [
+  { num: '01', tag: '#職涯', title: 'AI 正在重塑「學習與職涯結構」', text: 'AI 不只是一工具，而是成為人的「外腦」，模糊了專業門檻，卻放大了學習能力的差距。' },
+  { num: '02', tag: '#關係', title: '真實與信任變得前所未有地脆弱', text: '在多層次 AI 判斷與 deepfake 技術下，人類第一次無法輕易相信「所見即所得」。' },
+  { num: '03', tag: '#自然永續', title: 'AI 讓人類思考與環境面對「自然永續」', text: 'AI 讓人與自然更和諧，科技可以協助環境更賦能，萬物繫會。' },
+  { num: '04', tag: '#競爭優勢', title: '人類全球化越 AI 越體驗', text: '當 AI 能完成效率與知識，人類價值轉向關係、體驗與社群。人的 community 發展出了一種人跟社區結合的模式 New Experience。' },
+  { num: '05', tag: '#敘事經濟', title: '我們正進入一個全新的「AI 敘事世代」', text: 'AI 星帶來臨，所有的東西都要有新的面貌（讓眼睛的更新）迎來新的閱讀方式，AI 敘事。' },
+  { num: '06', tag: '#AllItself', title: 'AI Literacy', text: 'AI 與人性的底層邏輯' },
+];
+
 export default function ReportPage() {
+  const caveSectionRef = useRef<HTMLElement>(null);
+  const caveBgRef = useRef<HTMLImageElement>(null);
+
+  useEffect(() => {
+    const section = caveSectionRef.current;
+    const bg = caveBgRef.current;
+    if (!section || !bg) return;
+
+    const onScroll = () => {
+      const rect = section.getBoundingClientRect();
+      const viewH = window.innerHeight;
+      if (rect.bottom < -viewH || rect.top > viewH * 2) return;
+      // Background moves at only 8% of scroll speed — nearly still.
+      // Text (normal DOM flow) moves at 100%, creating a strong "copy races past bg" feel.
+      const offset = rect.top * 0.08;
+      bg.style.transform = `translateY(calc(-15% + ${offset}px))`;
+    };
+
+    window.addEventListener('scroll', onScroll, { passive: true });
+    onScroll(); // initialise on mount
+    return () => window.removeEventListener('scroll', onScroll);
+  }, []);
+
   return (
     <div className="tedx-xinyi bg-white text-neutral-900 min-h-screen">
       <style dangerouslySetInnerHTML={{ __html: globalStyles }} />
@@ -222,44 +265,181 @@ export default function ReportPage() {
           </div>
         </section>
 
+        {/* ==================== CAVE FOREWORD — parallax ==================== */}
+        {/* Section bg = dark→white gradient. Works as atmospheric fallback when the cave
+            image is missing (not yet generated), AND provides the white base for 無縫對拉. */}
+        <section
+          ref={caveSectionRef}
+          className="relative overflow-hidden"
+          style={{ minHeight: '92vh', background: 'linear-gradient(to bottom, #080604 0%, #0e0a06 45%, #2a1a0a 75%, #ffffff 100%)' }}
+        >
+          {/* Cave photo — 130% tall for parallax travel room; fades in on load */}
+          <img
+            ref={caveBgRef}
+            src="/tedx-xinyi/report-cave-intro.webp"
+            alt=""
+            loading="eager"
+            decoding="async"
+            className="absolute inset-x-0 w-full object-cover opacity-0 transition-opacity duration-700 will-change-transform"
+            style={{ height: '130%', top: 0, transform: 'translateY(-15%)' }}
+            onLoad={(e) => { (e.target as HTMLImageElement).style.opacity = '1'; }}
+            onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+          />
+          {/* Dark overlay — fades to transparent near bottom so the white bleeds through */}
+          <div className="absolute inset-0" style={{ background: 'linear-gradient(to bottom, rgba(8,6,4,0.90) 0%, rgba(8,6,4,0.55) 38%, rgba(8,6,4,0.68) 68%, rgba(8,6,4,0.10) 90%, rgba(8,6,4,0.00) 100%)' }} />
+          {/* White fade — 無縫對拉 into the next white section, sits above image/overlay */}
+          <div className="absolute bottom-0 left-0 right-0 pointer-events-none" style={{ height: '22%', background: 'linear-gradient(to bottom, transparent 0%, rgba(255,255,255,0.7) 55%, #ffffff 100%)', zIndex: 8 }} />
+
+          <div className="relative z-10 max-w-4xl mx-auto px-6 sm:px-10 md:px-14 py-24 md:py-36">
+
+            {/* Label */}
+            <FadeIn>
+              <div className="flex items-center gap-3 mb-10">
+                <span className="text-[10px] font-black tracking-[0.22em] uppercase" style={{ color: WARM_AMBER }}>前言</span>
+                <span className="flex-1 max-w-[80px] h-px" style={{ backgroundColor: `${WARM_AMBER}40` }} />
+                <span className="text-[10px] font-mono tracking-wider text-white/25">FOREWORD</span>
+              </div>
+            </FadeIn>
+
+            {/* Section 1 — 當資訊開始呼吸：AI 敘事 */}
+            <FadeIn delay={80}>
+              <h2 className="text-2xl sm:text-3xl md:text-4xl font-black text-white leading-tight mb-3" lang="zh-TW">
+                當資訊開始呼吸：<em className="not-italic" style={{ color: WARM_AMBER }}>AI 敘事</em>
+              </h2>
+              <p className="text-sm font-black tracking-wider mb-7" style={{ color: `${WARM_AMBER}90` }} lang="zh-TW">
+                從觀察者到成為者
+              </p>
+            </FadeIn>
+            <FadeIn delay={160}>
+              <p className="text-white/70 text-sm sm:text-base leading-[2] mb-5 max-w-2xl" lang="zh-TW">
+                在過去的時代，我們習慣把「趨勢」看作是一種外部的力量，它像是一場發生在外圍的景象變化，我們強烈感到，像洪流決定某種下一波一切。
+              </p>
+              <p className="text-white/70 text-sm sm:text-base leading-[2] mb-5 max-w-2xl" lang="zh-TW">
+                然而，在 AI 時代，這種觀察者的視角，某程度上可能再不適用？當資訊呼吸的一刻，不單會在世界舞台上掀起人類與 AI 細密互動的具體徵象及震盪回響。這亦寓言般地宣告一場由 AI 細胞寄居人類生命的蔓延。
+              </p>
+              <p className="text-white/70 text-sm sm:text-base leading-[2] mb-5 max-w-2xl" lang="zh-TW">
+                這就是「We Becoming」（我們成為），受時間氣候影響下，AI 正在重新塑造人類一切的時代。這不只是科技改變世界的故事，更是在每個人日常中成為嶄新世界標準的一場內在修練。
+              </p>
+              <p className="text-white/70 text-sm sm:text-base leading-[2] max-w-2xl" lang="zh-TW">
+                前人總愛說一生只活一次（YOLO），可曾想過我們身處的時空，AI 從對手到 AI Itself 的自我進化底層架構，都正反過來總結人類本來人的面貌，並帶入未曾被完全展現的更多可能？以 AI 故事為名，這是一場集結具豐富探索精神與 TED Style 立體立場大家庭的集體敍事實驗。
+              </p>
+            </FadeIn>
+
+            {/* Divider */}
+            <FadeIn delay={220}>
+              <div className="my-10 flex items-center gap-4">
+                <div className="flex-1 h-px" style={{ background: 'linear-gradient(to right, transparent, rgba(255,255,255,0.12))' }} />
+                <div className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: TED_RED }} />
+                <div className="flex-1 h-px" style={{ background: 'linear-gradient(to left, transparent, rgba(255,255,255,0.12))' }} />
+              </div>
+            </FadeIn>
+
+            {/* Section 2 — 重新思考的勇氣 */}
+            <FadeIn delay={280}>
+              <h3 className="text-xl sm:text-2xl font-black text-white mb-6" lang="zh-TW">重新思考的勇氣</h3>
+            </FadeIn>
+            <FadeIn delay={340}>
+              <p className="text-white/70 text-sm sm:text-base leading-[2] mb-5 max-w-2xl" lang="zh-TW">
+                Adam Grant 艾登‧格蘭特在《逆思者 Think Again》中提醒我們，進步的最大障礙往往不是無知，而是對於原有想法抱持不退縮的反思與執念。AI 取代而威脅人類角色早已不再是一個新話題，我們久踞熟悉舒適區的框架，結果有時會看見不起。
+              </p>
+              <p className="text-white/70 text-sm sm:text-base leading-[2] max-w-2xl" lang="zh-TW">
+                這份每年精心策劃並進行一場賭注於深層底定的重啟（Bottom Reset）。提案從遞出的一刻開始就等同於「放棄現狀」。它意味著 TEDxXinyi 的共建實驗將既不會停留在已知的安全地帶，也不會滿足於表面的創新修辭。所有參與者都被邀請暫時放下那些自以為堅不可摧的信念，反而是以謙虛而堅定的態度：「如果一切可以重新來過，我們會選擇怎樣的未來？」
+              </p>
+            </FadeIn>
+
+            {/* Divider */}
+            <FadeIn delay={380}>
+              <div className="my-10 flex items-center gap-4">
+                <div className="flex-1 h-px" style={{ background: 'linear-gradient(to right, transparent, rgba(255,255,255,0.12))' }} />
+                <div className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: TED_RED }} />
+                <div className="flex-1 h-px" style={{ background: 'linear-gradient(to left, transparent, rgba(255,255,255,0.12))' }} />
+              </div>
+            </FadeIn>
+
+            {/* Section 3 — 邀請函 */}
+            <FadeIn delay={420}>
+              <h3 className="text-xl sm:text-2xl font-black text-white mb-6" lang="zh-TW">一份發給所有思考者的邀請函</h3>
+            </FadeIn>
+            <FadeIn delay={480}>
+              <p className="text-white/70 text-sm sm:text-base leading-[2] mb-5 max-w-2xl" lang="zh-TW">
+                這不是一場單向度的表演，而是一場互為鏡像的思想實驗。每位觀眾和講者都以無形的線連結在一起，當你在台下思考、質疑、點頭或困惑的時候，台上的分享者也正在經歷同樣的內在震盪。這是一場沒有標準答案的考卷，卻是一份任何一位仍然願意保持好奇，願意承認「我可以再想深一點」的人都值得收到的邀請函。
+              </p>
+            </FadeIn>
+
+            {/* Closing pull-quote */}
+            <FadeIn delay={540}>
+              <blockquote
+                className="mt-10 pl-5 border-l-2 text-base sm:text-lg font-black italic whitespace-nowrap overflow-x-auto"
+                style={{ borderColor: WARM_AMBER, color: `${WARM_AMBER}CC` }}
+                lang="zh-TW"
+              >
+                人類正在深入內在的暗黑洞穴，當我們向前走，你依然在你的陰影之中呼吸。
+              </blockquote>
+            </FadeIn>
+
+          </div>
+        </section>
+
         {/* ==================== INTRO — Bottom Reset ==================== */}
         <Section bg="white">
-          <FadeIn>
-            <SectionLabel>BOTTOM RESET</SectionLabel>
-            <h2 className="text-2xl sm:text-3xl md:text-4xl font-black mb-6 leading-tight" lang="zh-TW">
-              一次底層設定的重啟
-            </h2>
-          </FadeIn>
-          <FadeIn delay={100}>
-            <div className="max-w-3xl">
-              <p className="text-neutral-600 text-base sm:text-lg leading-[1.9] mb-6" lang="zh-TW">
-                當 AI 開始學人類說故事、學習我們的價值與選擇，我們需要的不是追趕技術，而是一次 Bottom Reset——重新校準自己的底層設定。
-              </p>
-              <p className="text-neutral-600 text-base sm:text-lg leading-[1.9] mb-6" lang="zh-TW">
-                這份報告出自 TEDxXinyi 社群與多位趨勢觀察者、創作者與實踐者的合作。它聚焦四件事：
-              </p>
-            </div>
-          </FadeIn>
-          <FadeIn delay={200}>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 max-w-3xl">
-              {([
-                { title: '學習如何學習', desc: 'Meta Learning——不是學更多，而是學會怎麼學', Icon: IconBrain },
-                { title: 'AI 敘事與敘事經濟', desc: '當故事成為新的價值生成系統', Icon: IconPen },
-                { title: 'AI 應用能力', desc: '重點不在工具，而在人性與判斷力', Icon: IconCpu },
-                { title: '社區即學堂', desc: '社群不是 networking，而是 intelligence system', Icon: IconUsers },
-              ] as const).map((item, i) => (
-                <div key={i} className="flex items-start gap-3 p-4 rounded-xl border border-neutral-100 hover:border-neutral-200 transition-all" style={{ backgroundColor: WARM_GRAY }}>
-                  <div className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 mt-0.5" style={{ backgroundColor: `${TED_RED}10` }}>
-                    <item.Icon size={16} color={TED_RED} />
-                  </div>
-                  <div>
-                    <p className="font-black text-sm mb-0.5" lang="zh-TW">{item.title}</p>
-                    <p className="text-neutral-500 text-xs leading-relaxed" lang="zh-TW">{item.desc}</p>
-                  </div>
+          {/* Two-column: text left, brain infographic right */}
+          <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_320px] gap-10 lg:gap-14 items-start">
+
+            {/* Left: heading + text + cards */}
+            <div>
+              <FadeIn>
+                <SectionLabel>BOTTOM RESET</SectionLabel>
+                <h2 className="text-2xl sm:text-3xl md:text-4xl font-black mb-6 leading-tight" lang="zh-TW">
+                  一次底層設定的重啟
+                </h2>
+              </FadeIn>
+              <FadeIn delay={100}>
+                <p className="text-neutral-600 text-base sm:text-lg leading-[1.9] mb-6" lang="zh-TW">
+                  當 AI 開始學人類說故事、學習我們的價值與選擇，我們需要的不是追趕技術，而是一次 Bottom Reset——重新校準自己的底層設定。
+                </p>
+                <p className="text-neutral-600 text-base sm:text-lg leading-[1.9] mb-6" lang="zh-TW">
+                  這份報告出自 TEDxXinyi 社群與多位趨勢觀察者、創作者與實踐者的合作。它聚焦四件事：
+                </p>
+              </FadeIn>
+              <FadeIn delay={200}>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 max-w-3xl">
+                  {([
+                    { title: '學習如何學習', desc: 'Meta Learning——不是學更多，而是學會怎麼學', Icon: IconBrain },
+                    { title: 'AI 敘事與敘事經濟', desc: '當故事成為新的價值生成系統', Icon: IconPen },
+                    { title: 'AI 應用能力', desc: '重點不在工具，而在人性與判斷力', Icon: IconCpu },
+                    { title: '社區即學堂', desc: '社群不是 networking，而是 intelligence system', Icon: IconUsers },
+                  ] as const).map((item, i) => (
+                    <div key={i} className="flex items-start gap-3 p-4 rounded-xl border border-neutral-100 hover:border-neutral-200 transition-all" style={{ backgroundColor: WARM_GRAY }}>
+                      <div className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 mt-0.5" style={{ backgroundColor: `${TED_RED}10` }}>
+                        <item.Icon size={16} color={TED_RED} />
+                      </div>
+                      <div>
+                        <p className="font-black text-sm mb-0.5" lang="zh-TW">{item.title}</p>
+                        <p className="text-neutral-500 text-xs leading-relaxed" lang="zh-TW">{item.desc}</p>
+                      </div>
+                    </div>
+                  ))}
                 </div>
-              ))}
+              </FadeIn>
             </div>
-          </FadeIn>
+
+            {/* Right: brain infographic — sticky on large screens */}
+            <FadeIn delay={150}>
+              <div className="lg:sticky lg:top-8 w-full mx-auto">
+                <div className="rounded-2xl overflow-hidden shadow-lg border border-neutral-100 bg-white">
+                  <img
+                    src="/tedx-xinyi/report-brain.webp"
+                    alt="Bottom Reset 底層設定 — 重新理解學習的四個維度"
+                    loading="lazy"
+                    className="w-full h-auto block opacity-0 transition-opacity duration-700"
+                    onLoad={(e) => { (e.target as HTMLImageElement).style.opacity = '1'; }}
+                    onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                  />
+                </div>
+              </div>
+            </FadeIn>
+
+          </div>
         </Section>
 
         {/* ==================== 2) FOUR CATEGORIES ==================== */}
@@ -304,6 +484,130 @@ export default function ReportPage() {
             })}
           </div>
         </Section>
+
+        {/* ==================== TED AI — TALKS + PHENOMENA ==================== */}
+        <section className="overflow-hidden">
+          <div className="grid grid-cols-1 lg:grid-cols-[5fr_7fr]">
+
+            {/* ── LEFT: Dark editorial panel — 5 Talks ── */}
+            <div className="bg-neutral-950 text-white px-8 py-14 md:px-12 md:py-20 flex flex-col justify-between relative">
+              {/* Subtle red left border accent */}
+              <div className="absolute left-0 top-0 bottom-0 w-1" style={{ backgroundColor: TED_RED }} />
+
+              <div>
+                {/* Conference badge */}
+                <div className="flex flex-wrap items-center gap-3 mb-10">
+                  <span
+                    className="px-2.5 py-1 text-[10px] font-black tracking-[0.18em] rounded text-white"
+                    style={{ backgroundColor: TED_RED }}
+                  >TED AI</span>
+                  <span className="text-white/30 text-[11px] font-mono tracking-wider">24–26.9 · Vienna, Austria</span>
+                </div>
+
+                {/* Title */}
+                <FadeIn>
+                  <h2 className="text-3xl md:text-4xl xl:text-[2.6rem] font-black leading-[1.15] mb-12 max-w-sm">
+                    5 TED Talks showing AI&apos;s impact on our{' '}
+                    <em className="not-italic" style={{ color: WARM_AMBER }}>past, present</em>
+                    {' '}and{' '}
+                    <em className="not-italic" style={{ color: TED_RED }}>future</em>
+                  </h2>
+                </FadeIn>
+
+                {/* Talk list */}
+                <ol className="space-y-0">
+                  {TALKS.map((talk, i) => (
+                    <FadeIn key={i} delay={i * 80}>
+                      <li className="group flex items-start gap-4 py-5 border-t border-white/[0.07] hover:border-white/20 transition-colors">
+                        {/* Ghost number */}
+                        <span
+                          className="flex-shrink-0 text-[42px] md:text-[52px] font-black leading-none select-none mt-0.5 tabular-nums"
+                          style={{ color: 'rgba(255,255,255,0.06)' }}
+                        >
+                          {String(i + 1).padStart(2, '0')}
+                        </span>
+                        <div className="pt-1">
+                          <p className="text-sm md:text-[0.9rem] font-bold leading-snug text-white/80 group-hover:text-white transition-colors mb-1.5">
+                            {talk.title}
+                          </p>
+                          <p className="text-[11px] font-mono text-white/35 tracking-wider">{talk.speaker}</p>
+                        </div>
+                      </li>
+                    </FadeIn>
+                  ))}
+                  <li className="border-t border-white/[0.07]" />
+                </ol>
+              </div>
+
+              {/* Footer */}
+              <FadeIn delay={500}>
+                <div className="mt-10 flex flex-wrap items-center gap-x-4 gap-y-1">
+                  <span className="text-[11px] font-black tracking-[0.2em] text-white/25">TED</span>
+                  <span className="w-px h-3 bg-white/10" />
+                  <span className="text-[11px] font-black tracking-[0.2em]" style={{ color: WARM_AMBER }}>TED AI</span>
+                  <span className="w-px h-3 bg-white/10" />
+                  <span className="text-[11px] font-mono text-white/25">24–26.9 · Vienna, Austria</span>
+                </div>
+              </FadeIn>
+            </div>
+
+            {/* ── RIGHT: Light panel — 6 Phenomena ── */}
+            <div className="bg-neutral-50 px-8 py-14 md:px-10 md:py-20">
+              <FadeIn>
+                <div className="flex items-center gap-3 mb-8">
+                  <span className="text-[11px] font-black tracking-[0.18em] text-neutral-400 uppercase">六個關鍵現象</span>
+                  <span className="flex-1 h-px bg-neutral-200" />
+                </div>
+              </FadeIn>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                {PHENOMENA.map((ph, i) => (
+                  <FadeIn key={i} delay={i * 60}>
+                    <div className="relative rounded-2xl p-5 bg-white border border-neutral-100 hover:border-neutral-300 hover:shadow-md transition-all duration-300 overflow-hidden group h-full flex flex-col">
+                      {/* Ghost number watermark */}
+                      <span
+                        className="absolute -bottom-3 -right-2 text-[80px] font-black leading-none select-none pointer-events-none tabular-nums"
+                        style={{ color: `${TED_RED}07` }}
+                      >
+                        {ph.num}
+                      </span>
+
+                      {/* Top row: hashtag pill */}
+                      <div className="flex items-start justify-between mb-3">
+                        <span
+                          className="inline-block px-2.5 py-0.5 text-xs font-black tracking-wide rounded-full"
+                          style={{ backgroundColor: `${WARM_AMBER}18`, color: WARM_AMBER }}
+                        >
+                          {ph.tag}
+                        </span>
+                        <span className="text-xs font-black text-neutral-300 tabular-nums">現象{ph.num}</span>
+                      </div>
+
+                      {/* Title */}
+                      <h3
+                        className="text-base sm:text-lg font-black leading-snug text-neutral-900 mb-2.5 relative z-10"
+                        lang="zh-TW"
+                      >
+                        {ph.title}
+                      </h3>
+
+                      {/* Red divider */}
+                      <div className="w-5 h-0.5 mb-2.5" style={{ backgroundColor: TED_RED, opacity: 0.4 }} />
+
+                      {/* Body */}
+                      {ph.text && (
+                        <p className="text-sm text-neutral-500 leading-[1.85] relative z-10 flex-1" lang="zh-TW">
+                          {ph.text}
+                        </p>
+                      )}
+                    </div>
+                  </FadeIn>
+                ))}
+              </div>
+            </div>
+
+          </div>
+        </section>
 
         {/* ==================== 3) SALON — What We'll Do Together ==================== */}
         <Section bg="white">
@@ -401,6 +705,7 @@ export default function ReportPage() {
             </FadeIn>
           </div>
         </section>
+
 
         {/* CTA 2: Get the Report */}
         <Section bg="warm">

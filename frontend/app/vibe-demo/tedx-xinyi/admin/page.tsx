@@ -6,9 +6,9 @@ import Link from 'next/link';
 const API_BASE = typeof window !== 'undefined'
   ? (process.env.NEXT_PUBLIC_API_URL || '')
   : (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080');
-const ADMIN_PASSWORD = '5milesLab01@';
+const ADMIN_PASSWORD = '5mileslab';
 
-type Tab = 'slots' | 'media' | 'social' | 'publish';
+type Tab = 'slots' | 'media' | 'circles' | 'news-clippings' | 'event-photos' | 'social' | 'publish' | 'records' | 'sponsor-logos';
 
 interface MediaImage {
   key: string;
@@ -20,6 +20,9 @@ interface MediaImage {
   source?: string;
   description?: string;
   missing?: boolean;
+  circlesGallery?: boolean;
+  newsClipping?: boolean;
+  eventGallery?: boolean;
 }
 
 interface ImageSlot {
@@ -33,6 +36,8 @@ interface ImageSlot {
   localExists: boolean;
   status: 'cdn' | 'local-only' | 'missing' | 'external';
   note?: string;
+  generatable?: boolean;
+  visualId?: string;
 }
 
 interface SlotSummary {
@@ -52,6 +57,22 @@ interface SocialPost {
   platform: string;
   createdAt: string;
   updatedAt: string;
+}
+
+interface SponsorLogo {
+  key: string;
+  name: string;
+  category: string;
+  filename: string | null;
+  publicUrl?: string;
+  localExists: boolean;
+  uploadedAt: string;
+}
+
+interface SponsorCategory {
+  id: string;
+  label: string;
+  label_en: string;
 }
 
 export default function TEDxXinyiAdmin() {
@@ -111,9 +132,35 @@ export default function TEDxXinyiAdmin() {
   const [editCdnSaving, setEditCdnSaving] = useState(false);
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
 
+  // Sponsor logos state
+  const [sponsorLogos, setSponsorLogos] = useState<Record<string, SponsorLogo>>({});
+  const [sponsorCategories, setSponsorCategories] = useState<SponsorCategory[]>([]);
+  const [sponsorLogosLoading, setSponsorLogosLoading] = useState(false);
+  const [sponsorLogosLoaded, setSponsorLogosLoaded] = useState(false);
+  const [sponsorCategoryTab, setSponsorCategoryTab] = useState<string>('featured');
+  const [addLogoModal, setAddLogoModal] = useState<{ category: string } | null>(null);
+  const [newLogoName, setNewLogoName] = useState('');
+  const [logoUploading, setLogoUploading] = useState(false);
+  const [uploadStep, setUploadStep] = useState<'reading' | 'uploading' | 'cdn' | null>(null);
+
   const downloadRef = useRef<HTMLAnchorElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const replaceTargetRef = useRef<string | null>(null);
+  const pickerFileInputRef = useRef<HTMLInputElement>(null);
+  const circlesFileInputRef = useRef<HTMLInputElement>(null);
+  const newsClippingsFileInputRef = useRef<HTMLInputElement>(null);
+  const eventPhotosFileInputRef = useRef<HTMLInputElement>(null);
+  const sponsorLogoFileInputRef = useRef<HTMLInputElement>(null);
+  const pendingLogoCategory = useRef<string>('');
+  const pendingLogoName = useRef<string>('');
+  const [showLibraryPicker, setShowLibraryPicker] = useState(false);
+  const [circlesSaving, setCirclesSaving] = useState(false);
+  // draft = keys the user has toggled but not yet saved; null means "no picker open / no draft"
+  const [draftCirclesKeys, setDraftCirclesKeys] = useState<Set<string> | null>(null);
+  const [newsClippingsSaving, setNewsClippingsSaving] = useState(false);
+  const [draftNewsClippingsKeys, setDraftNewsClippingsKeys] = useState<Set<string> | null>(null);
+  const [eventPhotosSaving, setEventPhotosSaving] = useState(false);
+  const [draftEventPhotosKeys, setDraftEventPhotosKeys] = useState<Set<string> | null>(null);
 
   function showToast(msg: string, type: 'ok' | 'err' = 'ok') {
     setToast({ msg, type });
@@ -196,7 +243,7 @@ export default function TEDxXinyiAdmin() {
       const a = downloadRef.current;
       if (a) {
         a.href = url;
-        a.download = `tedx-xinyi-${new Date().toISOString().slice(0, 10)}.zip`;
+        a.download = `tedx-xinyi-${new Date().toISOString().slice(0, 10)}.tar.gz`;
         a.click();
       }
       setPublishMsg(`Pack downloaded (${(blob.size / 1024).toFixed(0)} KB)`);
@@ -391,7 +438,7 @@ export default function TEDxXinyiAdmin() {
   }, [authed, tab, slotsLoaded, slotsLoading, loadSlots]);
 
   useEffect(() => {
-    if (authed && tab === 'media' && !mediaLoaded && !mediaLoading) {
+    if (authed && (tab === 'media' || tab === 'records' || tab === 'circles' || tab === 'news-clippings' || tab === 'event-photos') && !mediaLoaded && !mediaLoading) {
       loadMedia();
     }
   }, [authed, tab, mediaLoaded, mediaLoading, loadMedia]);
@@ -402,12 +449,83 @@ export default function TEDxXinyiAdmin() {
     }
   }, [authed, tab, socialLoaded, socialLoading, loadSocialPosts]);
 
+  useEffect(() => {
+    if (authed && tab === 'sponsor-logos' && !sponsorLogosLoaded && !sponsorLogosLoading) {
+      loadSponsorLogos();
+    }
+  }, [authed, tab, sponsorLogosLoaded, sponsorLogosLoading]); // eslint-disable-line react-hooks/exhaustive-deps
+
   // Also preload media when opening image picker from slots tab
   useEffect(() => {
     if (imagePickerOpen && !mediaLoaded && !mediaLoading) {
       loadMedia();
     }
   }, [imagePickerOpen, mediaLoaded, mediaLoading, loadMedia]);
+
+  // ---- Sponsor logo functions ----
+  async function loadSponsorLogos() {
+    setSponsorLogosLoading(true);
+    try {
+      const res = await fetch(`${API_BASE}/api/tedx-xinyi/sponsors/logos`);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = await res.json();
+      setSponsorLogos(data.logos || {});
+      setSponsorCategories(data.categories || []);
+      setSponsorLogosLoaded(true);
+    } catch (err) {
+      showToast(`Failed to load logos: ${err instanceof Error ? err.message : 'Unknown'}`, 'err');
+    } finally {
+      setSponsorLogosLoading(false);
+    }
+  }
+
+  async function handleSponsorLogoFileSelected(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const category = pendingLogoCategory.current;
+    const name = pendingLogoName.current;
+    if (!category || !name) return;
+    setLogoUploading(true);
+    setUploadStep('reading');
+    try {
+      const reader = new FileReader();
+      const dataUrl: string = await new Promise((resolve, reject) => {
+        reader.onload = () => resolve(reader.result as string);
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+      });
+      setUploadStep('uploading');
+      const res = await fetch(`${API_BASE}/api/tedx-xinyi/sponsors/logos`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ data: dataUrl, name, category }),
+      });
+      setUploadStep('cdn');
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+      showToast(`Uploaded: ${name}`);
+      await loadSponsorLogos();
+    } catch (err) {
+      showToast(`Upload failed: ${err instanceof Error ? err.message : 'Unknown'}`, 'err');
+    } finally {
+      setLogoUploading(false);
+      setUploadStep(null);
+      pendingLogoCategory.current = '';
+      pendingLogoName.current = '';
+      if (sponsorLogoFileInputRef.current) sponsorLogoFileInputRef.current.value = '';
+    }
+  }
+
+  async function deleteSponsorLogo(key: string) {
+    try {
+      const res = await fetch(`${API_BASE}/api/tedx-xinyi/sponsors/logos/${key}`, { method: 'DELETE' });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      showToast('Logo removed');
+      setSponsorLogos(prev => { const next = { ...prev }; delete next[key]; return next; });
+    } catch (err) {
+      showToast(`Delete failed: ${err instanceof Error ? err.message : 'Unknown'}`, 'err');
+    }
+  }
 
   // Upload (replace) handler
   function triggerUpload(key: string) {
@@ -452,6 +570,248 @@ export default function TEDxXinyiAdmin() {
     }
   }
 
+  async function handlePickerUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file || !editSlot?.metaKey) return;
+    setActionLoading(editSlot.metaKey);
+    try {
+      const reader = new FileReader();
+      const dataUrl: string = await new Promise((resolve, reject) => {
+        reader.onload = () => resolve(reader.result as string);
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+      });
+      const uploadRes = await fetch(`${API_BASE}/api/tedx-xinyi/media/upload`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ data: dataUrl, filename: file.name }),
+      });
+      const uploadData = await uploadRes.json();
+      if (!uploadRes.ok) throw new Error(uploadData.error || `HTTP ${uploadRes.status}`);
+      const cdnUrl = uploadData.publicUrl;
+      if (!cdnUrl) throw new Error('No CDN URL returned from upload');
+      const mapRes = await fetch(`${API_BASE}/api/tedx-xinyi/media/metadata`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ key: editSlot.metaKey, cdnUrl }),
+      });
+      if (!mapRes.ok) throw new Error(`Map failed: HTTP ${mapRes.status}`);
+      showToast(`Uploaded and mapped to ${editSlot.metaKey}`);
+      setImagePickerOpen(false);
+      // Keep modal open so user can see the updated CDN URL immediately
+      setEditCdnUrl(cdnUrl);
+      setEditSlot(prev => prev ? { ...prev, cdnUrl, status: 'cdn' } : prev);
+      loadMedia();
+      if (slotsLoaded) loadSlots();
+    } catch (err) {
+      showToast(`Upload failed: ${err instanceof Error ? err.message : 'Unknown'}`, 'err');
+    } finally {
+      setActionLoading(null);
+      if (pickerFileInputRef.current) pickerFileInputRef.current.value = '';
+    }
+  }
+
+  // Upload a new TED Circles photo to ted-circles/ folder
+  async function handleCirclesUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const key = `circles-${Date.now()}-${file.name}`;
+    setActionLoading(key);
+    try {
+      const reader = new FileReader();
+      const dataUrl: string = await new Promise((resolve, reject) => {
+        reader.onload = () => resolve(reader.result as string);
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+      });
+      const res = await fetch(`${API_BASE}/api/tedx-xinyi/media/upload`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ data: dataUrl, filename: file.name, folder: 'ted-circles' }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+      showToast(`Uploaded ${file.name} → ${data.publicUrl ? 'CDN ✓' : 'local'}`);
+      await loadMedia();
+    } catch (err) {
+      showToast(`Upload failed: ${err instanceof Error ? err.message : 'Unknown'}`, 'err');
+    } finally {
+      setActionLoading(null);
+      if (circlesFileInputRef.current) circlesFileInputRef.current.value = '';
+    }
+  }
+
+  // Upload a new News Clipping photo
+  async function handleNewsClippingsUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const key = `nc-${Date.now()}-${file.name}`;
+    setActionLoading(key);
+    try {
+      const reader = new FileReader();
+      const dataUrl: string = await new Promise((resolve, reject) => {
+        reader.onload = () => resolve(reader.result as string);
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+      });
+      const res = await fetch(`${API_BASE}/api/tedx-xinyi/media/upload`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ data: dataUrl, filename: file.name, folder: 'news-clippings' }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+      // Auto-flag as news clipping
+      await fetch(`${API_BASE}/api/tedx-xinyi/media/toggle-news-clipping`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ key: data.key, inGallery: true }),
+      });
+      showToast(`Uploaded ${file.name} → ${data.publicUrl ? 'CDN ✓' : 'local'}`);
+      await loadMedia();
+    } catch (err) {
+      showToast(`Upload failed: ${err instanceof Error ? err.message : 'Unknown'}`, 'err');
+    } finally {
+      setActionLoading(null);
+      if (newsClippingsFileInputRef.current) newsClippingsFileInputRef.current.value = '';
+    }
+  }
+
+  // Upload a new Event Photo
+  async function handleEventPhotosUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const key = `ep-${Date.now()}-${file.name}`;
+    setActionLoading(key);
+    try {
+      const reader = new FileReader();
+      const dataUrl: string = await new Promise((resolve, reject) => {
+        reader.onload = () => resolve(reader.result as string);
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+      });
+      const res = await fetch(`${API_BASE}/api/tedx-xinyi/media/upload`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ data: dataUrl, filename: file.name, folder: 'event-photos' }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+      // Auto-flag as event gallery
+      await fetch(`${API_BASE}/api/tedx-xinyi/media/toggle-event-photo`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ key: data.key, inGallery: true }),
+      });
+      showToast(`Uploaded ${file.name} → ${data.publicUrl ? 'CDN ✓' : 'local'}`);
+      await loadMedia();
+    } catch (err) {
+      showToast(`Upload failed: ${err instanceof Error ? err.message : 'Unknown'}`, 'err');
+    } finally {
+      setActionLoading(null);
+      if (eventPhotosFileInputRef.current) eventPhotosFileInputRef.current.value = '';
+    }
+  }
+
+  // Toggle a key in the local draft (no API call until Save is clicked)
+  function toggleDraftCircle(key: string) {
+    setDraftCirclesKeys(prev => {
+      const next = new Set(prev ?? media.filter(m => m.circlesGallery).map(m => m.key));
+      if (next.has(key)) next.delete(key); else next.add(key);
+      return next;
+    });
+  }
+
+  // Commit all draft changes to the backend
+  async function saveCircles() {
+    if (!draftCirclesKeys) return;
+    setCirclesSaving(true);
+    try {
+      // Compute which keys changed vs the current saved state
+      const savedKeys = new Set(media.filter(m => m.circlesGallery).map(m => m.key));
+      const allKeys = new Set([...savedKeys, ...draftCirclesKeys]);
+      const changed: Array<{ key: string; inCircles: boolean }> = [];
+      for (const key of allKeys) {
+        const wasSaved = savedKeys.has(key);
+        const isDraft = draftCirclesKeys.has(key);
+        if (wasSaved !== isDraft) changed.push({ key, inCircles: isDraft });
+      }
+      await Promise.all(changed.map(({ key, inCircles }) =>
+        fetch(`${API_BASE}/api/tedx-xinyi/media/toggle-circles`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ key, inCircles }),
+        })
+      ));
+      // Reflect saved state in media list
+      setMedia(prev => prev.map(m => ({ ...m, circlesGallery: draftCirclesKeys.has(m.key) })));
+      setDraftCirclesKeys(null); // clear draft — picker shows fresh saved state
+      showToast(`Saved ${changed.length} change${changed.length !== 1 ? 's' : ''} ✓`);
+    } catch (err) {
+      showToast(`Save failed: ${err instanceof Error ? err.message : 'Unknown'}`, 'err');
+    } finally {
+      setCirclesSaving(false);
+    }
+  }
+
+  async function saveNewsClippings() {
+    if (!draftNewsClippingsKeys) return;
+    setNewsClippingsSaving(true);
+    try {
+      const savedKeys = new Set(media.filter(m => m.newsClipping).map(m => m.key));
+      const allKeys = new Set([...savedKeys, ...draftNewsClippingsKeys]);
+      const changed: Array<{ key: string; inGallery: boolean }> = [];
+      for (const key of allKeys) {
+        const wasSaved = savedKeys.has(key);
+        const isDraft = draftNewsClippingsKeys.has(key);
+        if (wasSaved !== isDraft) changed.push({ key, inGallery: isDraft });
+      }
+      await Promise.all(changed.map(({ key, inGallery }) =>
+        fetch(`${API_BASE}/api/tedx-xinyi/media/toggle-news-clipping`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ key, inGallery }),
+        })
+      ));
+      setMedia(prev => prev.map(m => ({ ...m, newsClipping: draftNewsClippingsKeys.has(m.key) })));
+      setDraftNewsClippingsKeys(null);
+      showToast(`Saved ${changed.length} change${changed.length !== 1 ? 's' : ''} ✓`);
+    } catch (err) {
+      showToast(`Save failed: ${err instanceof Error ? err.message : 'Unknown'}`, 'err');
+    } finally {
+      setNewsClippingsSaving(false);
+    }
+  }
+
+  async function saveEventPhotos() {
+    if (!draftEventPhotosKeys) return;
+    setEventPhotosSaving(true);
+    try {
+      const savedKeys = new Set(media.filter(m => m.eventGallery).map(m => m.key));
+      const allKeys = new Set([...savedKeys, ...draftEventPhotosKeys]);
+      const changed: Array<{ key: string; inGallery: boolean }> = [];
+      for (const key of allKeys) {
+        const wasSaved = savedKeys.has(key);
+        const isDraft = draftEventPhotosKeys.has(key);
+        if (wasSaved !== isDraft) changed.push({ key, inGallery: isDraft });
+      }
+      await Promise.all(changed.map(({ key, inGallery }) =>
+        fetch(`${API_BASE}/api/tedx-xinyi/media/toggle-event-photo`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ key, inGallery }),
+        })
+      ));
+      setMedia(prev => prev.map(m => ({ ...m, eventGallery: draftEventPhotosKeys.has(m.key) })));
+      setDraftEventPhotosKeys(null);
+      showToast(`Saved ${changed.length} change${changed.length !== 1 ? 's' : ''} ✓`);
+    } catch (err) {
+      showToast(`Save failed: ${err instanceof Error ? err.message : 'Unknown'}`, 'err');
+    } finally {
+      setEventPhotosSaving(false);
+    }
+  }
+
   // Archive (deactivate, keep asset in storage with --archived- prefix)
   async function handleArchive(key: string) {
     setActionLoading(key);
@@ -473,7 +833,7 @@ export default function TEDxXinyiAdmin() {
     }
   }
 
-  // Regenerate (AI)
+  // Regenerate (AI) — for existing images
   async function handleRegenerate(key: string, instructions?: string) {
     setActionLoading(key);
     try {
@@ -488,6 +848,28 @@ export default function TEDxXinyiAdmin() {
       await loadMedia();
     } catch (err) {
       showToast(`Regenerate failed: ${err instanceof Error ? err.message : 'Unknown'}`, 'err');
+    } finally {
+      setActionLoading(null);
+    }
+  }
+
+  // Generate via nanobanana (Gemini) — for VISUALS with predefined prompts
+  async function handleGenerate(visualId: string) {
+    setActionLoading(visualId);
+    try {
+      const res = await fetch(`${API_BASE}/api/tedx-xinyi/generate`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: visualId }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+      showToast(`Generated ${visualId} → CDN: ${data.publicUrl || 'local only'}`);
+      setEditSlot(null);
+      await loadMedia();
+      if (slotsLoaded) await loadSlots();
+    } catch (err) {
+      showToast(`Generate failed: ${err instanceof Error ? err.message : 'Unknown'}`, 'err');
     } finally {
       setActionLoading(null);
     }
@@ -550,7 +932,12 @@ export default function TEDxXinyiAdmin() {
 
   const tabs: { id: Tab; label: string }[] = [
     { id: 'slots', label: 'Image Slots' },
+    { id: 'records', label: 'Image Records' },
     { id: 'media', label: 'Media Library' },
+    { id: 'circles', label: 'TED Circles' },
+    { id: 'news-clippings', label: 'News Clippings' },
+    { id: 'event-photos', label: 'Event Photos' },
+    { id: 'sponsor-logos', label: 'Sponsor Logos' },
     { id: 'social', label: 'Social Media' },
     { id: 'publish', label: 'Publish Site Pack' },
   ];
@@ -569,6 +956,113 @@ export default function TEDxXinyiAdmin() {
         className="hidden"
         onChange={handleFileSelected}
       />
+      <input
+        ref={pickerFileInputRef}
+        type="file"
+        accept="image/jpeg,image/png,image/webp"
+        className="hidden"
+        onChange={handlePickerUpload}
+      />
+      <input
+        ref={circlesFileInputRef}
+        type="file"
+        accept="image/jpeg,image/png,image/webp"
+        className="hidden"
+        multiple
+        onChange={async (e) => {
+          const files = Array.from(e.target.files || []);
+          for (const file of files) {
+            await handleCirclesUpload({ target: { files: [file] } } as unknown as React.ChangeEvent<HTMLInputElement>);
+          }
+          if (circlesFileInputRef.current) circlesFileInputRef.current.value = '';
+        }}
+      />
+      <input
+        ref={newsClippingsFileInputRef}
+        type="file"
+        accept="image/jpeg,image/png,image/webp"
+        className="hidden"
+        multiple
+        onChange={async (e) => {
+          const files = Array.from(e.target.files || []);
+          for (const file of files) {
+            await handleNewsClippingsUpload({ target: { files: [file] } } as unknown as React.ChangeEvent<HTMLInputElement>);
+          }
+          if (newsClippingsFileInputRef.current) newsClippingsFileInputRef.current.value = '';
+        }}
+      />
+      <input
+        ref={eventPhotosFileInputRef}
+        type="file"
+        accept="image/jpeg,image/png,image/webp"
+        className="hidden"
+        multiple
+        onChange={async (e) => {
+          const files = Array.from(e.target.files || []);
+          for (const file of files) {
+            await handleEventPhotosUpload({ target: { files: [file] } } as unknown as React.ChangeEvent<HTMLInputElement>);
+          }
+          if (eventPhotosFileInputRef.current) eventPhotosFileInputRef.current.value = '';
+        }}
+      />
+      <input
+        ref={sponsorLogoFileInputRef}
+        type="file"
+        accept="image/jpeg,image/png,image/webp,image/svg+xml"
+        className="hidden"
+        onChange={handleSponsorLogoFileSelected}
+      />
+
+      {/* Add Sponsor Logo Modal */}
+      {addLogoModal && (
+        <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center px-4">
+          <div className="bg-neutral-900 border border-neutral-700 rounded-xl p-6 max-w-sm w-full">
+            <h3 className="font-bold text-base mb-1">Upload Logo</h3>
+            <p className="text-neutral-500 text-xs mb-4">
+              {sponsorCategories.find(c => c.id === addLogoModal.category)?.label} — {sponsorCategories.find(c => c.id === addLogoModal.category)?.label_en}
+            </p>
+            <input
+              type="text"
+              value={newLogoName}
+              onChange={e => setNewLogoName(e.target.value)}
+              onKeyDown={e => {
+                if (e.key === 'Enter' && newLogoName.trim()) {
+                  pendingLogoCategory.current = addLogoModal.category;
+                  pendingLogoName.current = newLogoName.trim();
+                  setAddLogoModal(null);
+                  setNewLogoName('');
+                  sponsorLogoFileInputRef.current?.click();
+                }
+              }}
+              placeholder="Company / Partner name"
+              autoFocus
+              className="w-full px-3 py-2 bg-neutral-800 border border-neutral-700 rounded-lg text-sm text-white focus:outline-none focus:border-red-500 mb-3"
+            />
+            <div className="flex gap-2">
+              <button
+                onClick={() => {
+                  if (!newLogoName.trim()) return showToast('Enter a name first', 'err');
+                  pendingLogoCategory.current = addLogoModal.category;
+                  pendingLogoName.current = newLogoName.trim();
+                  setAddLogoModal(null);
+                  setNewLogoName('');
+                  sponsorLogoFileInputRef.current?.click();
+                }}
+                disabled={!newLogoName.trim()}
+                className="flex-1 py-2 bg-red-600 hover:bg-red-500 disabled:opacity-40 text-white text-sm font-bold rounded-lg transition-colors"
+              >
+                Choose File &rarr;
+              </button>
+              <button
+                onClick={() => { setAddLogoModal(null); setNewLogoName(''); }}
+                className="px-4 py-2 bg-neutral-800 hover:bg-neutral-700 text-sm rounded-lg transition-colors"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Toast */}
       {toast && (
@@ -649,7 +1143,7 @@ export default function TEDxXinyiAdmin() {
               <div className="flex gap-6">
                 <div className="w-40 h-28 rounded-lg bg-neutral-800 overflow-hidden flex items-center justify-center flex-shrink-0">
                   {(() => {
-                    const previewUrl = editSlot.cdnUrl || (editSlot.isExternal ? editSlot.src : (editSlot.isLocal ? `${API_BASE}${editSlot.src}` : null));
+                    const previewUrl = editSlot.cdnUrl || (editSlot.isExternal ? editSlot.src : (editSlot.isLocal && editSlot.localExists ? `${API_BASE}${editSlot.src}` : null));
                     return previewUrl ? (
                       <img src={previewUrl} alt="" className="w-full h-full object-cover" onError={e => { (e.target as HTMLImageElement).style.display = 'none'; }} />
                     ) : (
@@ -710,11 +1204,21 @@ export default function TEDxXinyiAdmin() {
                 );
               })()}
 
-              {/* Meta Key */}
+              {/* Meta Key + Visual ID */}
               {(editSlot.metaKey || editSlot.isLocal) && (
-                <div>
-                  <label className="text-[11px] text-neutral-500 font-bold uppercase tracking-wider block mb-1">Metadata Key</label>
-                  <div className="bg-neutral-800 rounded-lg px-3 py-2 text-xs text-neutral-300 font-mono break-all">{editSlot.metaKey || editSlot.src.replace('/tedx-xinyi/', '')}</div>
+                <div className="space-y-2">
+                  <div>
+                    <label className="text-[11px] text-neutral-500 font-bold uppercase tracking-wider block mb-1">Metadata Key</label>
+                    <div className="bg-neutral-800 rounded-lg px-3 py-2 text-xs text-neutral-300 font-mono break-all">{editSlot.metaKey || editSlot.src.replace('/tedx-xinyi/', '')}</div>
+                  </div>
+                  {editSlot.type !== 'speaker' && editSlot.isLocal && (
+                    <div>
+                      <label className="text-[11px] text-neutral-500 font-bold uppercase tracking-wider block mb-1">Visual ID <span className="text-neutral-600 normal-case font-normal">(for Generate button)</span></label>
+                      <div className="bg-amber-950/30 border border-amber-800/30 rounded-lg px-3 py-2 text-xs text-amber-300 font-mono">
+                        {(editSlot.metaKey || editSlot.src.replace('/tedx-xinyi/', '')).replace(/\.(jpg|jpeg|png|webp|gif)$/i, '')}
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
 
@@ -724,14 +1228,14 @@ export default function TEDxXinyiAdmin() {
                 const isLoading = actionLoading === effectiveKey;
                 return (
                   <div className="flex flex-wrap gap-2 pt-2">
-                    {/* Push to CDN — for local-only images */}
-                    {effectiveKey && editSlot.localExists && editSlot.status !== 'cdn' && (
+                    {/* Push to CDN — any slot with a local file */}
+                    {effectiveKey && editSlot.localExists && (
                       <button
                         onClick={() => pushToCdn(effectiveKey)}
                         disabled={isLoading}
                         className="px-4 py-2 text-xs font-bold bg-green-600/20 hover:bg-green-600/30 text-green-300 rounded-lg transition-colors disabled:opacity-40"
                       >
-                        {isLoading ? 'Uploading\u2026' : 'Push to CDN'}
+                        {isLoading ? 'Uploading\u2026' : editSlot.cdnUrl ? 'Repush to CDN' : 'Push to CDN'}
                       </button>
                     )}
                     {effectiveKey && (
@@ -751,6 +1255,16 @@ export default function TEDxXinyiAdmin() {
                         {imagePickerOpen ? 'Close Picker' : 'Pick from Library'}
                       </button>
                     )}
+                    {effectiveKey && editSlot.type !== 'speaker' && (
+                      <button
+                        onClick={() => handleGenerate(effectiveKey.replace(/\.(jpg|jpeg|png|webp|gif)$/i, ''))}
+                        disabled={isLoading}
+                        className="px-4 py-2 text-xs font-bold bg-amber-600/20 hover:bg-amber-600/30 text-amber-300 rounded-lg transition-colors disabled:opacity-40"
+                        title="Generate fresh via Gemini nanobanana using pre-defined prompt"
+                      >
+                        {isLoading ? 'Generating…' : '✦ Generate (nanobanana)'}
+                      </button>
+                    )}
                     {effectiveKey && (
                       <button
                         onClick={() => { setConfirmRegen(effectiveKey); }}
@@ -766,7 +1280,15 @@ export default function TEDxXinyiAdmin() {
               {/* Image Picker Grid */}
               {imagePickerOpen && (
                 <div className="border-t border-neutral-800 pt-4">
-                  <p className="text-xs text-neutral-500 font-bold mb-3">Select an image from the Media Library to use for this slot:</p>
+                  <div className="flex items-center gap-2 mb-3">
+                    <p className="text-xs text-neutral-500 font-bold flex-1">Select an image from the Media Library to use for this slot:</p>
+                    <button
+                      onClick={() => pickerFileInputRef.current?.click()}
+                      className="px-3 py-1.5 text-xs font-bold bg-blue-600/20 hover:bg-blue-600/30 text-blue-300 rounded-lg transition-colors shrink-0"
+                    >
+                      Upload Photo
+                    </button>
+                  </div>
                   {!mediaLoaded ? (
                     <p className="text-xs text-neutral-600">Loading media\u2026</p>
                   ) : pickableMedia.length === 0 ? (
@@ -788,8 +1310,10 @@ export default function TEDxXinyiAdmin() {
                               if (!res.ok) throw new Error(`HTTP ${res.status}`);
                               showToast(`Mapped ${editSlot.metaKey} to ${img.key}`);
                               setImagePickerOpen(false);
-                              setEditSlot(null);
-                              await loadSlots();
+                              // Keep modal open so user sees the CDN URL immediately
+                              setEditCdnUrl(img.publicUrl);
+                              setEditSlot(prev => prev ? { ...prev, cdnUrl: img.publicUrl, status: 'cdn' } : prev);
+                              loadSlots();
                             } catch (err) {
                               showToast(`Map failed: ${err instanceof Error ? err.message : 'Unknown'}`, 'err');
                             } finally {
@@ -931,7 +1455,7 @@ export default function TEDxXinyiAdmin() {
                     </thead>
                     <tbody>
                       {filteredSlots.map((slot, i) => {
-                        const previewUrl = slot.cdnUrl || (slot.isExternal ? slot.src : (slot.isLocal ? `${API_BASE}${slot.src}` : null));
+                        const previewUrl = slot.cdnUrl || (slot.isExternal ? slot.src : (slot.isLocal && slot.localExists ? `${API_BASE}${slot.src}` : null));
                         return (
                           <tr
                             key={`${slot.page}-${slot.src}-${i}`}
@@ -978,18 +1502,27 @@ export default function TEDxXinyiAdmin() {
                                 if (!effectiveKey) return null;
                                 const loading = actionLoading === effectiveKey;
                                 return (
-                                  <div className="flex gap-1">
-                                    {slot.localExists && slot.status !== 'cdn' && (
+                                  <div className="flex gap-1 items-center flex-wrap">
+                                    {slot.generatable && slot.visualId && (
+                                      <button
+                                        onClick={(e) => { e.stopPropagation(); handleGenerate(slot.visualId!); }}
+                                        disabled={loading}
+                                        className="px-2 py-1 text-[10px] font-bold bg-amber-600/20 hover:bg-amber-600/30 text-amber-300 rounded transition-colors disabled:opacity-40 whitespace-nowrap"
+                                      >
+                                        {loading ? '\u2026' : slot.localExists || slot.cdnUrl ? 'Re-gen' : 'Generate'}
+                                      </button>
+                                    )}
+                                    {slot.localExists && (
                                       <button
                                         onClick={(e) => { e.stopPropagation(); pushToCdn(effectiveKey); }}
                                         disabled={loading}
                                         className="px-2 py-1 text-[10px] font-bold bg-green-600/20 hover:bg-green-600/30 text-green-300 rounded transition-colors disabled:opacity-40 whitespace-nowrap"
                                       >
-                                        {loading ? '\u2026' : 'Push to CDN'}
+                                        {loading ? '\u2026' : slot.cdnUrl ? 'Repush CDN' : 'Push CDN'}
                                       </button>
                                     )}
-                                    {slot.status === 'cdn' && (
-                                      <span className="text-[10px] text-green-500">on CDN</span>
+                                    {slot.status === 'cdn' && !slot.localExists && (
+                                      <span className="text-[10px] text-green-500">CDN only</span>
                                     )}
                                   </div>
                                 );
@@ -1100,10 +1633,10 @@ export default function TEDxXinyiAdmin() {
                         )}
 
                         <div className="flex flex-wrap gap-1.5 mt-3 pt-3 border-t border-neutral-800/50">
-                          {/* Push to CDN — for local-only images */}
-                          {!archived && img.localExists && !img.publicUrl && (
-                            <button onClick={() => pushToCdn(img.key)} disabled={loading} className="w-full px-2 py-1.5 text-[11px] font-bold bg-green-600/20 hover:bg-green-600/30 text-green-300 rounded transition-colors disabled:opacity-40 mb-1" title="Upload local file to mmdbfiles CDN">
-                              {loading ? 'Uploading\u2026' : 'Push to CDN'}
+                          {/* Push to CDN — any image with a local file */}
+                          {!archived && img.localExists && (
+                            <button onClick={() => pushToCdn(img.key)} disabled={loading} className="w-full px-2 py-1.5 text-[11px] font-bold bg-green-600/20 hover:bg-green-600/30 text-green-300 rounded transition-colors disabled:opacity-40 mb-1" title={img.publicUrl ? 'Re-upload local file to mmdbfiles CDN' : 'Upload local file to mmdbfiles CDN'}>
+                              {loading ? 'Uploading\u2026' : img.publicUrl ? 'Repush to CDN' : 'Push to CDN'}
                             </button>
                           )}
                           {!archived && (
@@ -1375,8 +1908,8 @@ export default function TEDxXinyiAdmin() {
             <div className="bg-neutral-900 border border-neutral-800 rounded-xl p-6 mb-6">
               <h3 className="text-sm font-bold text-neutral-300 mb-4">Package Contents</h3>
               <ul className="text-sm text-neutral-400 space-y-1.5 mb-6">
-                <li>&#x2022; <span className="text-neutral-300 font-bold">index.html</span> + 6 sub-pages (about, blog, community, salon, speakers, sustainability)</li>
-                <li>&#x2022; <span className="text-neutral-300 font-bold">index.php</span> — PHP router for clean URLs (/salon, /about, etc.)</li>
+                <li>&#x2022; <span className="text-neutral-300 font-bold">index.html</span> + all sub-pages — URLs rewritten for <code className="text-xs bg-neutral-800 px-1 rounded">tedxxinyi.brandpromo.today</code></li>
+                <li>&#x2022; <span className="text-neutral-300 font-bold">index.php</span> — PHP router for clean URLs (<code className="text-xs bg-neutral-800 px-1 rounded">/about</code>, <code className="text-xs bg-neutral-800 px-1 rounded">/salon</code>, etc.)</li>
                 <li>&#x2022; <span className="text-neutral-300 font-bold">.htaccess</span> — Apache rewrite rules</li>
                 <li>&#x2022; _next/ static assets (JS &amp; CSS chunks)</li>
                 <li>&#x2022; tedx-xinyi/ images folder</li>
@@ -1408,6 +1941,7 @@ export default function TEDxXinyiAdmin() {
                 <div>
                   <p className="text-xs text-neutral-300 font-bold mb-1">PHP built-in server (local preview)</p>
                   <p className="text-xs text-neutral-500 font-mono bg-neutral-800/50 px-2 py-1 rounded inline-block">php -S localhost:8000 index.php</p>
+                  <p className="text-xs text-neutral-600 mt-1">Then open: http://localhost:8000/</p>
                 </div>
                 <div>
                   <p className="text-xs text-neutral-300 font-bold mb-1">Static hosting (Netlify, Vercel, S3)</p>
@@ -1418,6 +1952,810 @@ export default function TEDxXinyiAdmin() {
                 <p className="text-[11px] text-neutral-600">Images with CDN URLs load from mmdbfiles CDN even if local files are missing.</p>
               </div>
             </div>
+          </div>
+        )}
+
+        {/* ==================== TED CIRCLES TAB ==================== */}
+        {tab === 'circles' && (
+          <div>
+            <div className="flex items-center justify-between mb-6">
+              <div>
+                <h2 className="text-2xl font-black">TED Circles Photos</h2>
+                <p className="text-neutral-500 text-sm mt-1">Manage the TED Circles photo library shown on the Community page.</p>
+              </div>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setShowLibraryPicker(p => !p)}
+                  className={`px-4 py-2 text-xs font-bold rounded-lg transition-colors ${showLibraryPicker ? 'bg-amber-600 hover:bg-amber-500 text-white' : 'bg-neutral-700 hover:bg-neutral-600 text-neutral-200'}`}
+                >
+                  {showLibraryPicker ? 'Hide Library' : 'Pick from Library'}
+                </button>
+                <button
+                  onClick={() => circlesFileInputRef.current?.click()}
+                  className="px-4 py-2 bg-red-600 hover:bg-red-500 text-white text-xs font-bold rounded-lg transition-colors"
+                >
+                  + Upload Photos
+                </button>
+                <button
+                  onClick={loadMedia}
+                  disabled={mediaLoading}
+                  className="px-4 py-2 bg-neutral-800 hover:bg-neutral-700 text-xs font-bold rounded-lg transition-colors"
+                >
+                  {mediaLoading ? 'Loading…' : 'Refresh'}
+                </button>
+              </div>
+            </div>
+
+            {!mediaLoaded && !mediaLoading && (
+              <div className="text-center py-16 text-neutral-600">
+                <p className="text-sm mb-3">No photos yet.</p>
+                <button onClick={() => circlesFileInputRef.current?.click()} className="px-4 py-2 bg-red-600 hover:bg-red-500 text-white text-xs font-bold rounded-lg transition-colors">
+                  Upload first photo
+                </button>
+              </div>
+            )}
+
+            {/* Library picker — select any media image to add to circles gallery */}
+            {showLibraryPicker && mediaLoaded && (() => {
+              const effectiveKeys = draftCirclesKeys ?? new Set(media.filter(m => m.circlesGallery).map(m => m.key));
+              const savedKeys = new Set(media.filter(m => m.circlesGallery).map(m => m.key));
+              const hasUnsaved = draftCirclesKeys !== null && (
+                [...effectiveKeys].some(k => !savedKeys.has(k)) ||
+                [...savedKeys].some(k => !effectiveKeys.has(k))
+              );
+              const libraryImgs = media.filter(m =>
+                !m.key.startsWith('ted-circles/') &&
+                m.key !== 'ted-circles.webp' &&
+                (m.publicUrl || m.localExists) &&
+                !m.missing
+              );
+              return (
+                <div className="mb-6 border border-amber-900/40 rounded-2xl overflow-hidden">
+                  <div className="px-4 py-3 bg-amber-900/20 border-b border-amber-900/40 flex items-center justify-between">
+                    <div>
+                      <p className="text-sm font-black text-amber-200">Pick from Library</p>
+                      <p className="text-xs text-amber-400/70 mt-0.5">Select images then click Save to apply changes.</p>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <span className="text-xs text-amber-500 font-mono">{effectiveKeys.size} selected{hasUnsaved ? ' · unsaved' : ''}</span>
+                      {hasUnsaved ? (
+                        <button
+                          onClick={saveCircles}
+                          disabled={circlesSaving}
+                          className="px-4 py-1.5 bg-amber-500 hover:bg-amber-400 disabled:opacity-50 text-black text-xs font-black rounded-lg transition-colors"
+                        >
+                          {circlesSaving ? 'Saving…' : 'Save'}
+                        </button>
+                      ) : (
+                        <span className="text-[10px] text-green-400 font-bold">Saved ✓</span>
+                      )}
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3 p-4 max-h-[480px] overflow-y-auto">
+                    {libraryImgs.map(img => {
+                      const selected = effectiveKeys.has(img.key);
+                      return (
+                        <button
+                          key={img.key}
+                          onClick={() => toggleDraftCircle(img.key)}
+                          className={`relative rounded-xl overflow-hidden aspect-square border-2 transition-all ${selected ? 'border-amber-400 ring-2 ring-amber-400/40' : 'border-neutral-700 hover:border-neutral-500'}`}
+                        >
+                          <img
+                            src={img.publicUrl || `/tedx-xinyi/${img.key}`}
+                            alt={img.alt || img.filename}
+                            className="w-full h-full object-cover"
+                            onError={e => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                          />
+                          {selected && (
+                            <div className="absolute top-1.5 right-1.5 w-5 h-5 bg-amber-400 rounded-full flex items-center justify-center">
+                              <svg width="11" height="11" viewBox="0 0 12 12" fill="none"><path d="M2 6l3 3 5-5" stroke="#000" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                            </div>
+                          )}
+                          <div className="absolute bottom-0 inset-x-0 bg-gradient-to-t from-black/70 to-transparent px-2 pb-1.5 pt-4">
+                            <p className="text-[9px] text-white/80 truncate font-mono leading-tight">{img.filename}</p>
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            })()}
+
+                        {mediaLoaded && (() => {
+              const circleImgs = media.filter(m => m.key === 'ted-circles.webp' || m.key.startsWith('ted-circles/') || m.circlesGallery);
+              if (circleImgs.length === 0) return (
+                <div className="text-center py-16 border-2 border-dashed border-neutral-800 rounded-2xl">
+                  <p className="text-neutral-500 text-sm mb-3">No TED Circles photos uploaded yet.</p>
+                  <button onClick={() => circlesFileInputRef.current?.click()} className="px-4 py-2 bg-red-600 hover:bg-red-500 text-white text-xs font-bold rounded-lg transition-colors">
+                    Upload photos
+                  </button>
+                </div>
+              );
+              return (
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+                  {circleImgs.map(img => {
+                    const archived = isArchived(img.key);
+                    const loading = actionLoading === img.key;
+                    return (
+                      <div key={img.key} className={`bg-neutral-900 border rounded-xl overflow-hidden ${archived ? 'border-neutral-800/50 opacity-60' : 'border-neutral-800'}`}>
+                        <div className="aspect-square bg-neutral-800 flex items-center justify-center relative group">
+                          {(img.publicUrl || img.localExists) ? (
+                            <img
+                              src={img.publicUrl || `${API_BASE}/tedx-xinyi/${img.key}`}
+                              alt={img.alt || img.key}
+                              className="w-full h-full object-cover"
+                              onError={e => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                            />
+                          ) : (
+                            <span className="text-neutral-600 text-xs">Missing</span>
+                          )}
+                          {loading && (
+                            <div className="absolute inset-0 bg-black/60 flex items-center justify-center">
+                              <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                            </div>
+                          )}
+                          {archived && (
+                            <div className="absolute top-2 left-2">
+                              <span className="text-[10px] px-1.5 py-0.5 bg-amber-900/60 text-amber-300 rounded font-bold">ARCHIVED</span>
+                            </div>
+                          )}
+                        </div>
+                        <div className="p-3">
+                          <p className="text-[11px] text-neutral-500 truncate font-mono mb-2" title={img.key}>{img.key.replace('ted-circles/', '')}</p>
+                          <div className="flex flex-wrap gap-1 mb-2">
+                            {img.localExists && <span className="text-[10px] px-1.5 py-0.5 bg-green-900/40 text-green-400 rounded">local</span>}
+                            {img.publicUrl && <span className="text-[10px] px-1.5 py-0.5 bg-blue-900/40 text-blue-400 rounded">CDN</span>}
+                            {img.missing && <span className="text-[10px] px-1.5 py-0.5 bg-red-900/40 text-red-400 rounded">missing</span>}
+                          </div>
+                          {img.publicUrl && (
+                            <div className="flex items-center gap-1 mb-2">
+                              <a href={img.publicUrl} target="_blank" rel="noopener noreferrer" className="text-[10px] text-blue-400 hover:text-blue-300 font-mono truncate flex-1">{img.publicUrl}</a>
+                              <button onClick={() => copyToClipboard(img.publicUrl!, img.key)} className="px-1.5 py-0.5 text-[9px] font-bold bg-neutral-700 hover:bg-neutral-600 text-neutral-300 rounded flex-shrink-0">
+                                {copiedKey === img.key ? 'Copied' : 'Copy'}
+                              </button>
+                            </div>
+                          )}
+                          <div className="flex flex-wrap gap-1.5 pt-2 border-t border-neutral-800/50">
+                            {!archived && img.localExists && (
+                              <button onClick={() => pushToCdn(img.key)} disabled={loading} className="w-full px-2 py-1.5 text-[11px] font-bold bg-green-600/20 hover:bg-green-600/30 text-green-300 rounded transition-colors disabled:opacity-40 mb-1" title={img.publicUrl ? 'Re-upload to CDN' : 'Upload to CDN'}>
+                                {loading ? 'Uploading…' : img.publicUrl ? 'Repush to CDN' : 'Push to CDN'}
+                              </button>
+                            )}
+                            {!archived && (
+                              <button onClick={() => triggerUpload(img.key)} disabled={loading} className="flex-1 px-2 py-1.5 text-[11px] font-bold bg-blue-600/20 hover:bg-blue-600/30 text-blue-300 rounded transition-colors disabled:opacity-40">
+                                Replace
+                              </button>
+                            )}
+                            {!archived && (
+                              <button onClick={() => setConfirmArchive(img.key)} disabled={loading} className="px-2 py-1.5 text-[11px] font-bold bg-amber-600/20 hover:bg-amber-600/30 text-amber-300 rounded transition-colors disabled:opacity-40">
+                                Archive
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              );
+            })()}
+          </div>
+        )}
+
+        {/* ==================== NEWS CLIPPINGS TAB ==================== */}
+        {tab === 'news-clippings' && (
+          <div>
+            <div className="flex items-center justify-between mb-6">
+              <div>
+                <h2 className="text-2xl font-black">News Clippings</h2>
+                <p className="text-neutral-500 text-sm mt-1">Manage press clipping images shown on the Blog / PR page.</p>
+              </div>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => newsClippingsFileInputRef.current?.click()}
+                  className="px-4 py-2 bg-red-600 hover:bg-red-500 text-white text-xs font-bold rounded-lg transition-colors"
+                >
+                  + Upload Clippings
+                </button>
+                <button
+                  onClick={loadMedia}
+                  disabled={mediaLoading}
+                  className="px-4 py-2 bg-neutral-800 hover:bg-neutral-700 text-xs font-bold rounded-lg transition-colors"
+                >
+                  {mediaLoading ? 'Loading…' : 'Refresh'}
+                </button>
+              </div>
+            </div>
+
+            {/* Library picker */}
+            {mediaLoaded && (() => {
+              const effectiveKeys = draftNewsClippingsKeys ?? new Set(media.filter(m => m.newsClipping).map(m => m.key));
+              const savedKeys = new Set(media.filter(m => m.newsClipping).map(m => m.key));
+              const hasUnsaved = draftNewsClippingsKeys !== null && (
+                [...effectiveKeys].some(k => !savedKeys.has(k)) ||
+                [...savedKeys].some(k => !effectiveKeys.has(k))
+              );
+              const libraryImgs = media.filter(m =>
+                !m.key.startsWith('news-clippings/') &&
+                (m.publicUrl || m.localExists) &&
+                !m.missing
+              );
+              return libraryImgs.length > 0 ? (
+                <div className="mb-6 border border-amber-900/40 rounded-2xl overflow-hidden">
+                  <div className="px-4 py-3 bg-amber-900/20 border-b border-amber-900/40 flex items-center justify-between">
+                    <div>
+                      <p className="text-sm font-black text-amber-200">Pick from Library</p>
+                      <p className="text-xs text-amber-400/70 mt-0.5">Select images to include in the news clippings section.</p>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <span className="text-xs text-amber-500 font-mono">{effectiveKeys.size} selected{hasUnsaved ? ' · unsaved' : ''}</span>
+                      {hasUnsaved ? (
+                        <button
+                          onClick={saveNewsClippings}
+                          disabled={newsClippingsSaving}
+                          className="px-4 py-1.5 bg-amber-500 hover:bg-amber-400 disabled:opacity-50 text-black text-xs font-black rounded-lg transition-colors"
+                        >
+                          {newsClippingsSaving ? 'Saving…' : 'Save'}
+                        </button>
+                      ) : (
+                        <span className="text-[10px] text-green-400 font-bold">Saved ✓</span>
+                      )}
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3 p-4 max-h-[480px] overflow-y-auto">
+                    {libraryImgs.map(img => {
+                      const selected = effectiveKeys.has(img.key);
+                      return (
+                        <button
+                          key={img.key}
+                          onClick={() => setDraftNewsClippingsKeys(prev => {
+                            const next = new Set(prev ?? media.filter(m => m.newsClipping).map(m => m.key));
+                            if (next.has(img.key)) next.delete(img.key); else next.add(img.key);
+                            return next;
+                          })}
+                          className={`relative rounded-xl overflow-hidden aspect-square border-2 transition-all ${selected ? 'border-amber-400 ring-2 ring-amber-400/40' : 'border-neutral-700 hover:border-neutral-500'}`}
+                        >
+                          <img
+                            src={img.publicUrl || `/tedx-xinyi/${img.key}`}
+                            alt={img.alt || img.filename}
+                            className="w-full h-full object-cover"
+                            onError={e => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                          />
+                          {selected && (
+                            <div className="absolute top-1.5 right-1.5 w-5 h-5 bg-amber-400 rounded-full flex items-center justify-center">
+                              <svg width="11" height="11" viewBox="0 0 12 12" fill="none"><path d="M2 6l3 3 5-5" stroke="#000" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                            </div>
+                          )}
+                          <div className="absolute bottom-0 inset-x-0 bg-gradient-to-t from-black/70 to-transparent px-2 pb-1.5 pt-4">
+                            <p className="text-[9px] text-white/80 truncate font-mono leading-tight">{img.filename}</p>
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              ) : null;
+            })()}
+
+            {mediaLoaded && (() => {
+              const clippingImgs = media.filter(m => m.key.startsWith('news-clippings/') || m.newsClipping);
+              if (clippingImgs.length === 0) return (
+                <div className="text-center py-16 border-2 border-dashed border-neutral-800 rounded-2xl">
+                  <p className="text-neutral-500 text-sm mb-3">No news clipping images yet.</p>
+                  <button onClick={() => newsClippingsFileInputRef.current?.click()} className="px-4 py-2 bg-red-600 hover:bg-red-500 text-white text-xs font-bold rounded-lg transition-colors">
+                    Upload clippings
+                  </button>
+                </div>
+              );
+              return (
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+                  {clippingImgs.map(img => {
+                    const archived = isArchived(img.key);
+                    const loading = actionLoading === img.key;
+                    return (
+                      <div key={img.key} className={`bg-neutral-900 border rounded-xl overflow-hidden ${archived ? 'border-neutral-800/50 opacity-60' : 'border-neutral-800'}`}>
+                        <div className="aspect-[4/3] bg-neutral-800 flex items-center justify-center relative group">
+                          {(img.publicUrl || img.localExists) ? (
+                            <img
+                              src={img.publicUrl || `${API_BASE}/tedx-xinyi/${img.key}`}
+                              alt={img.alt || img.key}
+                              className="w-full h-full object-cover"
+                              onError={e => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                            />
+                          ) : (
+                            <span className="text-neutral-600 text-xs">Missing</span>
+                          )}
+                          {loading && (
+                            <div className="absolute inset-0 bg-black/60 flex items-center justify-center">
+                              <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                            </div>
+                          )}
+                          {archived && (
+                            <div className="absolute top-2 left-2">
+                              <span className="text-[10px] px-1.5 py-0.5 bg-amber-900/60 text-amber-300 rounded font-bold">ARCHIVED</span>
+                            </div>
+                          )}
+                        </div>
+                        <div className="p-3">
+                          <p className="text-[11px] text-neutral-500 truncate font-mono mb-2" title={img.key}>{img.filename}</p>
+                          <div className="flex flex-wrap gap-1 mb-2">
+                            {img.localExists && <span className="text-[10px] px-1.5 py-0.5 bg-green-900/40 text-green-400 rounded">local</span>}
+                            {img.publicUrl && <span className="text-[10px] px-1.5 py-0.5 bg-blue-900/40 text-blue-400 rounded">CDN</span>}
+                            {img.missing && <span className="text-[10px] px-1.5 py-0.5 bg-red-900/40 text-red-400 rounded">missing</span>}
+                          </div>
+                          <div className="flex flex-wrap gap-1.5 pt-2 border-t border-neutral-800/50">
+                            {!archived && img.localExists && (
+                              <button onClick={() => pushToCdn(img.key)} disabled={loading} className="w-full px-2 py-1.5 text-[11px] font-bold bg-green-600/20 hover:bg-green-600/30 text-green-300 rounded transition-colors disabled:opacity-40 mb-1">
+                                {loading ? 'Uploading…' : img.publicUrl ? 'Repush to CDN' : 'Push to CDN'}
+                              </button>
+                            )}
+                            {!archived && (
+                              <button onClick={() => triggerUpload(img.key)} disabled={loading} className="flex-1 px-2 py-1.5 text-[11px] font-bold bg-blue-600/20 hover:bg-blue-600/30 text-blue-300 rounded transition-colors disabled:opacity-40">
+                                Replace
+                              </button>
+                            )}
+                            {!archived && (
+                              <button onClick={() => setConfirmArchive(img.key)} disabled={loading} className="px-2 py-1.5 text-[11px] font-bold bg-amber-600/20 hover:bg-amber-600/30 text-amber-300 rounded transition-colors disabled:opacity-40">
+                                Archive
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              );
+            })()}
+          </div>
+        )}
+
+        {/* ==================== EVENT PHOTOS TAB ==================== */}
+        {tab === 'event-photos' && (
+          <div>
+            <div className="flex items-center justify-between mb-6">
+              <div>
+                <h2 className="text-2xl font-black">Event Photos</h2>
+                <p className="text-neutral-500 text-sm mt-1">Manage event photo gallery shown on the Salon / Event page.</p>
+              </div>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => eventPhotosFileInputRef.current?.click()}
+                  className="px-4 py-2 bg-red-600 hover:bg-red-500 text-white text-xs font-bold rounded-lg transition-colors"
+                >
+                  + Upload Photos
+                </button>
+                <button
+                  onClick={loadMedia}
+                  disabled={mediaLoading}
+                  className="px-4 py-2 bg-neutral-800 hover:bg-neutral-700 text-xs font-bold rounded-lg transition-colors"
+                >
+                  {mediaLoading ? 'Loading…' : 'Refresh'}
+                </button>
+              </div>
+            </div>
+
+            {/* Library picker */}
+            {mediaLoaded && (() => {
+              const effectiveKeys = draftEventPhotosKeys ?? new Set(media.filter(m => m.eventGallery).map(m => m.key));
+              const savedKeys = new Set(media.filter(m => m.eventGallery).map(m => m.key));
+              const hasUnsaved = draftEventPhotosKeys !== null && (
+                [...effectiveKeys].some(k => !savedKeys.has(k)) ||
+                [...savedKeys].some(k => !effectiveKeys.has(k))
+              );
+              const libraryImgs = media.filter(m =>
+                !m.key.startsWith('event-photos/') &&
+                (m.publicUrl || m.localExists) &&
+                !m.missing
+              );
+              return libraryImgs.length > 0 ? (
+                <div className="mb-6 border border-amber-900/40 rounded-2xl overflow-hidden">
+                  <div className="px-4 py-3 bg-amber-900/20 border-b border-amber-900/40 flex items-center justify-between">
+                    <div>
+                      <p className="text-sm font-black text-amber-200">Pick from Library</p>
+                      <p className="text-xs text-amber-400/70 mt-0.5">Select images to include in the event photo gallery.</p>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <span className="text-xs text-amber-500 font-mono">{effectiveKeys.size} selected{hasUnsaved ? ' · unsaved' : ''}</span>
+                      {hasUnsaved ? (
+                        <button
+                          onClick={saveEventPhotos}
+                          disabled={eventPhotosSaving}
+                          className="px-4 py-1.5 bg-amber-500 hover:bg-amber-400 disabled:opacity-50 text-black text-xs font-black rounded-lg transition-colors"
+                        >
+                          {eventPhotosSaving ? 'Saving…' : 'Save'}
+                        </button>
+                      ) : (
+                        <span className="text-[10px] text-green-400 font-bold">Saved ✓</span>
+                      )}
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3 p-4 max-h-[480px] overflow-y-auto">
+                    {libraryImgs.map(img => {
+                      const selected = effectiveKeys.has(img.key);
+                      return (
+                        <button
+                          key={img.key}
+                          onClick={() => setDraftEventPhotosKeys(prev => {
+                            const next = new Set(prev ?? media.filter(m => m.eventGallery).map(m => m.key));
+                            if (next.has(img.key)) next.delete(img.key); else next.add(img.key);
+                            return next;
+                          })}
+                          className={`relative rounded-xl overflow-hidden aspect-square border-2 transition-all ${selected ? 'border-amber-400 ring-2 ring-amber-400/40' : 'border-neutral-700 hover:border-neutral-500'}`}
+                        >
+                          <img
+                            src={img.publicUrl || `/tedx-xinyi/${img.key}`}
+                            alt={img.alt || img.filename}
+                            className="w-full h-full object-cover"
+                            onError={e => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                          />
+                          {selected && (
+                            <div className="absolute top-1.5 right-1.5 w-5 h-5 bg-amber-400 rounded-full flex items-center justify-center">
+                              <svg width="11" height="11" viewBox="0 0 12 12" fill="none"><path d="M2 6l3 3 5-5" stroke="#000" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                            </div>
+                          )}
+                          <div className="absolute bottom-0 inset-x-0 bg-gradient-to-t from-black/70 to-transparent px-2 pb-1.5 pt-4">
+                            <p className="text-[9px] text-white/80 truncate font-mono leading-tight">{img.filename}</p>
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              ) : null;
+            })()}
+
+            {mediaLoaded && (() => {
+              const eventImgs = media.filter(m => m.key.startsWith('event-photos/') || m.eventGallery);
+              if (eventImgs.length === 0) return (
+                <div className="text-center py-16 border-2 border-dashed border-neutral-800 rounded-2xl">
+                  <p className="text-neutral-500 text-sm mb-3">No event photos yet.</p>
+                  <button onClick={() => eventPhotosFileInputRef.current?.click()} className="px-4 py-2 bg-red-600 hover:bg-red-500 text-white text-xs font-bold rounded-lg transition-colors">
+                    Upload photos
+                  </button>
+                </div>
+              );
+              return (
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+                  {eventImgs.map(img => {
+                    const archived = isArchived(img.key);
+                    const loading = actionLoading === img.key;
+                    return (
+                      <div key={img.key} className={`bg-neutral-900 border rounded-xl overflow-hidden ${archived ? 'border-neutral-800/50 opacity-60' : 'border-neutral-800'}`}>
+                        <div className="aspect-square bg-neutral-800 flex items-center justify-center relative group">
+                          {(img.publicUrl || img.localExists) ? (
+                            <img
+                              src={img.publicUrl || `${API_BASE}/tedx-xinyi/${img.key}`}
+                              alt={img.alt || img.key}
+                              className="w-full h-full object-cover"
+                              onError={e => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                            />
+                          ) : (
+                            <span className="text-neutral-600 text-xs">Missing</span>
+                          )}
+                          {loading && (
+                            <div className="absolute inset-0 bg-black/60 flex items-center justify-center">
+                              <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                            </div>
+                          )}
+                          {archived && (
+                            <div className="absolute top-2 left-2">
+                              <span className="text-[10px] px-1.5 py-0.5 bg-amber-900/60 text-amber-300 rounded font-bold">ARCHIVED</span>
+                            </div>
+                          )}
+                        </div>
+                        <div className="p-3">
+                          <p className="text-[11px] text-neutral-500 truncate font-mono mb-2" title={img.key}>{img.filename}</p>
+                          <div className="flex flex-wrap gap-1 mb-2">
+                            {img.localExists && <span className="text-[10px] px-1.5 py-0.5 bg-green-900/40 text-green-400 rounded">local</span>}
+                            {img.publicUrl && <span className="text-[10px] px-1.5 py-0.5 bg-blue-900/40 text-blue-400 rounded">CDN</span>}
+                            {img.missing && <span className="text-[10px] px-1.5 py-0.5 bg-red-900/40 text-red-400 rounded">missing</span>}
+                          </div>
+                          <div className="flex flex-wrap gap-1.5 pt-2 border-t border-neutral-800/50">
+                            {!archived && img.localExists && (
+                              <button onClick={() => pushToCdn(img.key)} disabled={loading} className="w-full px-2 py-1.5 text-[11px] font-bold bg-green-600/20 hover:bg-green-600/30 text-green-300 rounded transition-colors disabled:opacity-40 mb-1">
+                                {loading ? 'Uploading…' : img.publicUrl ? 'Repush to CDN' : 'Push to CDN'}
+                              </button>
+                            )}
+                            {!archived && (
+                              <button onClick={() => triggerUpload(img.key)} disabled={loading} className="flex-1 px-2 py-1.5 text-[11px] font-bold bg-blue-600/20 hover:bg-blue-600/30 text-blue-300 rounded transition-colors disabled:opacity-40">
+                                Replace
+                              </button>
+                            )}
+                            {!archived && (
+                              <button onClick={() => setConfirmArchive(img.key)} disabled={loading} className="px-2 py-1.5 text-[11px] font-bold bg-amber-600/20 hover:bg-amber-600/30 text-amber-300 rounded transition-colors disabled:opacity-40">
+                                Archive
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              );
+            })()}
+          </div>
+        )}
+
+        {/* ==================== SPONSOR LOGOS TAB ==================== */}
+        {tab === 'sponsor-logos' && (
+          <div>
+            <div className="flex items-center justify-between mb-6">
+              <div>
+                <h2 className="text-2xl font-black">Sponsor Logos</h2>
+                <p className="text-neutral-500 text-sm mt-1">Manage partner and sponsor logos organized by tier. Logos are uploaded to CDN and displayed on the Sponsors page.</p>
+              </div>
+              <div className="flex gap-2">
+                <button
+                  onClick={loadSponsorLogos}
+                  disabled={sponsorLogosLoading || logoUploading}
+                  className="px-4 py-2 bg-neutral-800 hover:bg-neutral-700 text-sm font-bold rounded-lg transition-colors disabled:opacity-50"
+                >
+                  {sponsorLogosLoading ? 'Loading…' : sponsorLogosLoaded ? 'Refresh' : 'Load Logos'}
+                </button>
+              </div>
+            </div>
+
+            {logoUploading && (
+              <div className="mb-4 bg-neutral-800/60 border border-neutral-700 rounded-xl px-5 py-4">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-sm font-bold text-white">
+                    {uploadStep === 'reading' && 'Reading file…'}
+                    {uploadStep === 'uploading' && 'Processing & uploading…'}
+                    {uploadStep === 'cdn' && 'Saving to CDN…'}
+                  </span>
+                  <span className="text-xs text-neutral-500">
+                    {uploadStep === 'reading' && '1 / 3'}
+                    {uploadStep === 'uploading' && '2 / 3'}
+                    {uploadStep === 'cdn' && '3 / 3'}
+                  </span>
+                </div>
+                <div className="h-1.5 bg-neutral-700 rounded-full overflow-hidden">
+                  <div
+                    className="h-full bg-red-500 rounded-full transition-all duration-500"
+                    style={{ width: uploadStep === 'reading' ? '20%' : uploadStep === 'uploading' ? '65%' : '90%' }}
+                  />
+                </div>
+                <p className="text-xs text-neutral-500 mt-2">
+                  {uploadStep === 'reading' && 'Preparing image data…'}
+                  {uploadStep === 'uploading' && 'Converting to WebP and uploading to server…'}
+                  {uploadStep === 'cdn' && 'Saving CDN URL and updating database…'}
+                </p>
+              </div>
+            )}
+
+            {!sponsorLogosLoaded && !sponsorLogosLoading && (
+              <p className="text-neutral-500 text-sm">Click &quot;Load Logos&quot; to view sponsor logos.</p>
+            )}
+
+            {sponsorLogosLoaded && (
+              <>
+                {/* Category tabs */}
+                <div className="flex flex-wrap gap-1 mb-6 pb-3 border-b border-neutral-800">
+                  {sponsorCategories.map(cat => {
+                    const count = Object.values(sponsorLogos).filter(l => l.category === cat.id).length;
+                    return (
+                      <button
+                        key={cat.id}
+                        onClick={() => setSponsorCategoryTab(cat.id)}
+                        className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-colors flex items-center gap-1.5 ${
+                          sponsorCategoryTab === cat.id
+                            ? 'bg-red-600/20 text-red-400 border border-red-600/30'
+                            : 'text-neutral-500 hover:text-neutral-300 border border-transparent'
+                        }`}
+                      >
+                        {cat.label_en}
+                        {count > 0 && (
+                          <span className={`text-[10px] px-1 rounded ${sponsorCategoryTab === cat.id ? 'bg-red-600/30 text-red-300' : 'bg-neutral-800 text-neutral-500'}`}>
+                            {count}
+                          </span>
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+
+                {/* Active category content */}
+                {sponsorCategories.filter(c => c.id === sponsorCategoryTab).map(cat => {
+                  const catLogos = Object.values(sponsorLogos).filter(l => l.category === cat.id);
+                  return (
+                    <div key={cat.id}>
+                      <div className="flex items-center justify-between mb-4">
+                        <h3 className="text-base font-bold">
+                          {cat.label}
+                          <span className="text-neutral-500 font-normal text-sm ml-2">{cat.label_en}</span>
+                        </h3>
+                        <button
+                          onClick={() => { setAddLogoModal({ category: cat.id }); setNewLogoName(''); }}
+                          className="px-3 py-1.5 bg-red-600/20 hover:bg-red-600/30 text-red-400 text-xs font-bold rounded-lg border border-red-600/30 transition-colors"
+                        >
+                          + Upload Logo
+                        </button>
+                      </div>
+
+                      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3">
+                        {catLogos.map(logo => {
+                          const imgSrc = logo.publicUrl || (logo.localExists && logo.filename ? `${API_BASE}/tedx-xinyi/sponsors/${logo.filename}` : null);
+                          return (
+                            <div key={logo.key} className="bg-neutral-900 border border-neutral-800 rounded-lg overflow-hidden group">
+                              <div className="aspect-[3/2] bg-neutral-800 flex items-center justify-center relative">
+                                {imgSrc ? (
+                                  <img
+                                    src={imgSrc}
+                                    alt={logo.name}
+                                    className="w-full h-full object-contain p-3"
+                                    onError={e => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                                  />
+                                ) : (
+                                  <span className="text-neutral-700 text-[10px]">No image</span>
+                                )}
+                                <button
+                                  onClick={() => deleteSponsorLogo(logo.key)}
+                                  className="absolute top-1 right-1 w-5 h-5 bg-red-600/80 hover:bg-red-600 text-white text-xs rounded flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                                  title="Remove"
+                                >
+                                  ×
+                                </button>
+                              </div>
+                              <div className="px-2 py-1.5 border-t border-neutral-800">
+                                <p className="text-[11px] text-neutral-200 font-bold truncate">{logo.name}</p>
+                                <div className="flex gap-1 mt-0.5">
+                                  {logo.publicUrl && <span className="text-[9px] text-green-500 font-bold">CDN</span>}
+                                  {logo.localExists && !logo.publicUrl && <span className="text-[9px] text-amber-500 font-bold">Local</span>}
+                                  {!logo.publicUrl && !logo.localExists && <span className="text-[9px] text-red-500 font-bold">Missing</span>}
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })}
+
+                        {/* Empty state */}
+                        {catLogos.length === 0 && (
+                          <div
+                            className="col-span-full flex flex-col items-center justify-center border border-dashed border-neutral-800 rounded-lg py-10 text-neutral-600 cursor-pointer hover:border-neutral-600 hover:text-neutral-500 transition-colors"
+                            onClick={() => { setAddLogoModal({ category: cat.id }); setNewLogoName(''); }}
+                          >
+                            <span className="text-2xl mb-2">+</span>
+                            <span className="text-xs">No logos yet — click to add</span>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </>
+            )}
+          </div>
+        )}
+
+        {/* ==================== IMAGE RECORDS TAB ==================== */}
+        {tab === 'records' && (
+          <div>
+            <div className="flex items-center justify-between mb-6">
+              <div>
+                <h2 className="text-2xl font-black">Image Records</h2>
+                <p className="text-neutral-500 text-sm mt-1">Complete canonical inventory of all site images — CDN status, local status, and generation actions.</p>
+              </div>
+              <button
+                onClick={() => loadMedia()}
+                className="px-4 py-2 bg-neutral-800 hover:bg-neutral-700 text-white text-xs font-bold rounded-lg transition-colors"
+              >
+                Refresh
+              </button>
+            </div>
+
+            {!mediaLoaded ? (
+              <div className="text-center py-20 text-neutral-600">Loading image records…</div>
+            ) : (
+              <>
+                {/* Summary strip */}
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
+                  {[
+                    { label: 'Total', value: media.length, color: 'text-white' },
+                    { label: 'CDN Ready', value: media.filter(m => m.publicUrl).length, color: 'text-green-400' },
+                    { label: 'Local Only', value: media.filter(m => !m.publicUrl && m.localExists).length, color: 'text-amber-400' },
+                    { label: 'Missing', value: media.filter(m => m.missing).length, color: 'text-red-400' },
+                  ].map(s => (
+                    <div key={s.label} className="bg-neutral-900 border border-neutral-800 rounded-xl p-4">
+                      <p className={`text-2xl font-black ${s.color}`}>{s.value}</p>
+                      <p className="text-neutral-500 text-xs mt-0.5">{s.label}</p>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Records table grouped by source */}
+                {(['generated', 'speaker', 'uploaded'] as const).map(src => {
+                  const group = media.filter(m => m.source === src);
+                  if (group.length === 0) return null;
+                  const srcLabel = src === 'generated' ? '✦ Generated (nanobanana)' : src === 'speaker' ? '👤 Speaker Photos' : '⬆ Uploaded';
+                  return (
+                    <div key={src} className="mb-8">
+                      <h3 className="text-xs font-bold text-neutral-400 uppercase tracking-widest mb-3">{srcLabel}</h3>
+                      <div className="border border-neutral-800 rounded-xl overflow-hidden">
+                        <table className="w-full text-sm">
+                          <thead>
+                            <tr className="border-b border-neutral-800 bg-neutral-900/50">
+                              <th className="text-left px-4 py-2.5 text-[11px] font-bold text-neutral-500 uppercase tracking-wide">Key</th>
+                              <th className="text-left px-4 py-2.5 text-[11px] font-bold text-neutral-500 uppercase tracking-wide hidden md:table-cell">Description</th>
+                              <th className="text-center px-4 py-2.5 text-[11px] font-bold text-neutral-500 uppercase tracking-wide">CDN</th>
+                              <th className="text-center px-4 py-2.5 text-[11px] font-bold text-neutral-500 uppercase tracking-wide">Local</th>
+                              <th className="text-right px-4 py-2.5 text-[11px] font-bold text-neutral-500 uppercase tracking-wide">Actions</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {group.map((img, i) => {
+                              const isGenerated = src === 'generated';
+                              const visualId = img.key.replace(/\.(jpg|jpeg|png|webp|gif)$/i, '');
+                              const loading = actionLoading === img.key || actionLoading === visualId;
+                              return (
+                                <tr key={img.key} className={`border-b border-neutral-800/50 last:border-0 ${i % 2 === 0 ? '' : 'bg-neutral-900/20'}`}>
+                                  <td className="px-4 py-3">
+                                    <div className="flex items-center gap-2">
+                                      {(img.publicUrl || img.localExists) && (
+                                        <img
+                                          src={img.publicUrl || `${API_BASE}/tedx-xinyi/${img.key}`}
+                                          alt=""
+                                          className="w-8 h-8 rounded object-cover flex-shrink-0 bg-neutral-800"
+                                          onError={e => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                                        />
+                                      )}
+                                      <span className="font-mono text-[11px] text-neutral-300 break-all">{img.key}</span>
+                                    </div>
+                                  </td>
+                                  <td className="px-4 py-3 text-[11px] text-neutral-500 hidden md:table-cell max-w-[200px]">{img.description || img.alt || '—'}</td>
+                                  <td className="px-4 py-3 text-center">
+                                    {img.publicUrl ? (
+                                      <a href={img.publicUrl} target="_blank" rel="noopener noreferrer" className="text-green-400 text-[10px] font-bold hover:underline">✓ CDN</a>
+                                    ) : (
+                                      <span className="text-neutral-600 text-[10px]">—</span>
+                                    )}
+                                  </td>
+                                  <td className="px-4 py-3 text-center">
+                                    {img.localExists ? (
+                                      <span className="text-amber-400 text-[10px] font-bold">✓ Local</span>
+                                    ) : (
+                                      <span className="text-neutral-600 text-[10px]">—</span>
+                                    )}
+                                  </td>
+                                  <td className="px-4 py-3">
+                                    <div className="flex gap-1 justify-end flex-wrap">
+                                      {isGenerated && (
+                                        <button
+                                          onClick={() => handleGenerate(visualId)}
+                                          disabled={!!loading}
+                                          className="px-2 py-1 text-[10px] font-bold bg-amber-600/20 hover:bg-amber-600/30 text-amber-300 rounded transition-colors disabled:opacity-40"
+                                        >
+                                          {loading ? '…' : img.localExists || img.publicUrl ? 'Re-gen' : 'Generate'}
+                                        </button>
+                                      )}
+                                      {img.localExists && (
+                                        <button
+                                          onClick={() => pushToCdn(img.key)}
+                                          disabled={!!loading}
+                                          className="px-2 py-1 text-[10px] font-bold bg-green-600/20 hover:bg-green-600/30 text-green-300 rounded transition-colors disabled:opacity-40"
+                                          title={img.publicUrl ? 'Re-upload local file to CDN' : 'Upload local file to CDN'}
+                                        >
+                                          {loading ? '…' : img.publicUrl ? 'Repush CDN' : 'Push CDN'}
+                                        </button>
+                                      )}
+                                      {img.missing && !isGenerated && (
+                                        <span className="px-2 py-1 text-[10px] font-bold text-red-400">Missing</span>
+                                      )}
+                                    </div>
+                                  </td>
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  );
+                })}
+              </>
+            )}
           </div>
         )}
       </div>

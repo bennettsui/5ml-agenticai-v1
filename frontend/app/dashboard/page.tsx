@@ -12,11 +12,13 @@ import KnowledgeBase from '@/components/KnowledgeBase';
 import CostAnalysis from '@/components/CostAnalysis';
 import SecurityKB from '@/components/SecurityKB';
 import ZiweiChat from '@/components/ZiweiChat';
+import AdaptiveLearningStats from '@/components/AdaptiveLearningStats';
 import {
   LayoutDashboard, Layers, Activity, Home, Wifi, Calendar, GitBranch,
   BookOpen, DollarSign, ArrowRight, Users, Brain, MessageSquare,
   ChevronRight, Map, Zap, Send, Loader2, Sparkles, History,
-  Plus, Trash2, Clock, Monitor, TrendingUp, Shield,
+  Plus, Trash2, Clock, Monitor, TrendingUp, Shield, Printer, Mic,
+  ExternalLink, Key, Globe, Settings, Copy, CheckCircle2,
 } from 'lucide-react';
 import Link from 'next/link';
 import {
@@ -29,7 +31,7 @@ import {
   type ChatSession, type ChatType, type ChatMessage as StoredMessage,
 } from '@/lib/chat-history';
 
-type Tab = 'control' | 'overview' | 'architecture' | 'analytics' | 'scheduling' | 'knowledge' | 'costs' | 'workflows' | 'chat' | 'security';
+type Tab = 'control' | 'overview' | 'architecture' | 'analytics' | 'scheduling' | 'knowledge' | 'costs' | 'workflows' | 'chat' | 'security' | 'adaptive';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -374,7 +376,7 @@ export default function Dashboard() {
   const getInitialTab = (): Tab => {
     if (typeof window === 'undefined') return 'control';
     const p = new URLSearchParams(window.location.search).get('tab') as Tab | null;
-    const valid: Tab[] = ['control','overview','architecture','analytics','scheduling','knowledge','costs','workflows','chat','security'];
+    const valid: Tab[] = ['control','overview','architecture','analytics','scheduling','knowledge','costs','workflows','chat','security','adaptive'];
     return p && valid.includes(p) ? p : 'control';
   };
   const [activeTab, setActiveTab] = useState<Tab>(getInitialTab);
@@ -389,6 +391,7 @@ export default function Dashboard() {
     { id: 'knowledge', label: 'Knowledge Base', icon: BookOpen },
     { id: 'security', label: 'Security Audit', icon: Shield },
     { id: 'analytics', label: 'Analytics & API', icon: Wifi },
+    { id: 'adaptive', label: 'Adaptive Learning', icon: Brain },
     { id: 'architecture', label: 'Architecture', icon: Layers },
   ];
 
@@ -651,12 +654,12 @@ export default function Dashboard() {
         {activeTab === 'knowledge' && <KnowledgeBase />}
         {activeTab === 'security' && <SecurityKB />}
         {activeTab === 'costs' && <CostAnalysis />}
+        {activeTab === 'adaptive' && <AdaptiveLearningStats />}
         {activeTab === 'workflows' && (
           <div className="bg-[#1a1b2e]">
             <AgenticWorkflows />
           </div>
         )}
-
       </main>
     </div>
   );

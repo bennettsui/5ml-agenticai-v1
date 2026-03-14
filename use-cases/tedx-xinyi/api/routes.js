@@ -45,10 +45,16 @@ async function initMediaTable() {
         alt TEXT DEFAULT '',
         source VARCHAR(50) DEFAULT 'uploaded',
         description TEXT DEFAULT '',
+        circles_gallery BOOLEAN DEFAULT FALSE,
         created_at TIMESTAMPTZ DEFAULT NOW(),
         updated_at TIMESTAMPTZ DEFAULT NOW()
       )
     `);
+    // Add circles_gallery to any existing table that predates this column
+    await pool.query(`
+      ALTER TABLE tedx_media_assets
+        ADD COLUMN IF NOT EXISTS circles_gallery BOOLEAN DEFAULT FALSE
+    `).catch(() => {});
     console.log('[TEDxXinyi] Media assets table ready');
   } catch (err) {
     console.error('[TEDxXinyi] Failed to create media table:', err.message);
@@ -74,14 +80,28 @@ async function saveMediaUrlToDb(key, publicUrl, { alt, source, description } = {
   }
 }
 
+async function saveCirclesGalleryToDb(key, inCircles) {
+  const pool = getDbPool();
+  if (!pool) return;
+  try {
+    await pool.query(`
+      INSERT INTO tedx_media_assets (key, circles_gallery, updated_at)
+      VALUES ($1, $2, NOW())
+      ON CONFLICT (key) DO UPDATE SET circles_gallery = $2, updated_at = NOW()
+    `, [key, !!inCircles]);
+  } catch (err) {
+    console.error('[TEDxXinyi] DB circles_gallery save failed:', err.message);
+  }
+}
+
 async function loadMediaUrlsFromDb() {
   const pool = getDbPool();
   if (!pool) return {};
   try {
-    const { rows } = await pool.query('SELECT key, public_url, alt, source, description, created_at FROM tedx_media_assets ORDER BY created_at');
+    const { rows } = await pool.query('SELECT key, public_url, alt, source, description, circles_gallery, created_at FROM tedx_media_assets ORDER BY created_at');
     const map = {};
     for (const row of rows) {
-      map[row.key] = { publicUrl: row.public_url, alt: row.alt || '', source: row.source, description: row.description, dbStored: true };
+      map[row.key] = { publicUrl: row.public_url, alt: row.alt || '', source: row.source, description: row.description, circlesGallery: !!row.circles_gallery, dbStored: true };
     }
     return map;
   } catch (err) {
@@ -171,7 +191,7 @@ async function deleteSocialPostFromDb(id) {
 }
 
 // Init media table on module load, then hydrate metadata from DB
-initMediaTable().then(() => hydrateMetadataFromDb()).catch(() => {});
+initMediaTable().then(() => hydrateMetadataFromDb()).then(() => hydrateSponsorLogosFromDb()).catch(() => {});
 initSocialPostsTable().catch(() => {});
 
 // On startup: if .media-metadata.json is empty/missing, populate from DB CDN URLs.
@@ -236,6 +256,40 @@ router.get('/image-slots', (req, res) => {
   const slots = [];
   const meta = (() => { try { return loadMetadata(); } catch { return {}; } })();
 
+  // ── Phase 0: Guarantee all VISUALS always appear (baseline) ──
+  // Prevents dynamic-expression references (e.g. src={VAR || '/tedx-xinyi/...'})
+  // from being silently missed by the regex scanner.
+  const seenVisualKeys = new Set();
+  for (const v of VISUALS) {
+    const key = v.filename;
+    seenVisualKeys.add(key);
+    const localPath = `/tedx-xinyi/${key}`;
+    const metaEntry = meta[key];
+    const cdnUrl = metaEntry?.publicUrl || null;
+    const localExists = fs.existsSync(path.join(OUTPUT_DIR, key));
+    const isHero   = key.includes('hero-');
+    const isPoster = key.includes('poster-');
+    const isSalon  = key.includes('salon-');
+    let type = 'other';
+    if (isHero)   type = 'hero';
+    else if (isPoster) type = 'poster';
+    else if (isSalon)  type = 'visual';
+    slots.push({
+      page: 'visuals',
+      src: localPath,
+      type,
+      isExternal: false,
+      isLocal: true,
+      metaKey: key,
+      cdnUrl,
+      localExists,
+      status: cdnUrl ? 'cdn' : localExists ? 'local-only' : 'missing',
+      note: v.description || '',
+      generatable: true,
+      visualId: v.id,
+    });
+  }
+
   // Scan all TSX/TS files for image src references
   if (fs.existsSync(PAGES_DIR)) {
     const srcRe = /src\s*=\s*\{?\s*["'`]([^"'`]+\.(jpg|jpeg|png|webp|gif))[^"'`]*["'`]/gi;
@@ -284,6 +338,15 @@ router.get('/image-slots', (req, res) => {
             localExists = fs.existsSync(path.join(OUTPUT_DIR, metaKey));
           }
 
+          // When Phase 1 finds a VISUAL that Phase 0 already added, update its page
+          // from the generic 'visuals' bucket to the actual page filename so the
+          // admin's page-filter shows it under the correct page.
+          if (isLocal && metaKey && seenVisualKeys.has(metaKey)) {
+            const existing = slots.find(s => s.metaKey === metaKey && s.page === 'visuals');
+            if (existing) existing.page = pageName;
+            continue;
+          }
+
           slots.push({
             page: pageName,
             src: url,
@@ -294,6 +357,44 @@ router.get('/image-slots', (req, res) => {
             cdnUrl,
             localExists,
             status: isExternal ? 'external' : (cdnUrl ? 'cdn' : (localExists ? 'local-only' : 'missing')),
+          });
+        }
+
+        // Also detect any '/tedx-xinyi/...' path in quoted strings (e.g. image: '/tedx-xinyi/entry-about.webp')
+        const anyLocalRe = /['"`](\/tedx-xinyi\/[^'"`\s]+\.(jpg|jpeg|png|webp|gif))['"`]/gi;
+        let al;
+        while ((al = anyLocalRe.exec(content)) !== null) {
+          const url = al[1];
+          if (seen.has(url)) continue;
+          seen.add(url);
+          const metaKey = url.replace('/tedx-xinyi/', '');
+          // If already a VISUAL baseline, update its page to this actual page
+          if (seenVisualKeys.has(metaKey)) {
+            const existing = slots.find(s => s.metaKey === metaKey && s.page === 'visuals');
+            if (existing) existing.page = pageName;
+            continue;
+          }
+          const metaEntry = meta[metaKey];
+          const localEx = fs.existsSync(path.join(OUTPUT_DIR, metaKey));
+          const isSpeakerImg = url.includes('speakers/');
+          const isHeroImg = url.includes('hero-');
+          const isPosterImg = url.includes('poster-');
+          const isSalonImg = url.includes('salon-');
+          let imgType = 'other';
+          if (isHeroImg) imgType = 'hero';
+          else if (isPosterImg) imgType = 'poster';
+          else if (isSalonImg) imgType = 'visual';
+          else if (isSpeakerImg) imgType = 'speaker';
+          slots.push({
+            page: pageName,
+            src: url,
+            type: imgType,
+            isExternal: false,
+            isLocal: true,
+            metaKey,
+            cdnUrl: metaEntry?.publicUrl || null,
+            localExists: localEx,
+            status: metaEntry?.publicUrl ? 'cdn' : (localEx ? 'local-only' : 'missing'),
           });
         }
 
@@ -401,6 +502,27 @@ router.get('/image-slots', (req, res) => {
     } catch {}
   }
 
+  // Include sponsor logos as image slots
+  const sponsorLogos = loadSponsorLogos();
+  for (const [, logo] of Object.entries(sponsorLogos)) {
+    if (!logo.filename && !logo.publicUrl) continue;
+    const localPath = logo.filename ? `/tedx-xinyi/sponsors/${logo.filename}` : null;
+    const localExists = logo.filename ? fs.existsSync(path.join(SPONSORS_LOGOS_DIR, logo.filename)) : false;
+    let slotStatus = 'missing';
+    if (logo.publicUrl) slotStatus = 'cdn';
+    else if (localExists) slotStatus = 'local-only';
+    slots.push({
+      page: 'sponsors',
+      src: localExists ? localPath : (logo.publicUrl || localPath),
+      type: 'sponsor-logo',
+      status: slotStatus,
+      metaKey: logo.filename ? `sponsors/${logo.filename}` : null,
+      publicUrl: logo.publicUrl || null,
+      alt: logo.name || '',
+      label: `${logo.name} (${logo.category})`,
+    });
+  }
+
   // Summary stats
   const total = slots.length;
   const missing = slots.filter(s => s.status === 'missing').length;
@@ -500,10 +622,22 @@ const VISUALS = [
     prompt: 'Horizontal 16:10 card thumbnail image, gentle three-quarter overhead angle of a small circle of chairs arranged in a cozy modern Taipei creative space, warm amber-green evening lighting, colourful cushions on chairs, a low wooden coffee table in the centre with cups and small plants, arrangement clearly suggests a small intimate discussion group event, soft bokeh background, community warmth, documentary photography style, no text no watermarks no people',
   },
   {
+    id: 'report-cave-intro',
+    filename: 'report-cave-intro.webp',
+    description: 'Report foreword — cave silhouette, person walking toward light',
+    prompt: 'Cinematic photograph of a cave interior, rough dark brown and charcoal rock walls and floor in the foreground with deep shadows and visible texture, the cave narrows into an arched tunnel passage, strong bright golden-white light floods in from the cave mouth creating a glowing halo effect, a single lone human figure stands backlit at the cave opening as a silhouette — full upright posture, no facial features visible, facing away from camera toward the light, the contrast between the dark cave interior and the blinding white-gold exterior light is extreme and dramatic, mood: emergence, awakening, walking out of darkness into light, metaphorical and cinematic, no text, no watermarks',
+  },
+  {
+    id: 'hero-sponsors',
+    filename: 'hero-sponsors.webp',
+    description: 'Sponsors hero — partnership and ideas, warm Taipei networking',
+    prompt: 'Wide 16:9 cinematic banner of a warmly lit modern creative venue interior in Taipei, floor-to-ceiling windows revealing Xinyi district skyline at dusk bathed in amber and soft violet light, inside the space warm golden overhead lights illuminate a networking scene, in the middle ground two pairs of hands connecting in a gentle handshake gesture slightly motion-blurred suggesting trust and partnership, surrounding them blurred silhouettes of diverse people in animated conversation forming small clusters, clean minimalist modern furniture with a few potted plants, the overall atmosphere is optimistic warm and collaborative like the networking break at a TEDx event, palette of warm cream amber and soft neutral tones with a single bold red accent object visible in the decor, no text no watermarks no logos, cinematic depth of field with bokeh on background figures, festival-poster quality photography that feels genuine and aspirational',
+  },
+  {
     id: 'ted-circles',
     filename: 'ted-circles.webp',
-    description: 'TED Circles — iconic red circle carpet discussion gathering',
-    prompt: 'Warm intimate photograph of a small TED Circles discussion gathering, the centrepiece and visual anchor is the iconic TED Circle floor carpet — a large bold solid vivid red circle on a light wood floor, chairs arranged in a circle around it, slightly elevated camera angle clearly showing the full red circle and the circular seating arrangement, warm soft interior lighting in a clean modern Taipei venue, cream walls and natural wood tones, the bold red circle stands out vividly against the light floor, people seated in discussion are softly blurred, intimate cozy editorial photography style, no text no watermarks no logos',
+    description: 'TED Circles — iconic red circle carpet in dramatic dark venue',
+    prompt: 'Dramatic wide-angle photograph shot from a slightly elevated angle, a large bold vivid solid TEDx red circular carpet perfectly centred on a dark polished concrete floor, the surrounding space is very dark — nearly black walls ceiling and floor beyond the carpet, a single precise overhead spotlight makes the red circle glow intensely, chairs arranged in a perfect ring just outside the red carpet with participants visible as dark silhouettes, the bold saturated red carpet is the only strong colour in the entire frame, atmosphere is cinematic and intimate like a private theatre, documentary photography with extreme high-contrast lighting, no text no watermarks no logos',
   },
 ];
 
@@ -715,6 +849,101 @@ if (!fs.existsSync(SPEAKERS_DIR)) {
   fs.mkdirSync(SPEAKERS_DIR, { recursive: true });
 }
 
+// ---- Sponsor Logos ----
+const SPONSORS_LOGOS_DIR = path.join(OUTPUT_DIR, 'sponsors');
+const SPONSOR_LOGOS_FILE = path.join(__dirname, '.sponsor-logos.json');
+const SPONSOR_LOGOS_SEED_FILE = path.join(__dirname, '.sponsor-logos-seed.json');
+
+const SPONSOR_CATEGORIES = [
+  { id: 'featured',   label: '精選夥伴', label_en: 'Featured Partners' },
+  { id: 'strategic',  label: '策略夥伴', label_en: 'Strategic Partners' },
+  { id: 'patron',     label: '主贊助',   label_en: 'Patron' },
+  { id: 'honor',      label: '榮譽贊助', label_en: 'Honor' },
+  { id: 'basic',      label: '基礎贊助', label_en: 'Basic' },
+  { id: 'individual', label: '個人贊助', label_en: 'Individual' },
+  { id: 'in-kind',    label: '實物贊助', label_en: 'In-Kind' },
+  { id: 'community',  label: '社區夥伴', label_en: 'Community Partners' },
+];
+
+function loadSponsorLogos() {
+  try {
+    if (fs.existsSync(SPONSOR_LOGOS_FILE)) {
+      const d = JSON.parse(fs.readFileSync(SPONSOR_LOGOS_FILE, 'utf8'));
+      if (Object.keys(d).length > 0) return d;
+    }
+  } catch { /* ignore */ }
+  // Restore from seed (committed to git)
+  try {
+    if (fs.existsSync(SPONSOR_LOGOS_SEED_FILE)) {
+      const seed = JSON.parse(fs.readFileSync(SPONSOR_LOGOS_SEED_FILE, 'utf8'));
+      if (Object.keys(seed).length > 0) {
+        console.log(`[TEDxXinyi] Restored sponsor logos from seed (${Object.keys(seed).length} entries)`);
+        fs.writeFileSync(SPONSOR_LOGOS_FILE, JSON.stringify(seed, null, 2));
+        return seed;
+      }
+    }
+  } catch { /* ignore */ }
+  return {};
+}
+
+function saveSponsorLogos(data) {
+  fs.writeFileSync(SPONSOR_LOGOS_FILE, JSON.stringify(data, null, 2));
+  // Also update seed file so it can be committed to git
+  try {
+    fs.writeFileSync(SPONSOR_LOGOS_SEED_FILE, JSON.stringify(data, null, 2));
+  } catch (e) {
+    console.error('[TEDxXinyi] Failed to update sponsor logos seed:', e.message);
+  }
+}
+
+async function loadSponsorLogosFromDb() {
+  const pool = getDbPool();
+  if (!pool) return {};
+  try {
+    const { rows } = await pool.query(
+      `SELECT key, public_url, alt, description FROM tedx_media_assets WHERE source = 'sponsor-logo' ORDER BY created_at`
+    );
+    const map = {};
+    for (const row of rows) {
+      // key is like "sponsors/sponsor-featured-acme-1234567890.webp"
+      const logoKey = row.key.replace(/^sponsors\//, '').replace(/\.webp$/, '');
+      const parts = logoKey.split('-');
+      // category is stored in description
+      map[logoKey] = {
+        key: logoKey,
+        name: row.alt || '',
+        category: row.description || '',
+        filename: row.key.replace(/^sponsors\//, ''),
+        publicUrl: row.public_url,
+        uploadedAt: new Date().toISOString(),
+      };
+    }
+    return map;
+  } catch (err) {
+    console.error('[TEDxXinyi] Failed to load sponsor logos from DB:', err.message);
+    return {};
+  }
+}
+
+async function hydrateSponsorLogosFromDb() {
+  try {
+    // Only hydrate if logos file is missing or empty
+    if (fs.existsSync(SPONSOR_LOGOS_FILE)) {
+      const d = JSON.parse(fs.readFileSync(SPONSOR_LOGOS_FILE, 'utf8'));
+      if (Object.keys(d).length > 0) return;
+    }
+  } catch { /* ignore */ }
+  const dbLogos = await loadSponsorLogosFromDb();
+  if (Object.keys(dbLogos).length === 0) return;
+  try {
+    fs.writeFileSync(SPONSOR_LOGOS_FILE, JSON.stringify(dbLogos, null, 2));
+    fs.writeFileSync(SPONSOR_LOGOS_SEED_FILE, JSON.stringify(dbLogos, null, 2));
+    console.log(`[TEDxXinyi] Hydrated sponsor logos from DB (${Object.keys(dbLogos).length} logos)`);
+  } catch (e) {
+    console.error('[TEDxXinyi] Failed to hydrate sponsor logos:', e.message);
+  }
+}
+
 const METADATA_PATH = path.join(OUTPUT_DIR, '.media-metadata.json');
 const METADATA_SEED_PATH = path.join(__dirname, '.media-metadata-seed.json');
 
@@ -796,6 +1025,109 @@ async function backupMetadataToMmdb(meta) {
   }, 5000);
 }
 
+// ---- API: public TED Circles photo listing (no auth required) ----
+router.get('/circles', async (req, res) => {
+  const meta = loadMetadata();
+  const dbUrls = await loadMediaUrlsFromDb();
+  const photos = [];
+  const seen = new Set();
+
+  // Helper: is this key included in circles gallery?
+  function inCircles(key, data) {
+    if (key.startsWith('ted-circles/')) return true;
+    // Check both JSON metadata and DB (DB wins after Fly restarts)
+    const dbData = dbUrls[key];
+    return (data && data.circlesGallery === true) || (dbData && dbData.circlesGallery === true);
+  }
+
+  for (const [key, data] of Object.entries(meta)) {
+    if (!data || typeof data !== 'object') continue;
+    if (!inCircles(key, data)) continue;
+    if (key.includes('--archived-')) continue;
+    seen.add(key);
+    const localExists = fs.existsSync(path.join(OUTPUT_DIR, key));
+    const src = (data.publicUrl || dbUrls[key]?.publicUrl) || (localExists ? `/tedx-xinyi/${key}` : null);
+    if (src) photos.push({ key, src, publicUrl: data.publicUrl || dbUrls[key]?.publicUrl || null, alt: data.alt || '' });
+  }
+
+  // Also check DB for any circles_gallery items not in JSON metadata
+  for (const [key, data] of Object.entries(dbUrls)) {
+    if (seen.has(key)) continue;
+    if (!data.circlesGallery && !key.startsWith('ted-circles/')) continue;
+    if (key.includes('--archived-')) continue;
+    const localExists = fs.existsSync(path.join(OUTPUT_DIR, key));
+    const src = data.publicUrl || (localExists ? `/tedx-xinyi/${key}` : null);
+    if (src) photos.push({ key, src, publicUrl: data.publicUrl || null, alt: data.alt || '' });
+  }
+
+  res.json({ photos });
+});
+
+// ---- API: toggle a media item in/out of the TED Circles gallery ----
+router.post('/media/toggle-circles', express.json(), (req, res) => {
+  const { key, inCircles } = req.body;
+  if (!key) return res.status(400).json({ error: 'key required' });
+  const meta = loadMetadata();
+  if (!meta[key]) meta[key] = {};
+  meta[key].circlesGallery = !!inCircles;
+  saveMetadata(meta);
+  // Persist to DB so it survives Fly.dev machine restarts
+  saveCirclesGalleryToDb(key, !!inCircles).catch(() => {});
+  res.json({ success: true, key, circlesGallery: !!inCircles });
+});
+
+// ---- API: public News Clippings photo listing (no auth required) ----
+router.get('/news-clippings', (req, res) => {
+  const meta = loadMetadata();
+  const photos = [];
+  for (const [key, data] of Object.entries(meta)) {
+    if (!data || typeof data !== 'object') continue;
+    if (!data.newsClipping && !key.startsWith('news-clippings/')) continue;
+    if (key.includes('--archived-')) continue;
+    const localExists = fs.existsSync(path.join(OUTPUT_DIR, key));
+    const src = data.publicUrl || (localExists ? `/tedx-xinyi/${key}` : null);
+    if (src) photos.push({ key, src, publicUrl: data.publicUrl || null, alt: data.alt || '' });
+  }
+  res.json({ photos });
+});
+
+// ---- API: toggle a media item in/out of the News Clippings gallery ----
+router.post('/media/toggle-news-clipping', express.json(), (req, res) => {
+  const { key, inGallery } = req.body;
+  if (!key) return res.status(400).json({ error: 'key required' });
+  const meta = loadMetadata();
+  if (!meta[key]) meta[key] = {};
+  meta[key].newsClipping = !!inGallery;
+  saveMetadata(meta);
+  res.json({ success: true, key, newsClipping: !!inGallery });
+});
+
+// ---- API: public Event Photos listing (no auth required) ----
+router.get('/event-photos', (req, res) => {
+  const meta = loadMetadata();
+  const photos = [];
+  for (const [key, data] of Object.entries(meta)) {
+    if (!data || typeof data !== 'object') continue;
+    if (!data.eventGallery && !key.startsWith('event-photos/')) continue;
+    if (key.includes('--archived-')) continue;
+    const localExists = fs.existsSync(path.join(OUTPUT_DIR, key));
+    const src = data.publicUrl || (localExists ? `/tedx-xinyi/${key}` : null);
+    if (src) photos.push({ key, src, publicUrl: data.publicUrl || null, alt: data.alt || '' });
+  }
+  res.json({ photos });
+});
+
+// ---- API: toggle a media item in/out of the Event Photos gallery ----
+router.post('/media/toggle-event-photo', express.json(), (req, res) => {
+  const { key, inGallery } = req.body;
+  if (!key) return res.status(400).json({ error: 'key required' });
+  const meta = loadMetadata();
+  if (!meta[key]) meta[key] = {};
+  meta[key].eventGallery = !!inGallery;
+  saveMetadata(meta);
+  res.json({ success: true, key, eventGallery: !!inGallery });
+});
+
 // ---- Expected speaker photo slots (salon page + homepage lineup) ----
 const SPEAKER_SLOTS = [
   // Salon page speakers
@@ -852,6 +1184,7 @@ router.get('/media', async (req, res) => {
       source: 'generated', description: v.description,
       publicUrl: m.publicUrl, localExists: local, alt: m.alt,
       missing: !m.publicUrl && !local,
+      circlesGallery: !!(meta[key] && meta[key].circlesGallery) || !!(dbUrls[key] && dbUrls[key].circlesGallery),
     });
   }
 
@@ -906,6 +1239,7 @@ router.get('/media', async (req, res) => {
       source: 'uploaded', description: '',
       publicUrl: data.publicUrl || null, localExists: local, alt: data.alt || '',
       missing: !data.publicUrl && !local,
+      circlesGallery: !!data.circlesGallery || !!(dbUrls[key] && dbUrls[key].circlesGallery),
     });
   }
 
@@ -1015,6 +1349,11 @@ router.post('/media/metadata', express.json(), (req, res) => {
     // Also persist to DB so it survives Fly.dev restarts
     if (newUrl) {
       saveMediaUrlToDb(key, newUrl, { alt: meta[key].alt, source: 'manual' }).catch(() => {});
+      // Update TSX source files so the CDN URL is baked into the next build
+      const parts = key.split('/');
+      const filename = parts.pop();
+      const folder = parts.join('/');
+      updateWebpageImageUrl(filename, folder, newUrl);
     }
   }
   saveMetadata(meta);
@@ -1199,7 +1538,9 @@ router.post('/media/upload', express.json({ limit: '50mb' }), async (req, res) =
 
     // Sanitize filename
     const safeName = (filename || `upload-${Date.now()}`).replace(/[^a-zA-Z0-9._-]/g, '-').toLowerCase();
-    const targetDir = folder === 'speakers' ? SPEAKERS_DIR : OUTPUT_DIR;
+    const isSpeakerFolder = folder === 'speakers';
+    const subFolder = folder && !isSpeakerFolder ? folder : null;
+    const targetDir = isSpeakerFolder ? SPEAKERS_DIR : (subFolder ? path.join(OUTPUT_DIR, subFolder) : OUTPUT_DIR);
     if (!fs.existsSync(targetDir)) fs.mkdirSync(targetDir, { recursive: true });
 
     // Compress with sharp
@@ -1218,7 +1559,7 @@ router.post('/media/upload', express.json({ limit: '50mb' }), async (req, res) =
     fs.writeFileSync(outPath, compressed);
 
     // Always save metadata entry for uploaded file (so /media finds it)
-    const metaKey = folder === 'speakers' ? `speakers/${safeName}` : safeName;
+    const metaKey = isSpeakerFolder ? `speakers/${safeName}` : (subFolder ? `${subFolder}/${safeName}` : safeName);
     {
       const meta = loadMetadata();
       if (!meta[metaKey]) meta[metaKey] = {};
@@ -1228,16 +1569,16 @@ router.post('/media/upload', express.json({ limit: '50mb' }), async (req, res) =
     }
 
     const ratio = ((1 - compressed.length / rawBuffer.length) * 100).toFixed(0);
-    const urlPath = folder === 'speakers' ? `/tedx-xinyi/speakers/${safeName}` : `/tedx-xinyi/${safeName}`;
-    console.log(`[TEDxXinyi] Upload: ${safeName} — ${(rawBuffer.length / 1024).toFixed(0)} KB -> ${(compressed.length / 1024).toFixed(0)} KB (${ratio}% smaller)`);
+    const urlPath = isSpeakerFolder ? `/tedx-xinyi/speakers/${safeName}` : (subFolder ? `/tedx-xinyi/${subFolder}/${safeName}` : `/tedx-xinyi/${safeName}`);
+    console.log(`[TEDxXinyi] Upload: ${metaKey} — ${(rawBuffer.length / 1024).toFixed(0)} KB -> ${(compressed.length / 1024).toFixed(0)} KB (${ratio}% smaller)`);
 
     // Upload to mmdbfiles
     let publicUrl = null;
     try {
       publicUrl = await uploadToMmdb(compressed);
-      savePublicUrl(metaKey, publicUrl, { source: folder === 'speakers' ? 'speaker' : 'uploaded' });
-      updateWebpageImageUrl(safeName, folder === 'speakers' ? 'speakers' : '', publicUrl);
-      console.log(`[TEDxXinyi] ${safeName} → ${publicUrl}`);
+      savePublicUrl(metaKey, publicUrl, { source: isSpeakerFolder ? 'speaker' : 'uploaded' });
+      updateWebpageImageUrl(safeName, isSpeakerFolder ? 'speakers' : (subFolder || ''), publicUrl);
+      console.log(`[TEDxXinyi] ${metaKey} → ${publicUrl}`);
     } catch (uploadErr) {
       console.error(`[TEDxXinyi] mmdbfiles upload failed for ${safeName}:`, uploadErr.message);
     }
@@ -2211,6 +2552,37 @@ async function uploadAllAndReplacePaths() {
     }
   }
 
+  // Update IMAGE_CDN_URLS in homepage page.tsx (hero + entry card images)
+  const imageUrls = {};
+  for (const [key, data] of Object.entries(latestMeta)) {
+    if (key.startsWith('speakers/') || key.startsWith('_')) continue;
+    if (data && data.publicUrl) {
+      // key = "hero-home.webp" → mapKey = "hero-home"
+      const mapKey = key.replace(/\.(jpg|jpeg|png|webp|gif)$/i, '');
+      imageUrls[mapKey] = data.publicUrl;
+    }
+  }
+  if (Object.keys(imageUrls).length > 0) {
+    try {
+      const homePath = path.join(PAGES_DIR, 'page.tsx');
+      if (fs.existsSync(homePath)) {
+        let content = fs.readFileSync(homePath, 'utf8');
+        const mapStr = JSON.stringify(imageUrls, null, 2)
+          .replace(/"/g, "'")
+          .replace(/'([^']+)':/g, "'$1':");
+        const newMap = `const IMAGE_CDN_URLS: Record<string, string> = ${mapStr};`;
+        content = content.replace(
+          /const IMAGE_CDN_URLS: Record<string, string> = \{[^}]*\};/s,
+          newMap
+        );
+        fs.writeFileSync(homePath, content);
+        console.log(`[TEDxXinyi] Updated IMAGE_CDN_URLS with ${Object.keys(imageUrls).length} images`);
+      }
+    } catch (err) {
+      console.error('[TEDxXinyi] Failed to update homepage CDN map:', err.message);
+    }
+  }
+
   return results;
 }
 
@@ -2329,172 +2701,194 @@ async function generateVisual(client, prompt) {
 
 // ==================== PUBLISH HTML PACK ====================
 
+// Rewrite Next.js baked-in paths and strip JS hydration for pure static HTML deployment
+function rewriteTedxHtml(html, cdnMap = {}) {
+  const visibilityCss = `<style>
+/* Static deployment fix: reveal elements hidden by JS-driven animations */
+*{animation:none!important;transition:none!important}
+[style*="opacity:0"],[style*="opacity: 0"]{opacity:1!important}
+[style*="transform:translateY"],[style*="transform: translateY"]{transform:none!important}
+</style>`;
+
+  let out = html
+    .replace('</head>', visibilityCss + '</head>')
+    .replace(/https:\/\/5ml-agenticai-v1\.fly\.dev\/vibe-demo\/tedx-xinyi\//g, 'https://tedxxinyi.brandpromo.today/')
+    .replace(/https:\/\/5ml-agenticai-v1\.fly\.dev\/vibe-demo\/tedx-xinyi/g,  'https://tedxxinyi.brandpromo.today')
+    .replace(/\/vibe-demo\/tedx-xinyi\//g, '/')
+    .replace(/\/vibe-demo\/tedx-xinyi"/g, '/"')
+    .replace(/\/vibe-demo\/tedx-xinyi'/g, "/'")
+    // Strip ALL <script> tags — Next.js hydration JS crashes on non-Next hosts.
+    // HTML is fully server-rendered; CSS keeps all styling; links work without JS.
+    .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '');
+
+  // Rewrite local image paths to CDN URLs
+  out = out.replace(/src="\/tedx-xinyi\/([^"]+)"/g, (match, key) => {
+    const cdnUrl = cdnMap[key];
+    return cdnUrl ? `src="${cdnUrl}"` : match;
+  });
+  return out;
+}
+
 router.post('/publish-html-pack', async (req, res) => {
-  const { execSync } = require('child_process');
-  const archiver = require('archiver');
+  const { execSync, spawn } = require('child_process');
+  const os = require('os');
   const FRONTEND_DIR = path.join(__dirname, '../../../frontend');
-  const OUT_DIR = path.join(FRONTEND_DIR, 'out');
-  const TEDX_OUT = path.join(OUT_DIR, 'vibe-demo', 'tedx-xinyi');
-  const TEDX_HOME_HTML = path.join(OUT_DIR, 'vibe-demo', 'tedx-xinyi.html');
-  const NEXT_DIR = path.join(OUT_DIR, '_next');
-  const PUBLIC_IMAGES = path.join(FRONTEND_DIR, 'public', 'tedx-xinyi');
+  const OUT_DIR     = path.join(FRONTEND_DIR, 'out');
+  const TEDX_OUT    = path.join(OUT_DIR, 'vibe-demo', 'tedx-xinyi');
+  const TEDX_HOME   = path.join(OUT_DIR, 'vibe-demo', 'tedx-xinyi.html');
+  const NEXT_DIR    = path.join(OUT_DIR, '_next');
+  const PUBLIC_IMGS = path.join(FRONTEND_DIR, 'public', 'tedx-xinyi');
+
+  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'tedx-site-'));
 
   try {
-    // 1. Use existing build output if available (avoids OOM on small Fly.dev machines)
-    if (fs.existsSync(OUT_DIR) && fs.existsSync(path.join(OUT_DIR, '_next'))) {
-      console.log('[TEDxXinyi] Publish: using existing build output');
-    } else {
-      // Only rebuild if out/ doesn't exist — this can OOM on small machines
-      console.log('[TEDxXinyi] Publish: no existing build, running npm run build …');
+    // 1. Use existing build output (avoids OOM on small Fly machines)
+    if (!fs.existsSync(OUT_DIR) || !fs.existsSync(NEXT_DIR)) {
       execSync('npm run build', { cwd: FRONTEND_DIR, timeout: 180000, stdio: 'pipe' });
-      console.log('[TEDxXinyi] Publish: build complete');
     }
-
-    // 2. Verify output exists
     if (!fs.existsSync(TEDX_OUT)) {
       return res.status(500).json({ error: 'Build output not found' });
     }
 
-    // 3. Stream ZIP
-    res.setHeader('Content-Type', 'application/zip');
-    res.setHeader('Content-Disposition', `attachment; filename="tedx-xinyi-${Date.now()}.zip"`);
-    const archive = archiver('zip', { zlib: { level: 9 } });
-    archive.on('error', err => { throw err; });
-    archive.pipe(res);
+    // 1b. Fetch CDN URL map from DB
+    const cdnMap = {};
+    try {
+      const pool = getDbPool();
+      if (pool) {
+        const { rows } = await pool.query('SELECT key, public_url FROM tedx_media_assets WHERE public_url IS NOT NULL');
+        for (const r of rows) cdnMap[r.key] = r.public_url;
+      }
+    } catch (_) {}
 
-    // index.html (homepage)
-    if (fs.existsSync(TEDX_HOME_HTML)) {
-      archive.file(TEDX_HOME_HTML, { name: 'index.html' });
+    // 2. Collect sub-pages (exclude admin)
+    const EXCLUDE = new Set(['admin']);
+    const htmlFiles = fs.readdirSync(TEDX_OUT)
+      .filter(f => f.endsWith('.html') && !EXCLUDE.has(f.replace('.html', '')));
+    const pageNames = htmlFiles.map(f => f.replace('.html', ''));
+
+    // 3. Write rewritten HTML files into tmpDir (root-level, scripts stripped)
+    if (fs.existsSync(TEDX_HOME)) {
+      fs.writeFileSync(path.join(tmpDir, 'index.html'), rewriteTedxHtml(fs.readFileSync(TEDX_HOME, 'utf8'), cdnMap));
+    }
+    for (const f of htmlFiles) {
+      fs.writeFileSync(path.join(tmpDir, f), rewriteTedxHtml(fs.readFileSync(path.join(TEDX_OUT, f), 'utf8'), cdnMap));
     }
 
-    // Sub-pages (about.html, salon.html, etc.)
-    if (fs.existsSync(TEDX_OUT)) {
-      for (const f of fs.readdirSync(TEDX_OUT)) {
-        if (f.endsWith('.html')) {
-          archive.file(path.join(TEDX_OUT, f), { name: f });
-        }
+    // 4. Only copy CSS (JS chunks stripped — no hydration needed)
+    const cssDir = path.join(NEXT_DIR, 'static', 'css');
+    if (fs.existsSync(cssDir)) {
+      fs.mkdirSync(path.join(tmpDir, '_next', 'static', 'css'), { recursive: true });
+      for (const f of fs.readdirSync(cssDir)) {
+        fs.copyFileSync(path.join(cssDir, f), path.join(tmpDir, '_next', 'static', 'css', f));
       }
     }
+    // Copy images (binary)
+    if (fs.existsSync(PUBLIC_IMGS)) execSync(`cp -r "${PUBLIC_IMGS}" "${tmpDir}/tedx-xinyi"`);
 
-    // _next/ static assets (JS, CSS)
-    if (fs.existsSync(NEXT_DIR)) {
-      archive.directory(NEXT_DIR, '_next');
-    }
-
-    // tedx-xinyi/ images from public folder
-    if (fs.existsSync(PUBLIC_IMAGES)) {
-      archive.directory(PUBLIC_IMAGES, 'tedx-xinyi');
-    }
-
-    // index.php — PHP router for Apache/PHP hosting
-    const htmlFiles = fs.existsSync(TEDX_OUT)
-      ? fs.readdirSync(TEDX_OUT).filter(f => f.endsWith('.html'))
-      : [];
-    const phpPages = htmlFiles.map(f => f.replace('.html', ''));
+    // 5. PHP router (root-level clean URLs)
     const phpRouter = `<?php
 /**
  * TEDxXinyi — PHP Router
- * Drop this folder on any Apache + PHP host. No Python or Node needed.
+ * Deploy at: https://tedxxinyi.brandpromo.today/
  *
- * Supports:
- *   /              → index.html
- *   /salon         → salon.html
- *   /about         → about.html
- *   /speakers      → speakers.html
- *   /_next/...     → static JS/CSS assets
- *   /tedx-xinyi/.. → images
+ * Routes:
+ *   /           → index.html
+ *   /about      → about.html
+ *   /salon      → salon.html
+ *   /_next/...  → JS/CSS assets (served directly)
+ *   /tedx-xinyi/... → images (served directly)
  *
- * For Apache: add .htaccess (included) to enable clean URLs.
- * For PHP built-in server: php -S localhost:8000 index.php
+ * Apache: .htaccess (included) enables clean URLs.
+ * PHP built-in server: php -S localhost:8000 index.php
  */
 
 $uri = parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH);
 $uri = rtrim($uri, '/');
 
-// Static files — serve directly
+// Serve static files directly (_next, tedx-xinyi images, .html, etc.)
 if ($uri !== '' && file_exists(__DIR__ . $uri)) {
-    $ext = pathinfo($uri, PATHINFO_EXTENSION);
     $mimeTypes = [
-        'html' => 'text/html',
-        'css'  => 'text/css',
-        'js'   => 'application/javascript',
-        'json' => 'application/json',
-        'png'  => 'image/png',
-        'jpg'  => 'image/jpeg',
-        'jpeg' => 'image/jpeg',
-        'webp' => 'image/webp',
-        'gif'  => 'image/gif',
-        'svg'  => 'image/svg+xml',
-        'ico'  => 'image/x-icon',
-        'woff' => 'font/woff',
-        'woff2'=> 'font/woff2',
+        'html'  => 'text/html; charset=utf-8',
+        'css'   => 'text/css',
+        'js'    => 'application/javascript',
+        'json'  => 'application/json',
+        'png'   => 'image/png',
+        'jpg'   => 'image/jpeg',
+        'jpeg'  => 'image/jpeg',
+        'webp'  => 'image/webp',
+        'gif'   => 'image/gif',
+        'svg'   => 'image/svg+xml',
+        'ico'   => 'image/x-icon',
+        'woff'  => 'font/woff',
+        'woff2' => 'font/woff2',
     ];
-    if (isset($mimeTypes[$ext])) {
-        header('Content-Type: ' . $mimeTypes[$ext]);
-    }
+    $ext = strtolower(pathinfo($uri, PATHINFO_EXTENSION));
+    if (isset($mimeTypes[$ext])) header('Content-Type: ' . $mimeTypes[$ext]);
     readfile(__DIR__ . $uri);
     return;
 }
 
-// Clean URL routing — /salon → salon.html
-$pages = [${phpPages.map(p => `'${p}'`).join(', ')}];
+// Clean URL routing
 $page = ltrim($uri, '/');
+$pages = [${pageNames.map(p => `'${p}'`).join(', ')}];
 
 if ($page === '' || $page === 'index') {
     include __DIR__ . '/index.html';
-} elseif (in_array($page, $pages) && file_exists(__DIR__ . '/' . $page . '.html')) {
+} elseif (in_array($page, $pages)) {
     include __DIR__ . '/' . $page . '.html';
 } else {
     http_response_code(404);
-    if (file_exists(__DIR__ . '/index.html')) {
-        include __DIR__ . '/index.html';
-    } else {
-        echo '<h1>404 Not Found</h1>';
-    }
+    include __DIR__ . '/index.html';
 }
 `;
-    archive.append(phpRouter, { name: 'index.php' });
+    fs.writeFileSync(path.join(tmpDir, 'index.php'), phpRouter);
 
-    // .htaccess — Apache rewrite rules for clean URLs
+    // 6. .htaccess
     const htaccess = `# TEDxXinyi — Apache rewrite rules
 RewriteEngine On
 RewriteBase /
 
-# Serve existing files directly
 RewriteCond %{REQUEST_FILENAME} -f
 RewriteRule ^ - [L]
 
-# Serve existing directories directly
 RewriteCond %{REQUEST_FILENAME} -d
 RewriteRule ^ - [L]
 
-# Route clean URLs through index.php
 RewriteRule ^ index.php [L]
 `;
-    archive.append(htaccess, { name: '.htaccess' });
+    fs.writeFileSync(path.join(tmpDir, '.htaccess'), htaccess);
 
-    // manifest.json
+    // 7. manifest.json
     const manifest = {
-      name: 'TEDxXinyi Static HTML + PHP Pack',
+      name: 'TEDxXinyi Static Site Pack',
       built: new Date().toISOString(),
+      deployUrl: 'https://tedxxinyi.brandpromo.today/',
       pages: ['index.html', ...htmlFiles],
-      phpRouter: 'index.php',
-      htaccess: '.htaccess',
       usage: {
-        apache: 'Upload entire folder to Apache web root. .htaccess handles routing.',
+        apache: 'Upload all files to web root. .htaccess + index.php handle clean URL routing.',
         phpBuiltIn: 'php -S localhost:8000 index.php',
-        staticOnly: 'Serve index.html and sub-pages directly (clean URLs won\'t work without server)',
+        staticOnly: 'Open index.html directly (navigation links require a server).',
       },
     };
-    archive.append(JSON.stringify(manifest, null, 2), { name: 'manifest.json' });
+    fs.writeFileSync(path.join(tmpDir, 'manifest.json'), JSON.stringify(manifest, null, 2));
 
-    await archive.finalize();
-    console.log(`[TEDxXinyi] Publish: ZIP streamed (${archive.pointer()} bytes)`);
+    // 8. Stream tar.gz to response
+    res.setHeader('Content-Type', 'application/gzip');
+    res.setHeader('Content-Disposition', `attachment; filename="tedx-xinyi-site-${Date.now()}.tar.gz"`);
+
+    const tar = spawn('tar', ['-czf', '-', '-C', tmpDir, '.']);
+    tar.stdout.pipe(res);
+    tar.stderr.on('data', d => console.error('[tedx-publish tar]', d.toString()));
+    tar.on('close', () => { try { execSync(`rm -rf "${tmpDir}"`); } catch (_) {} });
+    tar.on('error', err => {
+      console.error('[tedx-publish] spawn error:', err);
+      if (!res.headersSent) res.status(500).json({ error: err.message });
+    });
+
   } catch (err) {
+    try { execSync(`rm -rf "${tmpDir}"`); } catch (_) {}
     console.error('[TEDxXinyi] Publish failed:', err.message);
-    if (!res.headersSent) {
-      res.status(500).json({ error: err.message });
-    }
+    if (!res.headersSent) res.status(500).json({ error: err.message });
   }
 });
 
@@ -2836,6 +3230,138 @@ Do NOT include any placeholder text. All text in the image should be real, final
     });
   } catch (err) {
     console.error('[TEDxXinyi] Generate social image error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ==================== SPONSOR LOGOS ====================
+
+router.get('/sponsors/logos', (req, res) => {
+  const data = loadSponsorLogos();
+  const result = {};
+  for (const [key, logo] of Object.entries(data)) {
+    const localExists = logo.filename ? fs.existsSync(path.join(SPONSORS_LOGOS_DIR, logo.filename)) : false;
+    result[key] = { ...logo, localExists };
+  }
+  res.json({ logos: result, categories: SPONSOR_CATEGORIES });
+});
+
+router.post('/sponsors/logos', express.json({ limit: '10mb' }), async (req, res) => {
+  try {
+    const { data: imgData, name, category } = req.body;
+    if (!name || !category) return res.status(400).json({ error: 'name and category required' });
+    if (!SPONSOR_CATEGORIES.find(c => c.id === category)) return res.status(400).json({ error: 'Invalid category' });
+
+    if (!fs.existsSync(SPONSORS_LOGOS_DIR)) fs.mkdirSync(SPONSORS_LOGOS_DIR, { recursive: true });
+
+    const slug = name.replace(/[^a-zA-Z0-9]+/g, '-').toLowerCase().slice(0, 40);
+    const key = `sponsor-${category}-${slug}-${Date.now()}`;
+    let filename = null;
+    let publicUrl = null;
+
+    if (imgData && imgData.startsWith('data:image/')) {
+      const match = imgData.match(/^data:image\/(jpeg|png|webp|gif);base64,(.+)$/);
+      if (match) {
+        const rawBuffer = Buffer.from(match[2], 'base64');
+        const sharp = require('sharp');
+        // Logos need higher quality + lossless-style to preserve crisp edges
+        const compressed = await sharp(rawBuffer)
+          .resize({ width: 800, height: 400, fit: 'inside', withoutEnlargement: true })
+          .webp({ quality: 95, lossless: false, effort: 2 })
+          .toBuffer();
+        filename = `${key}.webp`;
+        fs.writeFileSync(path.join(SPONSORS_LOGOS_DIR, filename), compressed);
+        try {
+          publicUrl = await uploadToMmdb(compressed);
+        } catch (err) {
+          console.error('[TEDxXinyi] Sponsor logo CDN upload failed:', err.message);
+        }
+      }
+    }
+
+    const logos = loadSponsorLogos();
+    logos[key] = { key, name, category, filename, publicUrl, uploadedAt: new Date().toISOString() };
+    saveSponsorLogos(logos);
+
+    // Persist to DB so logos survive Fly.dev restarts (always save, even without CDN URL)
+    const mediaKey = `sponsors/${filename || key}`;
+    const pool = getDbPool();
+    if (pool) {
+      pool.query(`
+        INSERT INTO tedx_media_assets (key, public_url, alt, source, description, updated_at)
+        VALUES ($1, $2, $3, $4, $5, NOW())
+        ON CONFLICT (key) DO UPDATE SET
+          public_url = COALESCE(EXCLUDED.public_url, tedx_media_assets.public_url),
+          alt = COALESCE(NULLIF(EXCLUDED.alt, ''), tedx_media_assets.alt),
+          source = COALESCE(EXCLUDED.source, tedx_media_assets.source),
+          description = COALESCE(NULLIF(EXCLUDED.description, ''), tedx_media_assets.description),
+          updated_at = NOW()
+      `, [mediaKey, publicUrl || null, name, 'sponsor-logo', category]).catch(e =>
+        console.error('[TEDxXinyi] Sponsor logo DB save failed:', e.message)
+      );
+    }
+
+    // Also add to media metadata so it appears in Media Library
+    if (publicUrl || filename) {
+      const meta = loadMetadata();
+      meta[mediaKey] = {
+        publicUrl: publicUrl || null,
+        alt: name,
+        source: 'sponsor-logo',
+        description: `${category} sponsor logo`,
+        uploadedAt: new Date().toISOString(),
+      };
+      saveMetadata(meta);
+    }
+
+    res.json({ success: true, logo: { ...logos[key], localExists: !!filename } });
+  } catch (err) {
+    console.error('[TEDxXinyi] Sponsor logo upload error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.put('/sponsors/logos/:key', express.json(), (req, res) => {
+  try {
+    const { key } = req.params;
+    const { name, category } = req.body;
+    const logos = loadSponsorLogos();
+    if (!logos[key]) return res.status(404).json({ error: 'Logo not found' });
+    if (name) logos[key].name = name;
+    if (category && SPONSOR_CATEGORIES.find(c => c.id === category)) logos[key].category = category;
+    saveSponsorLogos(logos);
+    res.json({ success: true, logo: logos[key] });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.delete('/sponsors/logos/:key', (req, res) => {
+  try {
+    const { key } = req.params;
+    const logos = loadSponsorLogos();
+    const logo = logos[key];
+    if (!logo) return res.status(404).json({ error: 'Logo not found' });
+    if (logo.filename) {
+      const fp = path.join(SPONSORS_LOGOS_DIR, logo.filename);
+      if (fs.existsSync(fp)) fs.unlinkSync(fp);
+    }
+    // Remove from media metadata
+    const mediaKey = `sponsors/${logo.filename || key}`;
+    try {
+      const meta = loadMetadata();
+      if (meta[mediaKey]) {
+        delete meta[mediaKey];
+        saveMetadata(meta);
+      }
+    } catch { /* ignore */ }
+    // Remove from DB
+    const pool = getDbPool();
+    if (pool) pool.query('DELETE FROM tedx_media_assets WHERE key = $1', [mediaKey]).catch(() => {});
+    delete logos[key];
+    saveSponsorLogos(logos);
+    res.json({ success: true });
+  } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });

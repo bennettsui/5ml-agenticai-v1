@@ -202,22 +202,21 @@ async function runScanWithUpdates(topicId, topic, sources, scanId) {
             }];
           }
         } else {
-          console.warn(`   ⚠️ Failed to fetch ${sourceName}: ${sourceContent.error}`);
-          sourceArticles = [{
-            url: sourceUrl,
-            title: `${sourceName} - Unable to fetch`,
-            content: '',
-            fetchError: sourceContent.error,
-          }];
+          console.warn(`   ⚠️ Failed to fetch ${sourceName}: ${sourceContent.error} — skipping source`);
+          // Mark source as failed in the UI and move on; do NOT save a placeholder article
+          reliableBroadcast(topicId, {
+            event: 'source_status_update',
+            data: { scanId, sourceId: source.source_id || `src-${i}`, sourceName, status: 'error', step: 'failed', message: `Could not fetch: ${sourceContent.error}` },
+          });
+          continue;
         }
       } catch (fetchError) {
-        console.error(`   ❌ Error fetching ${sourceName}:`, fetchError.message);
-        sourceArticles = [{
-          url: sourceUrl,
-          title: `${sourceName} - Fetch error`,
-          content: '',
-          fetchError: fetchError.message,
-        }];
+        console.error(`   ❌ Error fetching ${sourceName}:`, fetchError.message, '— skipping source');
+        reliableBroadcast(topicId, {
+          event: 'source_status_update',
+          data: { scanId, sourceId: source.source_id || `src-${i}`, sourceName, status: 'error', step: 'failed', message: `Fetch error: ${fetchError.message}` },
+        });
+        continue;
       }
 
       const foundInSource = sourceArticles.length;
@@ -248,6 +247,12 @@ async function runScanWithUpdates(topicId, topic, sources, scanId) {
             articleContent = fullContent.content;
             articleTitle = fullContent.title || articleTitle;
           }
+        }
+
+        // Skip LLM call when there is no meaningful content to analyse
+        if (!articleContent || articleContent.trim().length < 100) {
+          console.log(`   ⚠️ Skipping analysis for "${articleTitle}" — insufficient content`);
+          continue;
         }
 
         const analysis = await analyzeArticleContent(

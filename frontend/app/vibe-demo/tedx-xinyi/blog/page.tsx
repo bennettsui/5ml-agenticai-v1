@@ -1,9 +1,15 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { SiteNav, SiteFooter, Section, SectionLabel, FadeIn, globalStyles, TED_RED, WARM_GRAY } from '../components';
 
+const API_BASE = typeof window !== 'undefined'
+  ? (process.env.NEXT_PUBLIC_API_URL || '')
+  : (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080');
+
 type Category = 'all' | 'curatorial' | 'guide';
+
+interface ClippingPhoto { key: string; src: string; alt: string; }
 
 const POSTS = [
   {
@@ -42,6 +48,15 @@ const POSTS = [
 
 export default function BlogPage() {
   const [activeFilter, setActiveFilter] = useState<Category>('all');
+  const [clippings, setClippings] = useState<ClippingPhoto[]>([]);
+  const [lightboxSrc, setLightboxSrc] = useState<string | null>(null);
+
+  useEffect(() => {
+    fetch(`${API_BASE}/api/tedx-xinyi/news-clippings`)
+      .then(r => r.json())
+      .then(d => setClippings(d.photos || []))
+      .catch(() => {});
+  }, []);
 
   const filteredPosts = activeFilter === 'all'
     ? POSTS
@@ -145,6 +160,60 @@ export default function BlogPage() {
           </div>
         )}
       </Section>
+
+      {/* ==================== NEWS CLIPPINGS ==================== */}
+      {clippings.length > 0 && (
+        <Section bg="warm">
+          <FadeIn>
+            <SectionLabel>PRESS</SectionLabel>
+            <h2 className="text-2xl sm:text-3xl font-black mb-2" lang="zh-TW">媒體報導</h2>
+            <p className="text-neutral-500 text-sm mb-10" lang="zh-TW">媒體對 TEDxXinyi 的報導與剪報。</p>
+          </FadeIn>
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
+            {clippings.map((photo, i) => (
+              <FadeIn key={photo.key} delay={i * 60}>
+                <button
+                  className="group w-full rounded-xl overflow-hidden border border-neutral-200 hover:border-neutral-300 hover:shadow-md transition-all focus:outline-none"
+                  onClick={() => setLightboxSrc(photo.src)}
+                >
+                  <div className="aspect-[4/3] bg-neutral-100 overflow-hidden">
+                    <img
+                      src={photo.src}
+                      alt={photo.alt || ''}
+                      loading="lazy"
+                      className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
+                      onError={e => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                    />
+                  </div>
+                </button>
+              </FadeIn>
+            ))}
+          </div>
+        </Section>
+      )}
+
+      {/* Lightbox */}
+      {lightboxSrc && (
+        <div
+          className="fixed inset-0 z-50 bg-black/90 flex items-center justify-center p-4"
+          onClick={() => setLightboxSrc(null)}
+        >
+          <img
+            src={lightboxSrc}
+            alt=""
+            className="max-w-full max-h-full rounded-lg shadow-2xl"
+            onClick={e => e.stopPropagation()}
+          />
+          <button
+            onClick={() => setLightboxSrc(null)}
+            className="absolute top-4 right-4 w-10 h-10 flex items-center justify-center text-white/70 hover:text-white bg-white/10 hover:bg-white/20 rounded-full transition-colors"
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+              <path d="M18 6L6 18M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+      )}
 
       <SiteFooter />
     </div>

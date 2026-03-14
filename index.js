@@ -1,7 +1,19 @@
 require('./instrument.js');
 
+// ─── Global crash guards (Node.js 20 terminates on unhandled rejections) ─────
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('⚠️  Unhandled Rejection at:', promise, 'reason:', reason);
+  // Log but do NOT exit — keeps the server alive and health check passing
+});
+process.on('uncaughtException', (err) => {
+  console.error('⚠️  Uncaught Exception:', err);
+  // Log but do NOT exit for non-fatal errors
+});
+// ─────────────────────────────────────────────────────────────────────────────
+
 const express = require('express');
 const Anthropic = require('@anthropic-ai/sdk');
+const nodemailer = require('nodemailer');
 const fs = require('fs');
 const { spawn } = require('child_process');
 const { specs, swaggerUi } = require('./swagger');
@@ -111,7 +123,7 @@ app.use('/tedx-xinyi', async (req, res, next) => {
       if (!fs.existsSync(p)) continue;
       const meta = JSON.parse(fs.readFileSync(p, 'utf8'));
       if (meta[key] && meta[key].publicUrl) {
-        return res.redirect(302, meta[key].publicUrl);
+        return res.redirect(302, meta[key].publicUrl.replace(/^http:\/\//i, 'https://'));
       }
     } catch { /* ignore */ }
   }
@@ -124,7 +136,7 @@ app.use('/tedx-xinyi', async (req, res, next) => {
         [key]
       );
       if (rows.length > 0 && rows[0].public_url) {
-        return res.redirect(302, rows[0].public_url);
+        return res.redirect(302, rows[0].public_url.replace(/^http:\/\//i, 'https://'));
       }
     }
   } catch { /* DB not available */ }
@@ -136,9 +148,140 @@ app.use('/tedx-xinyi', express.static(path.join(__dirname, 'frontend', 'public',
 // Serve Radiance uploaded media
 app.use('/uploads/radiance', express.static(path.join(__dirname, 'uploads', 'radiance')));
 
+// Serve CRM project attachments
+app.use('/uploads/crm', express.static(path.join(__dirname, 'uploads', 'crm')));
+
 // Serve compressed image/PDF outputs
 app.use('/uploads/compressed', express.static(path.join(__dirname, 'uploads', 'compressed')));
 app.use('/uploads/pdfs', express.static(path.join(__dirname, 'uploads', 'pdfs')));
+
+// Rewrite Next.js baked-in paths, inject visibility fix, rewrite image CDN URLs
+function rewriteTedxHtml(html, cdnMap = {}) {
+  // Inject CSS before </head> to fix opacity:0 elements hidden by JS animations
+  const visibilityCss = `<style>
+/* Static deployment fix: reveal elements hidden by JS-driven animations */
+*{animation:none!important;transition:none!important}
+[style*="opacity:0"],[style*="opacity: 0"]{opacity:1!important}
+[style*="transform:translateY"],[style*="transform: translateY"]{transform:none!important}
+.opacity-0{opacity:1!important}
+</style>`;
+
+  let out = html
+    .replace('</head>', visibilityCss + '</head>')
+    // Rewrite absolute canonical/OG URLs
+    .replace(/https:\/\/5ml-agenticai-v1\.fly\.dev\/vibe-demo\/tedx-xinyi\//g, 'https://tedxxinyi.brandpromo.today/')
+    .replace(/https:\/\/5ml-agenticai-v1\.fly\.dev\/vibe-demo\/tedx-xinyi/g,  'https://tedxxinyi.brandpromo.today')
+    // Rewrite internal nav paths
+    .replace(/\/vibe-demo\/tedx-xinyi\//g, '/')
+    .replace(/\/vibe-demo\/tedx-xinyi"/g, '/"')
+    .replace(/\/vibe-demo\/tedx-xinyi'/g, "/'")
+    // Strip ALL <script> tags (Next.js hydration crashes on non-Next hosts)
+    .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '');
+
+  // Rewrite local image paths to CDN URLs (src= and href= for preload links)
+  // Always use https:// to avoid mixed-content blocking on HTTPS deployments
+  const rewriteKey = (key) => {
+    const url = cdnMap[key];
+    return url ? url.replace(/^http:\/\//i, 'https://') : null;
+  };
+  out = out.replace(/src="\/tedx-xinyi\/([^"]+)"/g, (match, key) => {
+    const cdnUrl = rewriteKey(key);
+    return cdnUrl ? `src="${cdnUrl}"` : match;
+  });
+  out = out.replace(/href="\/tedx-xinyi\/([^"]+)"/g, (match, key) => {
+    const cdnUrl = rewriteKey(key);
+    return cdnUrl ? `href="${cdnUrl}"` : match;
+  });
+
+  return out;
+}
+
+// Serve TEDx Xinyi static site pack for deployment (pure HTML+CSS, CDN images)
+app.get('/tedx-xinyi-site.tar.gz', async (req, res) => {
+  const { spawn, execSync } = require('child_process');
+  const os = require('os');
+  const outDir  = path.join(__dirname, 'frontend', 'out');
+  const tedxOut = path.join(outDir, 'vibe-demo', 'tedx-xinyi');
+  const tmpDir  = fs.mkdtempSync(path.join(os.tmpdir(), 'tedx-site-'));
+
+  try {
+    // Fetch CDN URL map from DB
+    const cdnMap = {};
+    try {
+      const { rows } = await pool.query('SELECT key, public_url FROM tedx_media_assets WHERE public_url IS NOT NULL');
+      // Force https:// — stored URLs are http:// but browsers block mixed content on HTTPS pages
+      for (const r of rows) cdnMap[r.key] = r.public_url.replace(/^http:\/\//i, 'https://');
+      console.log(`[tedx-site] cdnMap loaded: ${Object.keys(cdnMap).length} entries`);
+    } catch (e) { console.error('[tedx-site] cdnMap load failed:', e.message); }
+
+    // Rewrite and write home page
+    const homeSrc = path.join(outDir, 'vibe-demo', 'tedx-xinyi.html');
+    if (fs.existsSync(homeSrc)) {
+      fs.writeFileSync(path.join(tmpDir, 'index.html'), rewriteTedxHtml(fs.readFileSync(homeSrc, 'utf8'), cdnMap));
+    }
+
+    // Rewrite and write sub-pages (exclude admin)
+    const EXCLUDE = new Set(['admin']);
+    if (fs.existsSync(tedxOut)) {
+      for (const f of fs.readdirSync(tedxOut).filter(f => f.endsWith('.html') && !EXCLUDE.has(f.replace('.html', '')))) {
+        fs.writeFileSync(path.join(tmpDir, f), rewriteTedxHtml(fs.readFileSync(path.join(tedxOut, f), 'utf8'), cdnMap));
+      }
+    }
+
+    // Only copy CSS (JS chunks stripped)
+    const cssDir = path.join(outDir, '_next', 'static', 'css');
+    if (fs.existsSync(cssDir)) {
+      fs.mkdirSync(path.join(tmpDir, '_next', 'static', 'css'), { recursive: true });
+      for (const f of fs.readdirSync(cssDir)) {
+        fs.copyFileSync(path.join(cssDir, f), path.join(tmpDir, '_next', 'static', 'css', f));
+      }
+    }
+    // Copy any local tedx-xinyi/ images (fallback for images not on CDN)
+    const pubImgs = path.join(__dirname, 'frontend', 'public', 'tedx-xinyi');
+    if (fs.existsSync(pubImgs)) execSync(`cp -r "${pubImgs}" "${tmpDir}/tedx-xinyi"`);
+
+    res.setHeader('Content-Type', 'application/gzip');
+    res.setHeader('Content-Disposition', 'attachment; filename="tedx-xinyi-site.tar.gz"');
+
+    const tar = spawn('tar', ['-czf', '-', '-C', tmpDir, '.']);
+    tar.stdout.pipe(res);
+    tar.stderr.on('data', (d) => console.error('[tedx-site tar]', d.toString()));
+    tar.on('close', () => { try { execSync(`rm -rf "${tmpDir}"`); } catch (_) {} });
+    tar.on('error', (err) => {
+      console.error('[tedx-site] spawn error:', err);
+      if (!res.headersSent) res.status(500).json({ error: err.message });
+    });
+  } catch (err) {
+    try { require('child_process').execSync(`rm -rf "${tmpDir}"`); } catch (_) {}
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Serve TEDx Xinyi pack as tar.gz — uses built-in tar (no extra npm packages)
+app.get('/tedx-xinyi-pack.tar.gz', (req, res) => {
+  const { spawn } = require('child_process');
+  const sourceDir = path.join(__dirname, 'frontend', 'public', 'tedx-xinyi');
+
+  if (!fs.existsSync(sourceDir)) {
+    return res.status(404).json({ error: 'TEDx Xinyi media directory not found' });
+  }
+
+  res.setHeader('Content-Type', 'application/gzip');
+  res.setHeader('Content-Disposition', 'attachment; filename="tedx-xinyi-pack.tar.gz"');
+
+  const tar = spawn('tar', ['-czf', '-', '-C', sourceDir, '.']);
+  tar.stdout.pipe(res);
+  tar.stderr.on('data', (d) => console.error('[tedx-pack tar]', d.toString()));
+  tar.on('error', (err) => {
+    console.error('[tedx-pack] spawn error:', err);
+    if (!res.headersSent) res.status(500).json({ error: err.message });
+  });
+});
+
+// Backward-compat redirect
+app.get('/tedx-xinyi-pack.zip', (req, res) => {
+  res.redirect('/tedx-xinyi-pack.tar.gz');
+});
 
 // Serve Next.js frontend (includes /dashboard, /use-cases, etc.)
 const nextJsPath = path.join(__dirname, 'frontend/out');
@@ -161,8 +304,12 @@ const { pool, initDatabase, saveProject, saveAnalysis, getProjectAnalyses, getAl
 if (process.env.DATABASE_URL) {
   // Core schema first, then tender intelligence schema (auto-seeds sources if registry is empty)
   const { initTenderSchema } = require('./services/tender-intel-service');
+  const { initAdaptiveLearningDb } = require('./use-cases/adaptive-learning/db');
+  const { startEvolutionCron } = require('./use-cases/adaptive-learning/services/kb-evolution');
   initDatabase()
     .then(() => initTenderSchema(pool))
+    .then(() => initAdaptiveLearningDb())
+    .then(() => startEvolutionCron())
     .catch(err => {
       console.error('⚠️ Database initialization failed:', err.message);
       console.log('⚠️ App will continue running without database');
@@ -2340,6 +2487,39 @@ app.get('/stats', async (req, res) => {
           ],
         },
         {
+          id: 'adaptive-learning',
+          name: 'Adaptive Learning for Schools',
+          description: 'S1-S2 adaptive mathematics platform for HK schools — concept-centric, interest-aware learning with bilingual AI explanations',
+          agentCount: 1,
+          status: 'in_progress',
+          costEstimate: {
+            perRun: {
+              description: '1 student explanation (STUDENT_EXPLANATION mode)',
+              modelCalls: [
+                { model: 'Claude Haiku', calls: 1, avgTokensIn: 1800, avgTokensOut: 600, costPerMillion: { input: 0.25, output: 1.25 } },
+              ],
+              totalTokens: { input: 1800, output: 600 },
+              estimatedCost: 0.001,
+              notes: 'Session summaries and class summaries ~$0.002-0.003 each. Question authoring ~$0.001. All modes via Claude Haiku.',
+            },
+            daily: { runsPerDay: 100, estimatedCost: 0.10, notes: 'Estimate for 5 classes × 20 students × 1 session/day' },
+            monthly: { runsPerMonth: 2000, estimatedCost: 2.00, notes: 'Scales with number of active students and sessions' },
+          },
+          agents: [
+            { id: 'adaptive-agent', name: 'Adaptive Math Agent', role: 'Handles all 6 modes: explanation, session summary, class summary, question authoring, gamification, admin summary', model: 'Claude Haiku' },
+          ],
+          endpoints: [
+            'POST /api/adaptive-learning/explain          — STUDENT_EXPLANATION: explain question answer',
+            'POST /api/adaptive-learning/session-summary  — STUDENT_SESSION_SUMMARY: 20-min session recap',
+            'POST /api/adaptive-learning/class-summary    — TEACHER_CLASS_SUMMARY: class heatmap + recommendations',
+            'POST /api/adaptive-learning/author-question  — QUESTION_AUTHORING: clean OCR text, tag objectives',
+            'POST /api/adaptive-learning/gamification     — GAMIFICATION_MESSAGE: missions + badge messages',
+            'POST /api/adaptive-learning/demo             — Generic endpoint for any mode',
+            'GET  /api/adaptive-learning/curriculum       — HK S1-S2 math curriculum map',
+            'GET  /api/adaptive-learning/health           — Health check',
+          ],
+        },
+        {
           id: 'pdf-compression',
           name: 'PDF Compression Service',
           description: 'Self-hosted PDF compression pipeline — lossless, balanced, web & small profiles using pdfsizeopt, Ghostscript, pdfEasyCompress, and Paperweight',
@@ -2487,7 +2667,15 @@ console.log('✅ Debug routes loaded: /api/debug/sessions, /api/debug/modules, /
 const llm = require('./lib/llm');
 
 // Helper: read use case source code for chatbot context
+const _useCaseCodeCache = new Map();
 function readUseCaseCode(useCaseId, maxChars = 8000) {
+  const key = `${useCaseId}:${maxChars}`;
+  if (_useCaseCodeCache.has(key)) return _useCaseCodeCache.get(key);
+  const result = _readUseCaseCode(useCaseId, maxChars);
+  _useCaseCodeCache.set(key, result);
+  return result;
+}
+function _readUseCaseCode(useCaseId, maxChars = 8000) {
   const baseDir = path.join(__dirname, 'frontend', 'app', 'use-cases', useCaseId);
   if (!fs.existsSync(baseDir)) return '';
   const files = [];
@@ -2537,10 +2725,16 @@ app.post('/api/crm/chat', async (req, res) => {
       return res.status(400).json({ error: 'messages array is required' });
     }
 
-    // RAG: retrieve relevant CRM + company context
-    const lastUserMsg = [...messages].reverse().find(m => m.role === 'user');
-    const ragContext = lastUserMsg ? ragService.getContext(lastUserMsg.content, 'crm', 3) : '';
-    const companyContext = lastUserMsg ? ragService.getContext(lastUserMsg.content, 'company', 2) : '';
+    // RAG: retrieve relevant CRM + company context.
+    // content may be a string or a multimodal array — extract text blocks for the RAG query.
+    const lastUserMsg = messages.findLast(m => m.role === 'user');
+    const ragQuery = lastUserMsg
+      ? (Array.isArray(lastUserMsg.content)
+          ? lastUserMsg.content.filter(b => b.type === 'text').map(b => b.text || '').join('\n')
+          : lastUserMsg.content || '')
+      : '';
+    const ragContext = ragQuery ? ragService.getContext(ragQuery, 'crm', 3) : '';
+    const companyContext = ragQuery ? ragService.getContext(ragQuery, 'company', 2) : '';
 
     // Include use case source code for code-aware assistance
     const codeContext = readUseCaseCode(use_case_id || 'crm', 6000);
@@ -2582,6 +2776,20 @@ Create a project directly:
 {"type": "create_project", "data": {"name": "Website Redesign", "type": "website", "client_id": "uuid-here"}, "label": "Create Project"}
 \`\`\`
 
+Manage deliverables on the current project page (only when page_context.pageType === "project-detail"):
+\`\`\`action
+{"type": "update_form", "data": {"_deliverableAdd": {"title": "Design mockups", "deadline": "2026-03-20", "priority": "high", "use_case": "ai-media-generation"}}, "label": "Add deliverable"}
+\`\`\`
+\`\`\`action
+{"type": "update_form", "data": {"_deliverableUpdate": {"id": "DELIVERABLE_ID", "status": "done", "priority": "critical"}}, "label": "Update deliverable"}
+\`\`\`
+\`\`\`action
+{"type": "update_form", "data": {"_deliverableDelete": {"id": "DELIVERABLE_ID"}}, "label": "Delete deliverable"}
+\`\`\`
+Deliverable fields: title, deadline (YYYY-MM-DD|null), status ("pending"|"in_progress"|"done"), priority ("critical"|"high"|"medium"|"low"|null), notes (string|null), use_case (slug|null).
+Valid use_case slugs: "social-content-ops", "growth-architect", "growth-hacking-studio", "ai-media-generation", "sme-growth", "government-tenders", "hk-sg-tender-intel", "mans-accounting".
+Current deliverables are in page_context.formData.deliverables (each has id, title, status, priority, deadline, use_case).
+
 Available pages: /use-cases/crm (Dashboard), /use-cases/crm/brands (Brands list), /use-cases/crm/brands/new (New Brand form), /use-cases/crm/brands/detail?id=BRAND_ID (Brand detail with projects and feedback), /use-cases/crm/projects (Projects list), /use-cases/crm/projects/new (New Project form), /use-cases/crm/projects/detail?id=PROJECT_ID (Project detail), /use-cases/crm/feedback (Feedback), /use-cases/crm/integrations (Integrations)
 
 When the user asks you to do something actionable (create, navigate, fill in, etc.), include the appropriate action block so it can be executed in the UI.
@@ -2590,7 +2798,16 @@ ${page_context ? `Current page context: ${JSON.stringify(page_context)}` : ''}
 
 Respond concisely. Use English or the language the user writes in.`;
 
-    const result = await llm.chat(modelKey || 'sonnet', messages, {
+    // Model routing per CLAUDE.md:
+    //   DeepSeek  → default for text-only CRM chat (cheap, no Anthropic quota)
+    //   Haiku     → multimodal messages (images / PDF document blocks require Claude)
+    const hasMultimodal = messages.some(m =>
+      Array.isArray(m.content) &&
+      m.content.some(b => b.type === 'image' || b.type === 'document')
+    );
+    const defaultModel = hasMultimodal ? 'haiku' : 'deepseek';
+
+    const result = await llm.chat(modelKey || defaultModel, messages, {
       system,
       maxTokens: 4096,
     });
@@ -2679,7 +2896,7 @@ app.post('/api/social/chat', async (req, res) => {
     // Triggered when the caller provides a task_id (new Sarah chat panel).
     // Module-specific pages that don't send task_id fall through to legacy path.
     if (task_id) {
-      const lastUserMsg = [...messages].reverse().find(m => m.role === 'user');
+      const lastUserMsg = messages.findLast(m => m.role === 'user');
       const userInput = lastUserMsg?.content || '';
 
       // Detect research-related requests (bypass orchestrator for simpler handling)
@@ -2830,7 +3047,7 @@ ${ragContext ? `\n${ragContext}` : ''}`;
     }
     // ── Legacy path (module pages: strategy, content-dev, calendar, etc.) ────
 
-    const lastUserMsg = [...messages].reverse().find(m => m.role === 'user');
+    const lastUserMsg = messages.findLast(m => m.role === 'user');
     const ragContext = lastUserMsg ? ragService.getContext(lastUserMsg.content, 'company', 3) : '';
     const codeContext = readUseCaseCode(use_case_id || 'social-content-ops', 6000);
 
@@ -3843,7 +4060,7 @@ try {
   const tedxXinyiRoutes = require('./use-cases/tedx-xinyi/api/routes');
   app.use('/api/tedx-xinyi', tedxXinyiRoutes);
   // Admin media library — password-protected
-  const ADMIN_PASS = process.env.TEDX_ADMIN_PASS || '5milesLab01@';
+  const ADMIN_PASS = process.env.TEDX_ADMIN_PASS || '5mileslab';
   // Password check API
   app.post('/api/tedx-xinyi/auth', express.json(), (req, res) => {
     if (req.body?.password === ADMIN_PASS) return res.json({ ok: true, token: ADMIN_PASS });
@@ -3860,6 +4077,20 @@ try {
   console.log('✅ TEDxXinyi routes loaded: /api/tedx-xinyi, admin: /vibe-demo/tedx-xinyi/admin');
 } catch (error) {
   console.warn('⚠️ TEDxXinyi routes not loaded:', error.message);
+}
+
+// Arrisonapps Cigar System Routes
+try {
+  const arrisonappsRoutes = require('./use-cases/arrisonapps/api/routes');
+  app.use('/api/arrisonapps/v1', arrisonappsRoutes);
+  if (process.env.DATABASE_URL) {
+    arrisonappsRoutes.initDb(pool).catch(err =>
+      console.warn('⚠️ Arrisonapps DB init error:', err.message)
+    );
+  }
+  console.log('✅ Arrisonapps routes loaded: /api/arrisonapps/v1');
+} catch (error) {
+  console.warn('⚠️ Arrisonapps routes not loaded:', error.message);
 }
 
 // Ads Performance Dashboard Routes
@@ -3898,6 +4129,19 @@ try {
   console.warn('⚠️ Image Compression routes not loaded:', error.message);
 }
 
+// Transcription Analysis
+try {
+  const { router: transcriptionRoutes, initDb: initTranscriptionDb } = require('./use-cases/transcription/api/routes');
+  const { router: transcriptionAdminRoutes } = require('./use-cases/transcription/admin/routes');
+  app.use('/api/transcription', transcriptionRoutes);
+  app.use('/api/transcription/admin', transcriptionAdminRoutes);
+  initTranscriptionDb().catch(err => console.error('[transcription] DB init error:', err.message));
+  console.log('✅ Transcription routes loaded: /api/transcription');
+  console.log('✅ Transcription admin routes loaded: /api/transcription/admin');
+} catch (error) {
+  console.warn('⚠️ Transcription routes not loaded:', error.message);
+}
+
 // Event Check-in System
 try {
   const eventCheckinRoutes = require('./use-cases/event-checkin/api/routes');
@@ -3933,6 +4177,22 @@ try {
   console.log('✅ EventFlow routes loaded: /api/eventflow, /eventflow/checkin');
 } catch (error) {
   console.warn('⚠️ EventFlow routes not loaded:', error.message);
+// Adaptive Learning for Schools
+try {
+  const adaptiveLearningRoutes = require('./use-cases/adaptive-learning/api/routes');
+  app.use('/api/adaptive-learning', adaptiveLearningRoutes);
+  console.log('✅ Adaptive Learning routes loaded: /api/adaptive-learning');
+} catch (error) {
+  console.warn('⚠️ Adaptive Learning routes not loaded:', error.message);
+}
+
+// Presentation Deck
+try {
+  const presentationDeckRoutes = require('./use-cases/presentation-deck/api/routes');
+  app.use('/api/presentation-deck', presentationDeckRoutes);
+  console.log('✅ Presentation Deck routes loaded: /api/presentation-deck');
+} catch (error) {
+  console.warn('⚠️ Presentation Deck routes not loaded:', error.message);
 }
 
 // Scheduler Service
@@ -4181,7 +4441,7 @@ app.post('/api/workflow-chat', async (req, res) => {
     }, null, 2);
 
     // RAG: retrieve relevant context for the latest user message
-    const lastUserMsg = [...messages].reverse().find(m => m.role === 'user');
+    const lastUserMsg = messages.findLast(m => m.role === 'user');
     const ragContext = lastUserMsg ? ragService.getContext(lastUserMsg.content, 'workflows', 3) : '';
     const companyRag = lastUserMsg ? ragService.getContext(lastUserMsg.content, 'company', 2) : '';
 
@@ -4236,7 +4496,7 @@ app.post('/api/agent-chat', async (req, res) => {
     }
 
     // RAG: retrieve relevant context for the latest user message
-    const lastUserMsg = [...messages].reverse().find(m => m.role === 'user');
+    const lastUserMsg = messages.findLast(m => m.role === 'user');
     const ragContext = lastUserMsg ? ragService.getContext(lastUserMsg.content, null, 3) : '';
 
     const systemPrompt = `You are the 5ML Platform Agent Assistant — an expert on the 5ML Agentic AI Platform.
@@ -4450,21 +4710,10 @@ const wsServer = require('./services/websocket-server');
 // Radiance PR Contact Form API
 // ==========================================
 
-// Multer config for Radiance media uploads
+// Multer config for Radiance media uploads (memory storage → saved to Fly Postgres as BYTEA)
 const multer = require('multer');
-const radianceMediaStorage = multer.diskStorage({
-  destination: (req, file, cb) => {
-    const dir = path.join(__dirname, 'uploads', 'radiance');
-    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-    cb(null, dir);
-  },
-  filename: (req, file, cb) => {
-    const ext = path.extname(file.originalname);
-    cb(null, `${Date.now()}-${Math.random().toString(36).slice(2)}${ext}`);
-  },
-});
 const radianceUpload = multer({
-  storage: radianceMediaStorage,
+  storage: multer.memoryStorage(),
   limits: { fileSize: 10 * 1024 * 1024 },
   fileFilter: (req, file, cb) => {
     if (file.mimetype.startsWith('image/')) cb(null, true);
@@ -4472,7 +4721,7 @@ const radianceUpload = multer({
   },
 });
 
-const RADIANCE_ADMIN_PW = '5milesLab01@';
+const RADIANCE_ADMIN_PW = '5mileslab';
 
 // Simple in-memory rate limiter: max 5 submissions per IP per 15 min
 const _radianceRateLimitMap = new Map();
@@ -4618,7 +4867,7 @@ app.post('/api/radiance/contact', async (req, res) => {
 app.get('/api/radiance/contact/submissions', async (req, res) => {
   try {
     const { password } = req.query;
-    if (password !== '5milesLab01@') {
+    if (password !== '5mileslab') {
       return res.status(401).json({ error: 'Unauthorised' });
     }
     const limit = Math.min(parseInt(req.query.limit || '50'), 200);
@@ -4631,20 +4880,58 @@ app.get('/api/radiance/contact/submissions', async (req, res) => {
   }
 });
 
-// POST /api/radiance/admin/media/upload
+// POST /api/radiance/admin/media/upload — store image in Fly Postgres as BYTEA
 app.post('/api/radiance/admin/media/upload', radianceUpload.single('file'), async (req, res) => {
   try {
     if (req.query.password !== RADIANCE_ADMIN_PW) return res.status(401).json({ error: 'Unauthorised' });
     if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
-    const url = `/uploads/radiance/${req.file.filename}`;
+
+    const ext = path.extname(req.file.originalname);
+    const filename = `${Date.now()}-${Math.random().toString(36).slice(2)}${ext}`;
+    const publicUrl = `/api/radiance/media/${filename}`;
+
+    await pool.query(
+      `INSERT INTO radiance_media (filename, original_name, url, mime_type, size, data) VALUES ($1,$2,$3,$4,$5,$6)`,
+      [filename, req.file.originalname, publicUrl, req.file.mimetype, req.file.size, req.file.buffer]
+    );
+    console.log(`[Radiance] Uploaded to Postgres: ${req.file.originalname} (${(req.file.size / 1024).toFixed(0)} KB)`);
+    res.json({ success: true, url: publicUrl, filename, originalName: req.file.originalname });
+  } catch (err) {
+    console.error('[Radiance] Media upload error:', err);
+    res.status(500).json({ error: 'Upload failed' });
+  }
+});
+
+// GET /api/radiance/media/:filename — serve image stored in Postgres
+app.get('/api/radiance/media/:filename', async (req, res) => {
+  try {
+    const result = await pool.query('SELECT data, mime_type FROM radiance_media WHERE filename=$1', [req.params.filename]);
+    if (result.rows.length === 0) return res.status(404).send('Not found');
+    const { data, mime_type } = result.rows[0];
+    res.set('Content-Type', mime_type);
+    res.set('Cache-Control', 'public, max-age=31536000');
+    res.send(data);
+  } catch (err) {
+    console.error('[Radiance] Media serve error:', err);
+    res.status(500).send('Error');
+  }
+});
+
+// POST /api/radiance/admin/media/register — save externally-uploaded file record to DB
+app.post('/api/radiance/admin/media/register', async (req, res) => {
+  if (req.query.password !== RADIANCE_ADMIN_PW) return res.status(401).json({ error: 'Unauthorised' });
+  try {
+    const { filename, original_name, url, mime_type, size } = req.body;
+    if (!filename || !url) return res.status(400).json({ error: 'filename and url are required' });
     await pool.query(
       `INSERT INTO radiance_media (filename, original_name, url, mime_type, size) VALUES ($1,$2,$3,$4,$5)`,
-      [req.file.filename, req.file.originalname, url, req.file.mimetype, req.file.size]
+      [filename, original_name || filename, url, mime_type || 'image/jpeg', size || 0]
     );
-    res.json({ success: true, url, filename: req.file.filename, originalName: req.file.originalname });
+    console.log(`[Radiance] Uploaded: ${original_name || filename} → ${url} (${((size || 0) / 1024).toFixed(0)} KB)`);
+    res.json({ success: true, url });
   } catch (err) {
-    console.error('Radiance media upload error:', err);
-    res.status(500).json({ error: 'Upload failed' });
+    console.error('[Radiance] Media register error:', err);
+    res.status(500).json({ error: 'Failed to register media' });
   }
 });
 
@@ -4652,7 +4939,7 @@ app.post('/api/radiance/admin/media/upload', radianceUpload.single('file'), asyn
 app.get('/api/radiance/admin/media', async (req, res) => {
   if (req.query.password !== RADIANCE_ADMIN_PW) return res.status(401).json({ error: 'Unauthorised' });
   try {
-    const result = await pool.query('SELECT * FROM radiance_media ORDER BY uploaded_at DESC LIMIT 200');
+    const result = await pool.query('SELECT id, filename, original_name, url, mime_type, size, uploaded_at FROM radiance_media ORDER BY uploaded_at DESC LIMIT 200');
     res.json({ success: true, media: result.rows });
   } catch (err) { res.status(500).json({ error: 'Failed to fetch media' }); }
 });
@@ -4661,13 +4948,189 @@ app.get('/api/radiance/admin/media', async (req, res) => {
 app.delete('/api/radiance/admin/media/:id', async (req, res) => {
   if (req.query.password !== RADIANCE_ADMIN_PW) return res.status(401).json({ error: 'Unauthorised' });
   try {
-    const result = await pool.query('SELECT filename FROM radiance_media WHERE id=$1', [req.params.id]);
+    const result = await pool.query('SELECT filename, url FROM radiance_media WHERE id=$1', [req.params.id]);
     if (result.rows.length === 0) return res.status(404).json({ error: 'Not found' });
-    const filePath = path.join(__dirname, 'uploads', 'radiance', result.rows[0].filename);
-    if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+    // Only delete local file if it's not an external URL
+    if (!result.rows[0].url.startsWith('http')) {
+      const filePath = path.join(__dirname, 'uploads', 'radiance', result.rows[0].filename);
+      if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+    }
     await pool.query('DELETE FROM radiance_media WHERE id=$1', [req.params.id]);
     res.json({ success: true });
   } catch (err) { res.status(500).json({ error: 'Delete failed' }); }
+});
+
+// GET /api/radiance/pr-gallery — public, returns event photo gallery
+app.get('/api/radiance/pr-gallery', async (req, res) => {
+  try {
+    const result = await pool.query('SELECT * FROM radiance_pr_gallery ORDER BY sort_order ASC, created_at ASC');
+    res.json({ success: true, photos: result.rows });
+  } catch (err) { res.status(500).json({ error: 'Failed to fetch gallery' }); }
+});
+
+// POST /api/radiance/admin/pr-gallery — admin add photo
+app.post('/api/radiance/admin/pr-gallery', async (req, res) => {
+  if (req.query.password !== RADIANCE_ADMIN_PW) return res.status(401).json({ error: 'Unauthorised' });
+  try {
+    const { url, alt, caption_en, caption_zh, sort_order } = req.body;
+    if (!url) return res.status(400).json({ error: 'url is required' });
+    const result = await pool.query(
+      'INSERT INTO radiance_pr_gallery (url, alt, caption_en, caption_zh, sort_order) VALUES ($1,$2,$3,$4,$5) RETURNING *',
+      [url, alt || '', caption_en || '', caption_zh || '', sort_order ?? 0]
+    );
+    res.json({ success: true, photo: result.rows[0] });
+  } catch (err) { res.status(500).json({ error: 'Failed to add photo' }); }
+});
+
+// PUT /api/radiance/admin/pr-gallery/:id — admin update caption/sort
+app.put('/api/radiance/admin/pr-gallery/:id', async (req, res) => {
+  if (req.query.password !== RADIANCE_ADMIN_PW) return res.status(401).json({ error: 'Unauthorised' });
+  try {
+    const { alt, caption_en, caption_zh, sort_order } = req.body;
+    await pool.query(
+      'UPDATE radiance_pr_gallery SET alt=$1, caption_en=$2, caption_zh=$3, sort_order=$4 WHERE id=$5',
+      [alt, caption_en, caption_zh, sort_order, req.params.id]
+    );
+    res.json({ success: true });
+  } catch (err) { res.status(500).json({ error: 'Failed to update photo' }); }
+});
+
+// DELETE /api/radiance/admin/pr-gallery/:id — admin delete photo
+app.delete('/api/radiance/admin/pr-gallery/:id', async (req, res) => {
+  if (req.query.password !== RADIANCE_ADMIN_PW) return res.status(401).json({ error: 'Unauthorised' });
+  try {
+    await pool.query('DELETE FROM radiance_pr_gallery WHERE id=$1', [req.params.id]);
+    res.json({ success: true });
+  } catch (err) { res.status(500).json({ error: 'Failed to delete photo' }); }
+});
+
+// GET /api/radiance/news-clippings — public, returns press clippings gallery
+app.get('/api/radiance/news-clippings', async (req, res) => {
+  try {
+    const result = await pool.query('SELECT * FROM radiance_news_clippings ORDER BY sort_order ASC, created_at ASC');
+    res.json({ success: true, clippings: result.rows });
+  } catch (err) { res.status(500).json({ error: 'Failed to fetch clippings' }); }
+});
+
+// POST /api/radiance/admin/news-clippings — admin add clipping
+app.post('/api/radiance/admin/news-clippings', async (req, res) => {
+  if (req.query.password !== RADIANCE_ADMIN_PW) return res.status(401).json({ error: 'Unauthorised' });
+  try {
+    const { url, alt, outlet, headline, sort_order } = req.body;
+    if (!url) return res.status(400).json({ error: 'url is required' });
+    const result = await pool.query(
+      'INSERT INTO radiance_news_clippings (url, alt, outlet, headline, sort_order) VALUES ($1,$2,$3,$4,$5) RETURNING *',
+      [url, alt || '', outlet || '', headline || '', sort_order ?? 0]
+    );
+    res.json({ success: true, clipping: result.rows[0] });
+  } catch (err) { res.status(500).json({ error: 'Failed to add clipping' }); }
+});
+
+// PUT /api/radiance/admin/news-clippings/:id — admin update
+app.put('/api/radiance/admin/news-clippings/:id', async (req, res) => {
+  if (req.query.password !== RADIANCE_ADMIN_PW) return res.status(401).json({ error: 'Unauthorised' });
+  try {
+    const { alt, outlet, headline, sort_order } = req.body;
+    await pool.query(
+      'UPDATE radiance_news_clippings SET alt=$1, outlet=$2, headline=$3, sort_order=$4 WHERE id=$5',
+      [alt, outlet, headline, sort_order, req.params.id]
+    );
+    res.json({ success: true });
+  } catch (err) { res.status(500).json({ error: 'Failed to update clipping' }); }
+});
+
+// DELETE /api/radiance/admin/news-clippings/:id — admin delete
+app.delete('/api/radiance/admin/news-clippings/:id', async (req, res) => {
+  if (req.query.password !== RADIANCE_ADMIN_PW) return res.status(401).json({ error: 'Unauthorised' });
+  try {
+    await pool.query('DELETE FROM radiance_news_clippings WHERE id=$1', [req.params.id]);
+    res.json({ success: true });
+  } catch (err) { res.status(500).json({ error: 'Failed to delete clipping' }); }
+});
+
+// GET /api/radiance/admin/image-slots — catalog of all image placeholders across the Radiance site
+app.get('/api/radiance/admin/image-slots', async (req, res) => {
+  if (req.query.password !== RADIANCE_ADMIN_PW) return res.status(401).json({ error: 'Unauthorised' });
+  try {
+    const HOMEPAGE_HEROES = [
+      { key: 'hero-1', label: 'Hero Background 1', src: '/images/radiance/hero/Radiance-1.jpg' },
+      { key: 'hero-2', label: 'Hero Background 2', src: '/images/radiance/hero/Radiance-2.jpg' },
+      { key: 'hero-3', label: 'Hero Background 3', src: '/images/radiance/hero/Radiance-3.jpg' },
+    ];
+    const HOMEPAGE_LOGOS = [
+      { key: 'logo-1',  label: 'Client Logo 1',  src: 'http://5ml.mmdbfiles.com/assets/3808b2fb66ca40525e573461.jpg' },
+      { key: 'logo-2',  label: 'Client Logo 2',  src: 'http://5ml.mmdbfiles.com/assets/077707a701108f72623ec4bc.png' },
+      { key: 'logo-3',  label: 'Client Logo 3',  src: 'http://5ml.mmdbfiles.com/assets/5cd8f4f3226ac0e3c93e4393.png' },
+      { key: 'logo-4',  label: 'Client Logo 4',  src: 'http://5ml.mmdbfiles.com/assets/7c99bdf01d6cf2a586add91a.jpg' },
+      { key: 'logo-5',  label: 'Client Logo 5',  src: 'http://5ml.mmdbfiles.com/assets/b0f34a35f4e82d61546656d1.png' },
+      { key: 'logo-6',  label: 'Client Logo 6',  src: 'http://5ml.mmdbfiles.com/assets/de9d1b833bc5d93ff62e2e41.jpg' },
+      { key: 'logo-7',  label: 'Client Logo 7',  src: 'http://5ml.mmdbfiles.com/assets/8cb61dc159f35088617837b1.png' },
+      { key: 'logo-8',  label: 'Client Logo 8',  src: 'http://5ml.mmdbfiles.com/assets/489f18198b4127d98d307f43.jpg' },
+      { key: 'logo-9',  label: 'Client Logo 9',  src: 'http://5ml.mmdbfiles.com/assets/11b120b411e57a7fa62d3933.jpg' },
+      { key: 'logo-10', label: 'Client Logo 10', src: 'http://5ml.mmdbfiles.com/assets/4b87e1e47b865565936c7683.jpg' },
+    ];
+
+    const CASE_STUDY_SLUGS = [
+      'daikin', 'filorga', 'gp-batteries', 'her-own-words-sport',
+      'lung-fu-shan', 'richmond-fellowship', 'venice-biennale-hk', 'chinese-culture-exhibition',
+    ];
+    const BLOG_SLUGS = [
+      'earned-media-strategy', 'integrated-campaigns', 'product-launch-pr',
+      'event-media-strategy', 'thought-leadership', 'ngos-reputation',
+      'cultural-pr', 'social-media-strategy',
+    ];
+
+    const [csResult, blogResult] = await Promise.all([
+      pool.query('SELECT slug, title_en, featured_image FROM radiance_case_study_cms'),
+      pool.query('SELECT slug, title_en, hero_image FROM radiance_blog_cms'),
+    ]);
+
+    const csMap = {};
+    csResult.rows.forEach(r => { csMap[r.slug] = r; });
+    const blogMap = {};
+    blogResult.rows.forEach(r => { blogMap[r.slug] = r; });
+
+    const caseStudySlots = CASE_STUDY_SLUGS.map(slug => {
+      const row = csMap[slug];
+      return {
+        key: `case-study-${slug}`,
+        page: 'Case Studies',
+        label: row ? (row.title_en || slug) : slug,
+        src: row?.featured_image || null,
+        type: 'cms',
+        status: row?.featured_image ? 'filled' : 'missing',
+      };
+    });
+
+    const blogSlots = BLOG_SLUGS.map(slug => {
+      const row = blogMap[slug];
+      return {
+        key: `blog-${slug}`,
+        page: 'Blog',
+        label: row ? (row.title_en || slug) : slug,
+        src: row?.hero_image || null,
+        type: 'cms',
+        status: row?.hero_image ? 'filled' : 'missing',
+      };
+    });
+
+    const slots = [
+      ...HOMEPAGE_HEROES.map(s => ({ ...s, page: 'Homepage', type: 'local', status: 'filled' })),
+      ...HOMEPAGE_LOGOS.map(s => ({ ...s, page: 'Homepage', type: 'cdn', status: 'cdn' })),
+      ...caseStudySlots,
+      ...blogSlots,
+    ];
+
+    res.json({
+      success: true,
+      slots,
+      total: slots.length,
+      filled: slots.filter(s => s.status !== 'missing').length,
+    });
+  } catch (err) {
+    console.error('Image slots error:', err);
+    res.status(500).json({ error: 'Failed to fetch image slots' });
+  }
 });
 
 // GET /api/radiance/blog/:slug — returns CMS override or null
@@ -4777,6 +5240,60 @@ app.put('/api/radiance/admin/case-studies/:slug', async (req, res) => {
     );
     res.json({ success: true });
   } catch (err) { res.status(500).json({ error: 'Save failed' }); }
+});
+
+// GET /api/radiance/admin/site-pack — stream a ZIP of all Radiance site assets
+app.get('/api/radiance/admin/site-pack', async (req, res) => {
+  if (req.query.password !== RADIANCE_ADMIN_PW) return res.status(401).json({ error: 'Unauthorised' });
+  const archiver = require('archiver');
+  const fs = require('fs');
+  const pathLib = require('path');
+
+  const date = new Date().toISOString().slice(0, 10);
+  res.setHeader('Content-Type', 'application/zip');
+  res.setHeader('Content-Disposition', `attachment; filename="radiance-site-pack-${date}.zip"`);
+
+  const archive = archiver('zip', { zlib: { level: 6 } });
+  archive.on('error', err => { console.error('Radiance site-pack error:', err); res.end(); });
+  archive.pipe(res);
+
+  // HTML pages (static export)
+  const htmlDir = pathLib.join(__dirname, 'frontend/out/vibe-demo/radiance');
+  if (fs.existsSync(htmlDir)) {
+    archive.glob('**/*.html', { cwd: htmlDir }, { prefix: 'html' });
+  }
+
+  // Public images
+  const imagesDir = pathLib.join(__dirname, 'frontend/public/images/radiance');
+  if (fs.existsSync(imagesDir)) {
+    archive.directory(imagesDir, 'images');
+  }
+
+  // Uploaded media
+  const uploadsDir = pathLib.join(__dirname, 'uploads/radiance');
+  if (fs.existsSync(uploadsDir)) {
+    archive.directory(uploadsDir, 'uploads');
+  }
+
+  // README
+  const readme = [
+    `Radiance Site Pack — ${date}`,
+    '='.repeat(40),
+    '',
+    'Contents:',
+    '  html/     Static HTML exports for all Radiance pages',
+    '  images/   Public images (case-studies, hero, logos)',
+    '  uploads/  Admin-uploaded media files',
+    '',
+    'Deployment:',
+    '  Serve html/ files from your web root.',
+    '  Place images/ under /images/radiance/ and uploads/ under /uploads/radiance/.',
+    '',
+    'Generated by 5ML Agentic AI Platform.',
+  ].join('\n');
+  archive.append(readme, { name: 'README.txt' });
+
+  await archive.finalize();
 });
 
 // ==========================================
@@ -5040,7 +5557,7 @@ app.post('/api/recruitai/chat', async (req, res) => {
 // GET /api/recruitai/admin/leads — list all leads (password-protected)
 app.get('/api/recruitai/admin/leads', async (req, res) => {
   const { password } = req.query;
-  if (password !== '5milesLab01@') {
+  if (password !== '5mileslab') {
     return res.status(401).json({ error: 'Unauthorized' });
   }
   try {
@@ -5059,7 +5576,7 @@ app.get('/api/recruitai/admin/leads', async (req, res) => {
 // PATCH /api/recruitai/admin/leads/:id — update editable fields
 app.patch('/api/recruitai/admin/leads/:id', async (req, res) => {
   const { password, ...fields } = req.body;
-  if (password !== '5milesLab01@') return res.status(401).json({ error: 'Unauthorized' });
+  if (password !== '5mileslab') return res.status(401).json({ error: 'Unauthorized' });
   const { id } = req.params;
   if (!/^\d+$/.test(id)) return res.status(400).json({ error: 'Invalid id' });
   const EDITABLE = ['name', 'email', 'phone', 'company', 'industry', 'headcount', 'message'];
@@ -5086,7 +5603,7 @@ app.patch('/api/recruitai/admin/leads/:id', async (req, res) => {
 // DELETE /api/recruitai/admin/leads/:id — delete a lead
 app.delete('/api/recruitai/admin/leads/:id', async (req, res) => {
   const { password } = req.query;
-  if (password !== '5milesLab01@') return res.status(401).json({ error: 'Unauthorized' });
+  if (password !== '5mileslab') return res.status(401).json({ error: 'Unauthorized' });
   const { id } = req.params;
   if (!/^\d+$/.test(id)) return res.status(400).json({ error: 'Invalid id' });
   try {
@@ -5101,7 +5618,7 @@ app.delete('/api/recruitai/admin/leads/:id', async (req, res) => {
 // POST /api/recruitai/admin/leads/:id/analyze — AI analysis of a lead
 app.post('/api/recruitai/admin/leads/:id/analyze', async (req, res) => {
   const { password } = req.body;
-  if (password !== '5milesLab01@') return res.status(401).json({ error: 'Unauthorized' });
+  if (password !== '5mileslab') return res.status(401).json({ error: 'Unauthorized' });
   const { id } = req.params;
   if (!/^\d+$/.test(id)) return res.status(400).json({ error: 'Invalid id' });
   try {
@@ -5151,7 +5668,7 @@ Return this exact JSON structure:
 // GET /api/admin/media-library — aggregate all managed images across all sites
 app.get('/api/admin/media-library', (req, res) => {
   const { password } = req.query;
-  if (password !== '5milesLab01@') return res.status(401).json({ error: 'Unauthorized' });
+  if (password !== '5mileslab') return res.status(401).json({ error: 'Unauthorized' });
 
   const fs = require('fs');
   const path = require('path');
@@ -5249,7 +5766,7 @@ app.get('/api/admin/media-library', (req, res) => {
 // POST /api/admin/media-library/generate — trigger Gemini generation for one image
 app.post('/api/admin/media-library/generate', async (req, res) => {
   const { password, site, id } = req.body;
-  if (password !== '5milesLab01@') return res.status(401).json({ error: 'Unauthorized' });
+  if (password !== '5mileslab') return res.status(401).json({ error: 'Unauthorized' });
   if (!site || !id) return res.status(400).json({ error: 'site and id required' });
 
   const endpointMap = {
@@ -5293,7 +5810,7 @@ app.post('/api/admin/media-library/generate', async (req, res) => {
 // GET /api/recruitai/admin/sessions — list all chat sessions
 app.get('/api/recruitai/admin/sessions', async (req, res) => {
   const { password } = req.query;
-  if (password !== '5milesLab01@') {
+  if (password !== '5mileslab') {
     return res.status(401).json({ error: 'Unauthorized' });
   }
   try {
@@ -5317,7 +5834,7 @@ app.get('/api/recruitai/admin/sessions', async (req, res) => {
 // GET /api/recruitai/admin/sessions/:sessionId/messages
 app.get('/api/recruitai/admin/sessions/:sessionId/messages', async (req, res) => {
   const { password } = req.query;
-  if (password !== '5milesLab01@') {
+  if (password !== '5mileslab') {
     return res.status(401).json({ error: 'Unauthorized' });
   }
   try {
@@ -7086,6 +7603,2239 @@ const server = http.createServer(app);
 wsServer.initialize(server);
 
 // Global error handler middleware (must be last)
+// =============================================================================
+// 3D PRINT FINANCE API
+// =============================================================================
+
+const pfUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 5 * 1024 * 1024 } });
+
+function pfDbCheck(res) {
+  if (!process.env.DATABASE_URL) { res.status(503).json({ error: 'Database not configured' }); return false; }
+  return true;
+}
+
+// Auto-create all pf_ tables on startup
+(async () => {
+  if (!process.env.DATABASE_URL) return;
+  const tables = [
+    `CREATE TABLE IF NOT EXISTS pf_work_units (
+      id SERIAL PRIMARY KEY,
+      job_id TEXT,
+      name TEXT NOT NULL,
+      material TEXT,
+      grams NUMERIC(10,2) DEFAULT 0,
+      hours NUMERIC(10,2) DEFAULT 0,
+      status TEXT DEFAULT 'queued',
+      revenue NUMERIC(12,2) DEFAULT 0,
+      direct_cost NUMERIC(12,2) DEFAULT 0,
+      overhead_alloc NUMERIC(12,2) DEFAULT 0,
+      notes TEXT,
+      created_at TIMESTAMPTZ DEFAULT NOW(),
+      updated_at TIMESTAMPTZ DEFAULT NOW()
+    )`,
+    `CREATE TABLE IF NOT EXISTS pf_revenue_entries (
+      id SERIAL PRIMARY KEY,
+      period TEXT,
+      channel TEXT NOT NULL DEFAULT 'Direct',
+      revenue NUMERIC(12,2) DEFAULT 0,
+      cogs NUMERIC(12,2) DEFAULT 0,
+      job_count INTEGER DEFAULT 0,
+      notes TEXT,
+      created_at TIMESTAMPTZ DEFAULT NOW()
+    )`,
+    `CREATE TABLE IF NOT EXISTS pf_cost_entries (
+      id SERIAL PRIMARY KEY,
+      category TEXT NOT NULL,
+      type TEXT NOT NULL DEFAULT 'direct',
+      amount NUMERIC(12,2) DEFAULT 0,
+      period TEXT,
+      notes TEXT,
+      created_at TIMESTAMPTZ DEFAULT NOW()
+    )`,
+    `CREATE TABLE IF NOT EXISTS pf_inventory (
+      id SERIAL PRIMARY KEY,
+      material TEXT NOT NULL,
+      brand TEXT,
+      color TEXT,
+      stock_kg NUMERIC(10,3) DEFAULT 0,
+      price_per_kg NUMERIC(10,2) DEFAULT 0,
+      reorder_kg NUMERIC(10,3) DEFAULT 1,
+      supplier TEXT,
+      notes TEXT,
+      created_at TIMESTAMPTZ DEFAULT NOW(),
+      updated_at TIMESTAMPTZ DEFAULT NOW()
+    )`,
+    // 3D printing factory specialized cost tables
+    `CREATE TABLE IF NOT EXISTS pf_cost_categories (
+      id SERIAL PRIMARY KEY,
+      name TEXT NOT NULL UNIQUE,
+      parent TEXT NOT NULL DEFAULT 'overhead',
+      cost_type TEXT NOT NULL DEFAULT 'overhead',
+      description TEXT,
+      created_at TIMESTAMPTZ DEFAULT NOW()
+    )`,
+    `CREATE TABLE IF NOT EXISTS pf_material_usage (
+      id SERIAL PRIMARY KEY,
+      job_id TEXT,
+      material TEXT NOT NULL,
+      brand TEXT,
+      color TEXT,
+      quantity_g NUMERIC(10,3) DEFAULT 0,
+      cost_per_g NUMERIC(10,6) DEFAULT 0,
+      total_cost NUMERIC(12,2) GENERATED ALWAYS AS (ROUND((quantity_g * cost_per_g)::numeric, 2)) STORED,
+      supplier TEXT,
+      period TEXT,
+      notes TEXT,
+      created_at TIMESTAMPTZ DEFAULT NOW()
+    )`,
+    `CREATE TABLE IF NOT EXISTS pf_machine_log (
+      id SERIAL PRIMARY KEY,
+      printer_id TEXT,
+      printer_name TEXT,
+      job_id TEXT,
+      print_hours NUMERIC(10,2) DEFAULT 0,
+      electricity_kwh NUMERIC(10,3) DEFAULT 0,
+      electricity_cost NUMERIC(12,2) DEFAULT 0,
+      maintenance_cost NUMERIC(12,2) DEFAULT 0,
+      depreciation_cost NUMERIC(12,2) DEFAULT 0,
+      period TEXT,
+      notes TEXT,
+      created_at TIMESTAMPTZ DEFAULT NOW()
+    )`,
+    `CREATE TABLE IF NOT EXISTS pf_labour_log (
+      id SERIAL PRIMARY KEY,
+      job_id TEXT,
+      person TEXT,
+      role TEXT,
+      hours NUMERIC(10,2) DEFAULT 0,
+      hourly_rate NUMERIC(10,2) DEFAULT 0,
+      total_cost NUMERIC(12,2) GENERATED ALWAYS AS (ROUND((hours * hourly_rate)::numeric, 2)) STORED,
+      period TEXT,
+      notes TEXT,
+      created_at TIMESTAMPTZ DEFAULT NOW()
+    )`,
+    // Extend pf_cost_entries with richer fields (ADD COLUMN IF NOT EXISTS via separate queries)
+    `CREATE TABLE IF NOT EXISTS pf_uploaded_files (
+      id SERIAL PRIMARY KEY,
+      filename TEXT NOT NULL,
+      mimetype TEXT NOT NULL DEFAULT 'application/octet-stream',
+      size_bytes INTEGER NOT NULL DEFAULT 0,
+      imported_as TEXT,
+      rows_inserted INTEGER DEFAULT 0,
+      data BYTEA NOT NULL,
+      uploaded_at TIMESTAMPTZ DEFAULT NOW()
+    )`,
+  ];
+  for (const sql of tables) {
+    await pool.query(sql).catch(err => console.warn('[print-finance] table init:', err.message));
+  }
+  // Add new columns to pf_cost_entries if they don't exist yet
+  const alterCols = [
+    `ALTER TABLE pf_cost_entries ADD COLUMN IF NOT EXISTS sub_category TEXT`,
+    `ALTER TABLE pf_cost_entries ADD COLUMN IF NOT EXISTS quantity NUMERIC(10,3)`,
+    `ALTER TABLE pf_cost_entries ADD COLUMN IF NOT EXISTS unit TEXT`,
+    `ALTER TABLE pf_cost_entries ADD COLUMN IF NOT EXISTS unit_cost NUMERIC(12,4)`,
+    `ALTER TABLE pf_cost_entries ADD COLUMN IF NOT EXISTS vendor TEXT`,
+    `ALTER TABLE pf_cost_entries ADD COLUMN IF NOT EXISTS job_ref TEXT`,
+    `ALTER TABLE pf_cost_entries ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT NOW()`,
+    `ALTER TABLE pf_revenue_entries ADD COLUMN IF NOT EXISTS date TEXT`,
+    `ALTER TABLE pf_revenue_entries ADD COLUMN IF NOT EXISTS source TEXT`,
+    `ALTER TABLE pf_revenue_entries ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT NOW()`,
+  ];
+  for (const sql of alterCols) {
+    await pool.query(sql).catch(() => {}); // silently skip if already exists
+  }
+  // Seed default 3D printing cost categories
+  const defaultCategories = [
+    { name: 'Filament / Resin',   parent: 'materials', cost_type: 'direct',   desc: 'Raw material consumption per job' },
+    { name: 'Electricity',        parent: 'machine',   cost_type: 'overhead', desc: 'Power used by printers and equipment' },
+    { name: 'Machine Depreciation', parent: 'machine', cost_type: 'fixed',    desc: 'Printer depreciation over lifespan' },
+    { name: 'Machine Maintenance',  parent: 'machine', cost_type: 'direct',   desc: 'Repairs, nozzles, belts, lubricant' },
+    { name: 'Operator Labour',    parent: 'labour',    cost_type: 'direct',   desc: 'Operator and technician hours' },
+    { name: 'Post-Processing',    parent: 'labour',    cost_type: 'direct',   desc: 'Sanding, painting, support removal' },
+    { name: 'Rent',               parent: 'overhead',  cost_type: 'fixed',    desc: 'Workshop / factory floor space' },
+    { name: 'Software & Licences',parent: 'overhead',  cost_type: 'fixed',    desc: 'Slicer, CAD, ERP software' },
+    { name: 'Packaging',          parent: 'direct',    cost_type: 'direct',   desc: 'Boxes, foam, labels per shipment' },
+    { name: 'Shipping',           parent: 'direct',    cost_type: 'direct',   desc: 'Courier / freight costs' },
+    { name: 'Quality Control',    parent: 'labour',    cost_type: 'direct',   desc: 'Inspection and testing time' },
+    { name: 'Admin & Finance',    parent: 'overhead',  cost_type: 'fixed',    desc: 'Accounting, insurance, admin staff' },
+  ];
+  for (const c of defaultCategories) {
+    await pool.query(
+      `INSERT INTO pf_cost_categories (name, parent, cost_type, description) VALUES ($1,$2,$3,$4) ON CONFLICT (name) DO NOTHING`,
+      [c.name, c.parent, c.cost_type, c.desc]
+    ).catch(() => {});
+  }
+  // Job-level cost rollup view
+  await pool.query(`
+    CREATE OR REPLACE VIEW pf_job_cost_summary AS
+    SELECT
+      wu.job_id, wu.name, wu.status, wu.revenue,
+      COALESCE(m.material_total, 0)   AS material_cost,
+      COALESCE(mc.machine_total, 0)   AS machine_cost,
+      COALESCE(l.labour_total, 0)     AS labour_cost,
+      COALESCE(o.overhead_total, 0)   AS overhead_cost,
+      wu.revenue
+        - COALESCE(m.material_total, 0)
+        - COALESCE(mc.machine_total, 0)
+        - COALESCE(l.labour_total, 0)
+        - COALESCE(o.overhead_total, 0) AS gross_profit,
+      wu.created_at
+    FROM pf_work_units wu
+    LEFT JOIN (SELECT job_id, SUM(total_cost) AS material_total FROM pf_material_usage GROUP BY job_id) m ON m.job_id = wu.job_id
+    LEFT JOIN (SELECT job_id, SUM(electricity_cost + maintenance_cost + depreciation_cost) AS machine_total FROM pf_machine_log GROUP BY job_id) mc ON mc.job_id = wu.job_id
+    LEFT JOIN (SELECT job_id, SUM(total_cost) AS labour_total FROM pf_labour_log GROUP BY job_id) l ON l.job_id = wu.job_id
+    LEFT JOIN (SELECT job_ref, SUM(amount) AS overhead_total FROM pf_cost_entries WHERE job_ref IS NOT NULL GROUP BY job_ref) o ON o.job_ref = wu.job_id
+  `).catch(err => console.warn('[print-finance] view init:', err.message));
+})();
+
+// --- Work Units ---
+app.get('/api/print-finance/work-units', async (req, res) => {
+  if (!pfDbCheck(res)) return;
+  try {
+    const { rows } = await pool.query('SELECT * FROM pf_work_units ORDER BY created_at DESC');
+    res.json(rows);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.post('/api/print-finance/work-units', async (req, res) => {
+  if (!pfDbCheck(res)) return;
+  try {
+    const { job_id, name, material, grams, hours, status, revenue, direct_cost, overhead_alloc, notes } = req.body;
+    if (!name) return res.status(400).json({ error: 'name is required' });
+    const { rows } = await pool.query(
+      `INSERT INTO pf_work_units (job_id, name, material, grams, hours, status, revenue, direct_cost, overhead_alloc, notes)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING *`,
+      [job_id||null, name, material||null, grams||0, hours||0, status||'queued', revenue||0, direct_cost||0, overhead_alloc||0, notes||null]
+    );
+    res.status(201).json(rows[0]);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.put('/api/print-finance/work-units/:id', async (req, res) => {
+  if (!pfDbCheck(res)) return;
+  try {
+    const { job_id, name, material, grams, hours, status, revenue, direct_cost, overhead_alloc, notes } = req.body;
+    const { rows } = await pool.query(
+      `UPDATE pf_work_units SET job_id=$1, name=$2, material=$3, grams=$4, hours=$5, status=$6,
+       revenue=$7, direct_cost=$8, overhead_alloc=$9, notes=$10, updated_at=NOW()
+       WHERE id=$11 RETURNING *`,
+      [job_id||null, name, material, grams, hours, status, revenue, direct_cost, overhead_alloc, notes, req.params.id]
+    );
+    if (!rows.length) return res.status(404).json({ error: 'Not found' });
+    res.json(rows[0]);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.delete('/api/print-finance/work-units/:id', async (req, res) => {
+  if (!pfDbCheck(res)) return;
+  try {
+    const result = await pool.query('DELETE FROM pf_work_units WHERE id=$1', [req.params.id]);
+    if (result.rowCount === 0) return res.status(404).json({ error: 'Not found' });
+    res.status(204).end();
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// --- Revenue Entries ---
+app.get('/api/print-finance/revenue', async (req, res) => {
+  if (!pfDbCheck(res)) return;
+  try {
+    const { rows } = await pool.query('SELECT * FROM pf_revenue_entries ORDER BY period DESC, channel');
+    res.json(rows);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.post('/api/print-finance/revenue', async (req, res) => {
+  if (!pfDbCheck(res)) return;
+  try {
+    const { channel, period, date, source, job_count, units_grams, revenue, cogs, notes } = req.body;
+    if (!channel || !period) return res.status(400).json({ error: 'channel and period are required' });
+    const { rows } = await pool.query(
+      `INSERT INTO pf_revenue_entries (channel, period, date, source, job_count, units_grams, revenue, cogs, notes)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING *`,
+      [channel, period, date||null, source||null, job_count||0, units_grams||0, revenue||0, cogs||0, notes||null]
+    );
+    res.status(201).json(rows[0]);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.put('/api/print-finance/revenue/:id', async (req, res) => {
+  if (!pfDbCheck(res)) return;
+  try {
+    const { channel, period, date, source, job_count, units_grams, revenue, cogs, notes } = req.body;
+    const { rows } = await pool.query(
+      `UPDATE pf_revenue_entries SET channel=$1, period=$2, date=$3, source=$4, job_count=$5, units_grams=$6, revenue=$7, cogs=$8, notes=$9, updated_at=NOW()
+       WHERE id=$10 RETURNING *`,
+      [channel, period, date||null, source||null, job_count||0, units_grams||0, revenue||0, cogs||0, notes||null, req.params.id]
+    );
+    if (!rows.length) return res.status(404).json({ error: 'Not found' });
+    res.json(rows[0]);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.delete('/api/print-finance/revenue/:id', async (req, res) => {
+  if (!pfDbCheck(res)) return;
+  try {
+    const result = await pool.query('DELETE FROM pf_revenue_entries WHERE id=$1', [req.params.id]);
+    if (result.rowCount === 0) return res.status(404).json({ error: 'Not found' });
+    res.status(204).end();
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// --- Cost Entries ---
+app.get('/api/print-finance/costs', async (req, res) => {
+  if (!pfDbCheck(res)) return;
+  try {
+    const { rows } = await pool.query('SELECT * FROM pf_cost_entries ORDER BY type, category');
+    res.json(rows);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.post('/api/print-finance/costs', async (req, res) => {
+  if (!pfDbCheck(res)) return;
+  try {
+    const { category, type, sub_category, amount, quantity, unit, unit_cost, vendor, job_ref, period, notes } = req.body;
+    if (!category || !type) return res.status(400).json({ error: 'category and type are required' });
+    const { rows } = await pool.query(
+      `INSERT INTO pf_cost_entries (category, type, sub_category, amount, quantity, unit, unit_cost, vendor, job_ref, period, notes) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING *`,
+      [category, type, sub_category||null, amount||0, quantity||null, unit||null, unit_cost||null, vendor||null, job_ref||null, period||null, notes||null]
+    );
+    res.status(201).json(rows[0]);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.put('/api/print-finance/costs/:id', async (req, res) => {
+  if (!pfDbCheck(res)) return;
+  try {
+    const { category, type, sub_category, amount, quantity, unit, unit_cost, vendor, job_ref, period, notes } = req.body;
+    const { rows } = await pool.query(
+      `UPDATE pf_cost_entries SET category=$1, type=$2, sub_category=$3, amount=$4, quantity=$5, unit=$6, unit_cost=$7, vendor=$8, job_ref=$9, period=$10, notes=$11, updated_at=NOW()
+       WHERE id=$12 RETURNING *`,
+      [category, type, sub_category||null, amount, quantity||null, unit||null, unit_cost||null, vendor||null, job_ref||null, period, notes, req.params.id]
+    );
+    if (!rows.length) return res.status(404).json({ error: 'Not found' });
+    res.json(rows[0]);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.delete('/api/print-finance/costs/:id', async (req, res) => {
+  if (!pfDbCheck(res)) return;
+  try {
+    const result = await pool.query('DELETE FROM pf_cost_entries WHERE id=$1', [req.params.id]);
+    if (result.rowCount === 0) return res.status(404).json({ error: 'Not found' });
+    res.status(204).end();
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// POST /api/print-finance/costs/upload — CSV or XLSX bulk import
+// Expected columns: category, type (direct|overhead), amount, period (optional), notes (optional)
+app.post('/api/print-finance/costs/upload', pfUpload.single('file'), async (req, res) => {
+  if (!pfDbCheck(res)) return;
+  if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
+  const ext = path.extname(req.file.originalname).toLowerCase();
+  if (!['.csv', '.xlsx', '.xls'].includes(ext)) {
+    return res.status(400).json({ error: 'Only .csv, .xlsx, or .xls files are accepted' });
+  }
+  try {
+    let rows = [];
+    if (ext === '.csv') {
+      const text = req.file.buffer.toString('utf8');
+      const lines = text.split(/\r?\n/).filter(l => l.trim());
+      const header = lines[0].split(',').map(h => h.trim().toLowerCase().replace(/\s+/g, '_'));
+      for (let i = 1; i < lines.length; i++) {
+        const vals = lines[i].split(',').map(v => v.trim().replace(/^"|"$/g, ''));
+        const row = {};
+        header.forEach((h, idx) => { row[h] = vals[idx] || ''; });
+        rows.push(row);
+      }
+    } else {
+      const ExcelJS = require('exceljs');
+      const workbook = new ExcelJS.Workbook();
+      await workbook.xlsx.load(req.file.buffer);
+      const sheet = workbook.worksheets[0];
+      const header = [];
+      sheet.getRow(1).eachCell(cell => header.push(String(cell.value || '').trim().toLowerCase().replace(/\s+/g, '_')));
+      sheet.eachRow((row, rowNum) => {
+        if (rowNum === 1) return;
+        const obj = {};
+        row.eachCell((cell, colNum) => { obj[header[colNum - 1]] = cell.value !== null && cell.value !== undefined ? String(cell.value) : ''; });
+        rows.push(obj);
+      });
+    }
+    const validTypes = ['direct', 'overhead'];
+    const inserted = [];
+    const errors = [];
+    for (const r of rows) {
+      const category = r.category || r.Category;
+      const type = (r.type || r.Type || '').toLowerCase();
+      const amount = parseFloat(r.amount || r.Amount || '0');
+      if (!category || !validTypes.includes(type)) {
+        errors.push({ row: r, reason: 'Missing category or invalid type (must be direct|overhead)' });
+        continue;
+      }
+      const { rows: ins } = await pool.query(
+        `INSERT INTO pf_cost_entries (category, type, amount, period, notes) VALUES ($1,$2,$3,$4,$5) RETURNING *`,
+        [category, type, isNaN(amount) ? 0 : amount, r.period || r.Period || null, r.notes || r.Notes || null]
+      );
+      inserted.push(ins[0]);
+    }
+    res.json({ inserted: inserted.length, errors });
+  } catch (err) {
+    console.error('Print finance cost upload error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /api/print-finance/costs/template — download CSV template
+app.get('/api/print-finance/costs/template', (req, res) => {
+  const csv = [
+    'category,type,amount,period,notes',
+    'Filament & Resin,direct,842,Mar 2026,Main material cost',
+    'Post-processing labor,direct,320,Mar 2026,',
+    'Machine depreciation,overhead,410,Mar 2026,Annualized over 5 years',
+    'Electricity,overhead,180,Mar 2026,',
+  ].join('\n');
+  res.setHeader('Content-Type', 'text/csv');
+  res.setHeader('Content-Disposition', 'attachment; filename="print-finance-costs-template.csv"');
+  res.send(csv);
+});
+
+// --- Inventory ---
+app.get('/api/print-finance/inventory', async (req, res) => {
+  if (!pfDbCheck(res)) return;
+  try {
+    const { rows } = await pool.query('SELECT * FROM pf_inventory_items ORDER BY name');
+    res.json(rows);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.post('/api/print-finance/inventory', async (req, res) => {
+  if (!pfDbCheck(res)) return;
+  try {
+    const { name, type, unit, stock_qty, reorder_point, unit_cost, supplier, notes } = req.body;
+    if (!name) return res.status(400).json({ error: 'name is required' });
+    const { rows } = await pool.query(
+      `INSERT INTO pf_inventory_items (name, type, unit, stock_qty, reorder_point, unit_cost, supplier, notes)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING *`,
+      [name, type||'filament', unit||'kg', stock_qty||0, reorder_point||0, unit_cost||0, supplier||null, notes||null]
+    );
+    res.status(201).json(rows[0]);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.put('/api/print-finance/inventory/:id', async (req, res) => {
+  if (!pfDbCheck(res)) return;
+  try {
+    const { name, type, unit, stock_qty, reorder_point, unit_cost, supplier, notes } = req.body;
+    const { rows } = await pool.query(
+      `UPDATE pf_inventory_items SET name=$1, type=$2, unit=$3, stock_qty=$4, reorder_point=$5,
+       unit_cost=$6, supplier=$7, notes=$8, updated_at=NOW() WHERE id=$9 RETURNING *`,
+      [name, type, unit, stock_qty, reorder_point, unit_cost, supplier, notes, req.params.id]
+    );
+    if (!rows.length) return res.status(404).json({ error: 'Not found' });
+    res.json(rows[0]);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.delete('/api/print-finance/inventory/:id', async (req, res) => {
+  if (!pfDbCheck(res)) return;
+  try {
+    const result = await pool.query('DELETE FROM pf_inventory_items WHERE id=$1', [req.params.id]);
+    if (result.rowCount === 0) return res.status(404).json({ error: 'Not found' });
+    res.status(204).end();
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// --- Excel Exports ---
+function xlsxHeaders(res, filename) {
+  res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+  res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+}
+
+function styleHeaderRow(sheet, colCount) {
+  const row = sheet.getRow(1);
+  for (let i = 1; i <= colCount; i++) {
+    const cell = row.getCell(i);
+    cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1E293B' } };
+    cell.font = { bold: true, color: { argb: 'FFE2E8F0' } };
+    cell.border = { bottom: { style: 'thin', color: { argb: 'FF334155' } } };
+  }
+  row.commit();
+}
+
+// GET /api/print-finance/export/jobs
+app.get('/api/print-finance/export/jobs', async (req, res) => {
+  if (!pfDbCheck(res)) return;
+  try {
+    const ExcelJS = require('exceljs');
+    const wb = new ExcelJS.Workbook();
+    wb.creator = '3D Print Finance';
+    const ws = wb.addWorksheet('Work Units');
+    ws.columns = [
+      { header: 'Job ID',      key: 'job_id',        width: 18 },
+      { header: 'Name',        key: 'name',           width: 30 },
+      { header: 'Material',    key: 'material',       width: 18 },
+      { header: 'Weight (g)',  key: 'grams',          width: 12 },
+      { header: 'Hours',       key: 'hours',          width: 10 },
+      { header: 'Status',      key: 'status',         width: 14 },
+      { header: 'Revenue ($)', key: 'revenue',        width: 14 },
+      { header: 'Direct Cost ($)', key: 'direct_cost', width: 16 },
+      { header: 'Overhead ($)',key: 'overhead_alloc', width: 14 },
+      { header: 'Gross Profit ($)', key: 'profit',   width: 16 },
+      { header: 'Margin (%)',  key: 'margin',         width: 12 },
+      { header: 'Notes',       key: 'notes',          width: 30 },
+      { header: 'Created At',  key: 'created_at',     width: 20 },
+    ];
+    styleHeaderRow(ws, ws.columns.length);
+    const { rows } = await pool.query('SELECT * FROM pf_work_units ORDER BY created_at DESC');
+    rows.forEach(r => {
+      const profit = Number(r.revenue) - Number(r.direct_cost) - Number(r.overhead_alloc);
+      const margin = Number(r.revenue) > 0 ? ((profit / Number(r.revenue)) * 100).toFixed(1) : '';
+      ws.addRow({ ...r, profit: profit.toFixed(2), margin, created_at: new Date(r.created_at).toLocaleString() });
+    });
+    ws.eachRow((row, rowNum) => { if (rowNum > 1) row.getCell('profit').numFmt = '#,##0.00'; });
+    xlsxHeaders(res, 'print-finance-jobs.xlsx');
+    await wb.xlsx.write(res);
+    res.end();
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// GET /api/print-finance/export/pl
+app.get('/api/print-finance/export/pl', async (req, res) => {
+  if (!pfDbCheck(res)) return;
+  try {
+    const ExcelJS = require('exceljs');
+    const wb = new ExcelJS.Workbook();
+    wb.creator = '3D Print Finance';
+    const [revResult, costResult] = await Promise.all([
+      pool.query('SELECT * FROM pf_revenue_entries ORDER BY period DESC, channel'),
+      pool.query('SELECT * FROM pf_cost_entries ORDER BY type, category'),
+    ]);
+
+    // Sheet 1: P&L Summary
+    const ws1 = wb.addWorksheet('P&L Summary');
+    ws1.columns = [
+      { header: 'Line Item', key: 'label', width: 32 },
+      { header: 'Amount ($)', key: 'amount', width: 16 },
+    ];
+    styleHeaderRow(ws1, 2);
+    const totalRev = revResult.rows.reduce((s, r) => s + Number(r.revenue), 0);
+    const totalCogs = revResult.rows.reduce((s, r) => s + Number(r.cogs), 0);
+    const grossProfit = totalRev - totalCogs;
+    const opex = costResult.rows.filter(c => c.type === 'overhead').reduce((s, c) => s + Number(c.amount), 0);
+    const directCosts = costResult.rows.filter(c => c.type === 'direct').reduce((s, c) => s + Number(c.amount), 0);
+    const ebitda = grossProfit - opex;
+    const depr = costResult.rows.find(c => c.category.toLowerCase().includes('depreciation'));
+    const ebit = ebitda - (depr ? Number(depr.amount) : 0);
+    const plLines = [
+      { label: 'Revenue', amount: totalRev },
+      { label: '  Cost of Goods Sold', amount: -totalCogs },
+      { label: 'Gross Profit', amount: grossProfit },
+      { label: '  Direct Costs (variable)', amount: -directCosts },
+      { label: '  Operating Expenses (overhead)', amount: -opex },
+      { label: 'EBITDA', amount: ebitda },
+      { label: '  Depreciation', amount: depr ? -Number(depr.amount) : 0 },
+      { label: 'EBIT', amount: ebit },
+    ];
+    plLines.forEach((l, i) => {
+      const row = ws1.addRow({ label: l.label, amount: l.amount.toFixed(2) });
+      const isBold = ['Gross Profit', 'EBITDA', 'EBIT'].includes(l.label);
+      if (isBold) {
+        row.getCell('label').font = { bold: true };
+        row.getCell('amount').font = { bold: true, color: { argb: l.amount >= 0 ? 'FF10B981' : 'FFEF4444' } };
+        row.getCell('amount').border = { top: { style: 'thin', color: { argb: 'FF334155' } } };
+      }
+    });
+
+    // Sheet 2: Revenue breakdown
+    const ws2 = wb.addWorksheet('Revenue');
+    ws2.columns = [
+      { header: 'Channel', key: 'channel', width: 20 },
+      { header: 'Period',  key: 'period',  width: 14 },
+      { header: 'Jobs',    key: 'jobs',    width: 8  },
+      { header: 'Grams',   key: 'units_grams', width: 12 },
+      { header: 'Revenue ($)', key: 'revenue', width: 14 },
+      { header: 'COGS ($)', key: 'cogs',  width: 14 },
+      { header: 'Gross Profit ($)', key: 'gp', width: 18 },
+      { header: 'Margin (%)', key: 'margin', width: 12 },
+    ];
+    styleHeaderRow(ws2, ws2.columns.length);
+    revResult.rows.forEach(r => {
+      const gp = Number(r.revenue) - Number(r.cogs);
+      const margin = Number(r.revenue) > 0 ? ((gp / Number(r.revenue)) * 100).toFixed(1) : '';
+      ws2.addRow({ ...r, gp: gp.toFixed(2), margin });
+    });
+
+    // Sheet 3: Costs breakdown
+    const ws3 = wb.addWorksheet('Costs');
+    ws3.columns = [
+      { header: 'Category', key: 'category', width: 28 },
+      { header: 'Type',     key: 'type',     width: 12 },
+      { header: 'Amount ($)', key: 'amount', width: 14 },
+      { header: 'Period',   key: 'period',   width: 14 },
+      { header: 'Notes',    key: 'notes',    width: 30 },
+    ];
+    styleHeaderRow(ws3, ws3.columns.length);
+    costResult.rows.forEach(r => ws3.addRow(r));
+
+    xlsxHeaders(res, 'print-finance-pl.xlsx');
+    await wb.xlsx.write(res);
+    res.end();
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// GET /api/print-finance/export/inventory
+app.get('/api/print-finance/export/inventory', async (req, res) => {
+  if (!pfDbCheck(res)) return;
+  try {
+    const ExcelJS = require('exceljs');
+    const wb = new ExcelJS.Workbook();
+    wb.creator = '3D Print Finance';
+    const ws = wb.addWorksheet('Inventory');
+    ws.columns = [
+      { header: 'SKU',          key: 'sku',           width: 18 },
+      { header: 'Name',         key: 'name',          width: 30 },
+      { header: 'Type',         key: 'type',          width: 12 },
+      { header: 'Unit',         key: 'unit',          width: 8  },
+      { header: 'Stock Qty',    key: 'stock_qty',     width: 12 },
+      { header: 'Reorder @',    key: 'reorder_point', width: 12 },
+      { header: 'Unit Cost ($)',key: 'unit_cost',     width: 14 },
+      { header: 'Stock Value ($)', key: 'value',      width: 16 },
+      { header: 'Supplier',     key: 'supplier',      width: 20 },
+      { header: 'Low Stock?',   key: 'low_stock',     width: 12 },
+      { header: 'Notes',        key: 'notes',         width: 30 },
+    ];
+    styleHeaderRow(ws, ws.columns.length);
+    const { rows } = await pool.query('SELECT * FROM pf_inventory_items ORDER BY name');
+    rows.forEach(r => {
+      const value = (Number(r.stock_qty) * Number(r.unit_cost)).toFixed(2);
+      const low_stock = Number(r.stock_qty) <= Number(r.reorder_point) ? 'YES' : 'no';
+      const row = ws.addRow({ ...r, value, low_stock });
+      if (Number(r.stock_qty) <= Number(r.reorder_point)) {
+        row.getCell('low_stock').font = { color: { argb: 'FFF59E0B' }, bold: true };
+      }
+    });
+    xlsxHeaders(res, 'print-finance-inventory.xlsx');
+    await wb.xlsx.write(res);
+    res.end();
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// ============================================================
+// SETTINGS (pf_settings key-value store)
+// ============================================================
+pool.query(`CREATE TABLE IF NOT EXISTS pf_settings (
+  key TEXT PRIMARY KEY,
+  value TEXT,
+  label TEXT,
+  category TEXT,
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+)`).then(() => {
+  // Seed defaults if table is empty
+  const defaults = [
+    { key: 'operator_rate_hr', value: '15.00', label: 'Operator Hourly Rate', category: 'hr' },
+    { key: 'manager_rate_hr',  value: '25.00', label: 'Manager Hourly Rate',  category: 'hr' },
+    { key: 'overhead_pct',     value: '25.00', label: 'Overhead Allocation %', category: 'overhead' },
+    { key: 'default_margin',   value: '40.00', label: 'Default Target Margin %', category: 'pricing' },
+    { key: 'currency',         value: 'HKD',   label: 'Currency',             category: 'general' },
+    { key: 'company_name',     value: '3D Print Factory', label: 'Company Name', category: 'general' },
+    { key: 'payment_terms',    value: 'Net 30', label: 'Default Payment Terms', category: 'invoicing' },
+    { key: 'tax_rate',         value: '0',      label: 'Default Tax Rate %',    category: 'invoicing' },
+  ];
+  defaults.forEach(({ key, value, label, category }) => {
+    pool.query(
+      `INSERT INTO pf_settings (key, value, label, category) VALUES ($1,$2,$3,$4) ON CONFLICT (key) DO NOTHING`,
+      [key, value, label, category]
+    ).catch(() => {});
+  });
+}).catch(() => {});
+
+app.get('/api/print-finance/settings', async (req, res) => {
+  if (!pfDbCheck(res)) return;
+  try {
+    const { rows } = await pool.query('SELECT * FROM pf_settings ORDER BY category, key');
+    res.json(rows);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.put('/api/print-finance/settings', async (req, res) => {
+  if (!pfDbCheck(res)) return;
+  try {
+    const updates = req.body; // { key: value, ... }
+    for (const [key, value] of Object.entries(updates)) {
+      await pool.query(
+        `UPDATE pf_settings SET value=$1, updated_at=NOW() WHERE key=$2`,
+        [String(value), key]
+      );
+    }
+    const { rows } = await pool.query('SELECT * FROM pf_settings ORDER BY category, key');
+    res.json(rows);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// ============================================================
+// GENERIC IMPORT
+// ============================================================
+function detectImportType(headers) {
+  const h = headers.map(x => String(x).toLowerCase().replace(/[\s_-]+/g, ''));
+  const has = (...keys) => keys.some(k => h.some(x => x.includes(k.replace(/[\s_-]+/g, ''))));
+  // Specialized 3D printing tables — check before generic ones
+  if ((has('weightg','quantityg','costperg') && has('material','filament','resin')) ||
+      (has('克數','重量') && has('材料','耗材','樹脂'))) return 'material_usage';
+  if (has('printerid','printername','machineid') ||
+      (has('printhours','electricitycost','maintenancecost') && has('printer','machine','設備'))) return 'machine_log';
+  if ((has('hourlyrate','labourhours','workhours') && has('person','employee','operator','員工','操作員')) ||
+      has('時薪') && has('工時')) return 'labour_log';
+  // Generic tables
+  if (has('jobid', 'job_id') || (has('grams', 'hours') && has('material'))) return 'work-units';
+  if ((has('stockkg', 'priceperkg', 'stockg', 'quantity') && has('material')) || (has('spool', 'filament') && has('stock'))) return 'inventory';
+  if (has('channel', 'source') && has('revenue', 'amount')) return 'revenue';
+  if (has('category') && has('type') && has('amount')) return 'costs';
+  if (has('revenue') && !has('material') && !has('grams')) return 'revenue';
+  if (has('category') && has('amount')) return 'costs';
+  return 'unknown';
+}
+
+async function parseUploadedFile(file) {
+  const ext = require('path').extname(file.originalname).toLowerCase();
+  if (!['.csv', '.xlsx', '.xls'].includes(ext)) throw new Error('Only .csv, .xlsx, or .xls files are accepted');
+  let headers = [], rows = [];
+  if (ext === '.csv') {
+    const text = file.buffer.toString('utf8');
+    const lines = text.split(/\r?\n/).filter(l => l.trim());
+    if (!lines.length) throw new Error('Empty file');
+    headers = lines[0].split(',').map(h => h.trim().replace(/^"|"$/g, ''));
+    for (let i = 1; i < lines.length; i++) {
+      const vals = lines[i].split(',').map(v => v.trim().replace(/^"|"$/g, ''));
+      const row = { _sheet: 'Sheet1', _row: i + 1 };
+      headers.forEach((h, idx) => { row[h] = vals[idx] ?? ''; });
+      rows.push(row);
+    }
+  } else {
+    const ExcelJS = require('exceljs');
+    const wb = new ExcelJS.Workbook();
+    await wb.xlsx.load(file.buffer);
+    const sheets = [];
+    // collect all worksheets
+    wb.eachSheet(ws => sheets.push(ws));
+    if (!sheets.length) throw new Error('No worksheets found');
+    // use first sheet headers as canonical, but read all sheets
+    const firstHeaders = [];
+    sheets[0].getRow(1).eachCell(cell => firstHeaders.push(String(cell.value || '').trim()));
+    headers = firstHeaders;
+    for (const ws of sheets) {
+      const sheetHeaders = [];
+      ws.getRow(1).eachCell(cell => sheetHeaders.push(String(cell.value || '').trim()));
+      ws.eachRow((row, rowNum) => {
+        if (rowNum === 1) return;
+        const obj = { _sheet: ws.name, _row: rowNum };
+        row.eachCell((cell, colNum) => {
+          const h = sheetHeaders[colNum - 1];
+          if (!h) return;
+          let v = cell.value;
+          if (v !== null && typeof v === 'object' && 'result' in v) v = v.result;
+          if (v !== null && typeof v === 'object' && Array.isArray(v.richText)) v = v.richText.map(r => r.text || '').join('');
+          if (v instanceof Date) v = v.toISOString().slice(0, 10);
+          obj[h] = v !== null && v !== undefined ? String(v) : '';
+        });
+        if (Object.keys(obj).filter(k => !k.startsWith('_')).some(k => obj[k] !== '')) rows.push(obj);
+      });
+    }
+    // ensure headers union covers all sheets
+    const allKeys = new Set(headers);
+    rows.forEach(r => Object.keys(r).filter(k => !k.startsWith('_')).forEach(k => allKeys.add(k)));
+    headers = [...allKeys];
+  }
+  const sheets = [...new Set(rows.map(r => r._sheet).filter(Boolean))];
+  return { headers: headers.filter(h => !h.startsWith('_')), rows, sheet_count: sheets.length, sheets };
+}
+
+// Chinese → English column name aliases for flexible matching
+const ZH_ALIASES = {
+  // Amounts
+  '合計': 'amount', '金額': 'amount', '費用': 'amount', '總計': 'amount', '總金額': 'amount', '小計': 'amount',
+  '租金': 'amount', '保險': 'amount', '行政費': 'amount', '軟件費': 'amount',
+  '單價': 'unit_cost', '數量': 'quantity',
+  // Time / period
+  '日期': 'date', '月份': 'period', '年月': 'period',
+  // Notes
+  '備註': 'notes', '備注': 'notes', '說明': 'notes', '描述': 'notes',
+  // Names / categories
+  '名稱': 'name', '品名': 'name', '項目': 'name', '項目名稱': 'name', '工作名稱': 'name',
+  '類別': 'category', '類型': 'type',
+  // Revenue / channel
+  '渠道': 'channel', '來源': 'source', '平台': 'channel',
+  '收入': 'revenue', '營業額': 'revenue',
+  // Inventory / materials
+  '材料': 'material', '耗材': 'material', '打印材料': 'material', '樹脂': 'material', '絲料': 'material',
+  '品牌': 'brand', '顏色': 'color',
+  '庫存': 'stock_kg', '庫存量': 'stock_kg',
+  // Material usage (3D printing)
+  '重量': 'weight_g', '克數': 'weight_g', '用料重量': 'weight_g',
+  '每克成本': 'cost_per_g', '成本每克': 'cost_per_g',
+  // Machine log
+  '打印機': 'printer', '機器': 'printer', '設備': 'printer', '打印機編號': 'printer',
+  '打印時數': 'hours', '機器時數': 'hours', '運行時數': 'hours',
+  '電費': 'electricity_cost', '維修費': 'maintenance_cost', '折舊': 'depreciation_cost',
+  // Labour log
+  '員工': 'person', '操作員': 'person', '人員': 'person', '姓名': 'person',
+  '工時': 'hours', '時薪': 'hourly_rate', '職位': 'role', '崗位': 'role',
+  // Job reference
+  '工單': 'job_ref', '訂單': 'job_ref', '工作編號': 'job_ref', '工作號': 'job_ref',
+};
+
+// importRows: type = target table, rows = parsed rows, aiMapping = optional AI field_mapping
+async function importRows(type, rows, aiMapping = null, aiCategory = null, aiCostType = null) {
+  const results = []; // { sheet, row_num, status, label, reason? }
+  for (const r of rows) {
+    const sheet = r._sheet || '?';
+    const row_num = r._row || '?';
+    // build a lookup map that includes both original keys and Chinese alias translations
+    const norm = s => s.toLowerCase().replace(/[\s_-]/g, '');
+    const lookup = {};
+    for (const rk of Object.keys(r)) {
+      if (rk.startsWith('_')) continue;
+      const v = r[rk];
+      lookup[norm(rk)] = v;
+      if (ZH_ALIASES[rk]) lookup[norm(ZH_ALIASES[rk])] = v;
+    }
+    // If AI provided field mappings, also add those as aliases
+    if (aiMapping) {
+      for (const [field, colName] of Object.entries(aiMapping)) {
+        if (colName && r[colName] !== undefined) {
+          lookup[norm(field)] = r[colName];
+        }
+      }
+    }
+    const get = (...keys) => {
+      for (const k of keys) {
+        const v = lookup[norm(k)];
+        if (v !== undefined && v !== null && v !== '') return String(v);
+      }
+      return '';
+    };
+    try {
+      if (type === 'revenue') {
+        const period = get('period', 'date', 'month');
+        const channel = get('channel', 'source', 'platform');
+        let revenue = parseFloat(get('revenue', 'amount')) || 0;
+        if (!revenue) {
+          const qty = parseFloat(get('quantity')) || 1;
+          const unitPrice = parseFloat(get('unit_price')) || 0;
+          if (unitPrice) revenue = qty * unitPrice;
+        }
+        const name = get('name', 'description');
+        // skip only truly empty rows
+        if (!period && !channel && revenue === 0 && !name) { results.push({ sheet, row_num, status: 'skipped', reason: 'No usable data' }); continue; }
+        await pool.query(
+          `INSERT INTO pf_revenue_entries (period, channel, revenue, job_count, notes) VALUES ($1,$2,$3,$4,$5)`,
+          [period||null, channel||name||'Import', revenue, parseInt(get('jobs', 'job_count', 'count'))||0, get('notes','description')||null]
+        );
+        results.push({ sheet, row_num, status: 'accepted', label: `${channel||name||'Import'} · ${period||'—'} · $${revenue}`,
+          data: { channel: channel||name||'Import', period: period||'—', revenue, notes: get('notes')||'' } });
+      } else if (type === 'costs') {
+        const category = get('category', 'name');
+        const costType = (get('type')||'').toLowerCase();
+        // amount: try direct total first, then qty×price fallback
+        let amount = parseFloat(get('amount')) || 0;
+        if (!amount) {
+          const qty = parseFloat(get('quantity')) || 1;
+          const unitPrice = parseFloat(get('unit_price')) || 0;
+          if (unitPrice) amount = qty * unitPrice;
+        }
+        if (!category) { results.push({ sheet, row_num, status: 'skipped', reason: 'Missing category' }); continue; }
+        const validType = ['direct','overhead','fixed'].includes(costType) ? costType : 'direct';
+        await pool.query(
+          `INSERT INTO pf_cost_entries (category, type, amount, period, notes) VALUES ($1,$2,$3,$4,$5)`,
+          [category, validType, amount, get('period','date')||null, get('notes','description')||null]
+        );
+        results.push({ sheet, row_num, status: 'accepted', label: `${category} · ${validType} · $${amount}`,
+          data: { category, type: validType, amount, period: get('period','date')||'—', notes: get('notes')||'' } });
+      } else if (type === 'work-units') {
+        const name = get('name', 'job_name');
+        if (!name) { results.push({ sheet, row_num, status: 'skipped', reason: 'Missing name' }); continue; }
+        await pool.query(
+          `INSERT INTO pf_work_units (job_id, name, material, grams, hours, revenue, direct_cost, status, notes)
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
+          [
+            get('job_id','jobid')||null, name,
+            get('material')||null,
+            parseFloat(get('grams','weight_g','weight'))||0,
+            parseFloat(get('hours','print_hours'))||0,
+            parseFloat(get('revenue','price','amount'))||0,
+            parseFloat(get('direct_cost','cost','direct cost'))||0,
+            get('status')||'pending', get('notes')||null,
+          ]
+        );
+        results.push({ sheet, row_num, status: 'accepted', label: `${name} · ${get('material')||'?'}`,
+          data: { name, job_id: get('job_id','jobid')||'', material: get('material')||'', grams: parseFloat(get('grams','weight_g','weight'))||0, hours: parseFloat(get('hours','print_hours'))||0, revenue: parseFloat(get('revenue','price','amount'))||0 } });
+      } else if (type === 'inventory') {
+        const material = get('material', 'filament', 'name');
+        if (!material) { results.push({ sheet, row_num, status: 'skipped', reason: 'Missing material' }); continue; }
+        const stock = parseFloat(get('stock_kg','stock','quantity_kg','quantity'))||0;
+        const price = parseFloat(get('price_per_kg','price','cost_per_kg'))||0;
+        await pool.query(
+          `INSERT INTO pf_inventory (material, brand, color, stock_kg, price_per_kg, supplier, notes)
+           VALUES ($1,$2,$3,$4,$5,$6,$7)`,
+          [
+            material, get('brand')||null, get('color')||null, stock, price,
+            get('supplier')||null, get('notes')||null,
+          ]
+        );
+        results.push({ sheet, row_num, status: 'accepted', label: `${material} · ${stock}kg · $${price}/kg`,
+          data: { material, brand: get('brand')||'', color: get('color')||'', stock_kg: stock, price_per_kg: price, supplier: get('supplier')||'', notes: get('notes')||'' } });
+      } else if (type === 'material_usage') {
+        const material = get('material', 'filament', 'name', 'resin');
+        if (!material) { results.push({ sheet, row_num, status: 'skipped', reason: 'Missing material name' }); continue; }
+        const qty_g = parseFloat(get('weight_g', 'quantity', 'grams', 'weight')) || 0;
+        const cost_per_g = parseFloat(get('unit_cost', 'cost_per_g', 'cost_per_gram', 'price')) || 0;
+        await pool.query(
+          `INSERT INTO pf_material_usage (job_id, material, brand, color, quantity_g, cost_per_g, supplier, period, notes)
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
+          [get('job_ref','job_id','job')||null, material, get('brand')||null, get('color')||null,
+           qty_g, cost_per_g, get('vendor','supplier')||null, get('period','date')||null, get('notes')||null]
+        );
+        results.push({ sheet, row_num, status: 'accepted', label: `${material} · ${qty_g}g · $${(qty_g*cost_per_g).toFixed(2)}`,
+          data: { material, quantity_g: qty_g, cost_per_g, total_cost: +(qty_g*cost_per_g).toFixed(2), brand: get('brand')||'', color: get('color')||'', job_id: get('job_ref','job_id')||'', supplier: get('vendor','supplier')||'', period: get('period','date')||'', notes: get('notes')||'' } });
+      } else if (type === 'machine_log') {
+        const printer = get('printer', 'machine', 'printer_id', 'printer_name');
+        const hours = parseFloat(get('hours', 'print_hours', 'runtime')) || 0;
+        const elec = parseFloat(get('electricity_cost', 'electricity', 'power_cost')) || 0;
+        const maint = parseFloat(get('maintenance_cost', 'maintenance', 'repair')) || 0;
+        const dep = parseFloat(get('depreciation_cost', 'depreciation')) || 0;
+        if (!printer && !hours) { results.push({ sheet, row_num, status: 'skipped', reason: 'Missing printer and hours' }); continue; }
+        await pool.query(
+          `INSERT INTO pf_machine_log (printer_id, printer_name, job_id, print_hours, electricity_cost, maintenance_cost, depreciation_cost, period, notes)
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
+          [printer||null, printer||null, get('job_ref','job_id')||null, hours, elec, maint, dep, get('period','date')||null, get('notes')||null]
+        );
+        results.push({ sheet, row_num, status: 'accepted', label: `${printer||'Machine'} · ${hours}h · $${(elec+maint+dep).toFixed(2)}`,
+          data: { printer: printer||'', print_hours: hours, electricity_cost: elec, maintenance_cost: maint, depreciation_cost: dep, total: +(elec+maint+dep).toFixed(2), job_id: get('job_ref','job_id')||'', period: get('period','date')||'', notes: get('notes')||'' } });
+      } else if (type === 'labour_log') {
+        const person = get('person', 'employee', 'name', 'operator');
+        const hours = parseFloat(get('hours', 'labour_hours', 'work_hours')) || 0;
+        const rate = parseFloat(get('hourly_rate', 'rate', 'unit_cost')) || 0;
+        if (!person && !hours) { results.push({ sheet, row_num, status: 'skipped', reason: 'Missing person and hours' }); continue; }
+        await pool.query(
+          `INSERT INTO pf_labour_log (job_id, person, role, hours, hourly_rate, period, notes)
+           VALUES ($1,$2,$3,$4,$5,$6,$7)`,
+          [get('job_ref','job_id')||null, person||null, get('role','position','title')||aiCategory||null,
+           hours, rate, get('period','date')||null, get('notes')||null]
+        );
+        results.push({ sheet, row_num, status: 'accepted', label: `${person||'Staff'} · ${hours}h · $${(hours*rate).toFixed(2)}`,
+          data: { person: person||'', role: get('role','position','title')||'', hours, hourly_rate: rate, total_cost: +(hours*rate).toFixed(2), job_id: get('job_ref','job_id')||'', period: get('period','date')||'', notes: get('notes')||'' } });
+      } else {
+        results.push({ sheet, row_num, status: 'skipped', reason: `Unknown type: ${type}` });
+      }
+    } catch (e) {
+      results.push({ sheet, row_num, status: 'skipped', reason: e.message });
+    }
+  }
+  return { inserted: results.filter(r => r.status === 'accepted').length, skipped: results.filter(r => r.status === 'skipped').length, results };
+}
+
+// GET /api/print-finance/cost-categories — list all categories
+app.get('/api/print-finance/cost-categories', async (req, res) => {
+  if (!pfDbCheck(res)) return;
+  try {
+    const { rows } = await pool.query('SELECT * FROM pf_cost_categories ORDER BY parent, name');
+    res.json(rows);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// POST /api/print-finance/cost-categories — create or return existing category
+app.post('/api/print-finance/cost-categories', async (req, res) => {
+  if (!pfDbCheck(res)) return;
+  const { name, parent, cost_type, description } = req.body;
+  if (!name) return res.status(400).json({ error: 'name is required' });
+  try {
+    const { rows } = await pool.query(
+      `INSERT INTO pf_cost_categories (name, parent, cost_type, description)
+       VALUES ($1,$2,$3,$4) ON CONFLICT (name) DO UPDATE SET parent=EXCLUDED.parent, cost_type=EXCLUDED.cost_type RETURNING *`,
+      [name, parent||'overhead', cost_type||'overhead', description||null]
+    );
+    res.status(201).json(rows[0]);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// GET /api/print-finance/job-cost-summary
+app.get('/api/print-finance/job-cost-summary', async (req, res) => {
+  if (!pfDbCheck(res)) return;
+  try {
+    const { rows } = await pool.query('SELECT * FROM pf_job_cost_summary ORDER BY created_at DESC');
+    res.json(rows);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// GET /api/print-finance/material-log
+app.get('/api/print-finance/material-log', async (req, res) => {
+  if (!pfDbCheck(res)) return;
+  try {
+    const { rows } = await pool.query('SELECT * FROM pf_material_usage ORDER BY created_at DESC');
+    res.json(rows);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.delete('/api/print-finance/material-log/:id', async (req, res) => {
+  if (!pfDbCheck(res)) return;
+  try {
+    const result = await pool.query('DELETE FROM pf_material_usage WHERE id=$1', [req.params.id]);
+    if (result.rowCount === 0) return res.status(404).json({ error: 'Not found' });
+    res.status(204).end();
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.put('/api/print-finance/material-log/:id', async (req, res) => {
+  if (!pfDbCheck(res)) return;
+  try {
+    const { material, brand, color, quantity_g, cost_per_g, job_id, supplier, period, notes } = req.body;
+    const { rows } = await pool.query(
+      `UPDATE pf_material_usage SET material=$1, brand=$2, color=$3, quantity_g=$4, cost_per_g=$5, job_id=$6, supplier=$7, period=$8, notes=$9
+       WHERE id=$10 RETURNING *`,
+      [material, brand||null, color||null, quantity_g||0, cost_per_g||0, job_id||null, supplier||null, period||null, notes||null, req.params.id]
+    );
+    if (!rows.length) return res.status(404).json({ error: 'Not found' });
+    res.json(rows[0]);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// GET /api/print-finance/machine-log
+app.get('/api/print-finance/machine-log', async (req, res) => {
+  if (!pfDbCheck(res)) return;
+  try {
+    const { rows } = await pool.query('SELECT * FROM pf_machine_log ORDER BY created_at DESC');
+    res.json(rows);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.delete('/api/print-finance/machine-log/:id', async (req, res) => {
+  if (!pfDbCheck(res)) return;
+  try {
+    const result = await pool.query('DELETE FROM pf_machine_log WHERE id=$1', [req.params.id]);
+    if (result.rowCount === 0) return res.status(404).json({ error: 'Not found' });
+    res.status(204).end();
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.put('/api/print-finance/machine-log/:id', async (req, res) => {
+  if (!pfDbCheck(res)) return;
+  try {
+    const { printer_id, printer_name, job_id, print_hours, electricity_cost, maintenance_cost, depreciation_cost, period, notes } = req.body;
+    const { rows } = await pool.query(
+      `UPDATE pf_machine_log SET printer_id=$1, printer_name=$2, job_id=$3, print_hours=$4, electricity_cost=$5, maintenance_cost=$6, depreciation_cost=$7, period=$8, notes=$9
+       WHERE id=$10 RETURNING *`,
+      [printer_id||null, printer_name||null, job_id||null, print_hours||0, electricity_cost||0, maintenance_cost||0, depreciation_cost||0, period||null, notes||null, req.params.id]
+    );
+    if (!rows.length) return res.status(404).json({ error: 'Not found' });
+    res.json(rows[0]);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// GET /api/print-finance/labour-log
+app.get('/api/print-finance/labour-log', async (req, res) => {
+  if (!pfDbCheck(res)) return;
+  try {
+    const { rows } = await pool.query('SELECT * FROM pf_labour_log ORDER BY created_at DESC');
+    res.json(rows);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.delete('/api/print-finance/labour-log/:id', async (req, res) => {
+  if (!pfDbCheck(res)) return;
+  try {
+    const result = await pool.query('DELETE FROM pf_labour_log WHERE id=$1', [req.params.id]);
+    if (result.rowCount === 0) return res.status(404).json({ error: 'Not found' });
+    res.status(204).end();
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.put('/api/print-finance/labour-log/:id', async (req, res) => {
+  if (!pfDbCheck(res)) return;
+  try {
+    const { job_id, person, role, hours, hourly_rate, period, notes } = req.body;
+    const { rows } = await pool.query(
+      `UPDATE pf_labour_log SET job_id=$1, person=$2, role=$3, hours=$4, hourly_rate=$5, period=$6, notes=$7
+       WHERE id=$8 RETURNING *`,
+      [job_id||null, person||null, role||null, hours||0, hourly_rate||0, period||null, notes||null, req.params.id]
+    );
+    if (!rows.length) return res.status(404).json({ error: 'Not found' });
+    res.json(rows[0]);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// POST /api/print-finance/import/analyze — AI-powered column analysis
+// Returns: { table, category, cost_type, sub_category, field_mapping, is_new_category, confidence, reasoning }
+async function analyzeWithAI(columns, sampleRows, existingCategories) {
+  const colStr = columns.join(', ');
+  const sampleStr = sampleRows.slice(0, 3).map((r, i) =>
+    `Row ${i + 1}: ${Object.entries(r).filter(([k]) => !k.startsWith('_')).map(([k, v]) => `${k}=${v}`).join(', ')}`
+  ).join('\n');
+  const catStr = existingCategories.map(c => `${c.name} (${c.parent}/${c.cost_type})`).join(', ');
+
+  const systemPrompt = `You are a financial data analyst for a 3D printing factory.
+The factory tracks these cost layers: materials (filament/resin), machine (electricity/maintenance/depreciation), labour (operators, post-processing, QC), overhead (rent, admin, software), and revenue.
+
+Existing cost categories: ${catStr}
+
+Respond ONLY with valid JSON, no markdown, no explanation outside the JSON.`;
+
+  const userPrompt = `Analyze this Excel/CSV data and map it to the correct cost table and fields.
+
+Columns: ${colStr}
+${sampleStr}
+
+Return a JSON object with exactly these fields:
+{
+  "table": one of "costs" | "material_usage" | "machine_log" | "labour_log" | "revenue" | "inventory",
+  "category": "best matching existing category name, or new name if none fits",
+  "cost_type": "direct" | "overhead" | "fixed" | "revenue",
+  "sub_category": "optional further classification, or null",
+  "field_mapping": {
+    "amount": "column name for total cost/amount, or null",
+    "period": "column name for date/period, or null",
+    "notes": "column name for notes/remarks, or null",
+    "name": "column name for item name/description, or null",
+    "quantity": "column name for quantity, or null",
+    "unit_cost": "column name for unit price, or null",
+    "unit": "column name for unit of measure, or null",
+    "vendor": "column name for supplier/vendor, or null",
+    "job_ref": "column name for job/order reference, or null",
+    "material": "column name for material type (for material_usage), or null",
+    "weight_g": "column name for weight in grams (for material_usage), or null",
+    "printer": "column name for printer/machine ID (for machine_log), or null",
+    "hours": "column name for hours worked or print hours, or null",
+    "person": "column name for person/employee name (for labour_log), or null",
+    "role": "column name for job role (for labour_log), or null"
+  },
+  "is_new_category": true or false,
+  "confidence": 0.0 to 1.0,
+  "reasoning": "one sentence explanation"
+}`;
+
+  const result = await deepseekService.analyze(systemPrompt, userPrompt, {
+    maxTokens: 800,
+    temperature: 0.1,
+    model: 'deepseek-chat', // use chat for structured JSON extraction (faster + cheaper)
+  });
+
+  // Parse JSON from response
+  let text = result.content.trim();
+  // Strip markdown code fences if present
+  text = text.replace(/^```json\s*/i, '').replace(/^```\s*/i, '').replace(/\s*```$/i, '').trim();
+  return JSON.parse(text);
+}
+
+app.post('/api/print-finance/import/analyze', pfUpload.single('file'), async (req, res) => {
+  if (!pfDbCheck(res)) return;
+  if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
+  try {
+    const { headers, rows, sheet_count, sheets } = await parseUploadedFile(req.file);
+    const cleanRows = rows.map(r => { const o = {...r}; delete o._sheet; delete o._row; return o; });
+    const heuristicType = detectImportType(headers);
+    const { rows: cats } = await pool.query('SELECT * FROM pf_cost_categories ORDER BY parent, name');
+
+    let aiAnalysis = null;
+    let aiError = null;
+    if (deepseekService.isAvailable()) {
+      try {
+        aiAnalysis = await analyzeWithAI(headers, cleanRows, cats);
+      } catch (e) {
+        aiError = e.message;
+        console.warn('[import/analyze] AI failed, using heuristic:', e.message);
+      }
+    }
+
+    res.json({
+      columns: headers,
+      sample_rows: cleanRows.slice(0, 5),
+      row_count: rows.length,
+      sheet_count,
+      sheets,
+      heuristic_type: heuristicType,
+      ai: aiAnalysis,
+      ai_error: aiError,
+      categories: cats,
+    });
+  } catch (err) { res.status(400).json({ error: err.message }); }
+});
+
+// POST /api/print-finance/import/preview — parse file, detect type, return preview
+app.post('/api/print-finance/import/preview', pfUpload.single('file'), async (req, res) => {
+  if (!pfDbCheck(res)) return;
+  if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
+  try {
+    const { headers, rows, sheet_count, sheets } = await parseUploadedFile(req.file);
+    const detected_type = detectImportType(headers);
+    const cleanRows = rows.map(r => { const o = {...r}; delete o._sheet; delete o._row; return o; });
+    res.json({
+      detected_type,
+      columns: headers,
+      sample_rows: cleanRows.slice(0, 5),
+      row_count: rows.length,
+      sheet_count,
+      sheets,
+    });
+  } catch (err) { res.status(400).json({ error: err.message }); }
+});
+
+// POST /api/print-finance/import/dry-run — parse all rows + detect issues, NO DB writes
+app.post('/api/print-finance/import/dry-run', pfUpload.single('file'), async (req, res) => {
+  if (!pfDbCheck(res)) return;
+  if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
+  const type = req.body.type || 'costs';
+  let aiMapping = null;
+  try { aiMapping = req.body.field_mapping ? JSON.parse(req.body.field_mapping) : null; } catch {}
+  try {
+    const { rows } = await parseUploadedFile(req.file);
+    const norm = s => String(s).toLowerCase().replace(/[\s_-]/g, '');
+    const annotated = rows.map(r => {
+      const sheet = r._sheet || '?';
+      const row_num = r._row || '?';
+      const issues = [];
+      // Build clean data map
+      const data = {};
+      for (const [k, v] of Object.entries(r)) {
+        if (!k.startsWith('_')) data[k] = v;
+      }
+      if (aiMapping) {
+        for (const [field, colName] of Object.entries(aiMapping)) {
+          if (colName && r[colName] !== undefined) data[field] = r[colName];
+        }
+      }
+      // Date format detection on any date-like column
+      const DATE_PATTERNS = [
+        { re: /^\d{8}$/, fmt: 'YYYYMMDD', suggest: 'YYYY-MM-DD e.g. 2026-03-01' },
+        { re: /^\d{4}\/\d{1,2}\/\d{1,2}$/, fmt: 'YYYY/MM/DD', suggest: 'Use - instead of /' },
+        { re: /^\d{1,2}\/\d{1,2}\/\d{4}$/, fmt: 'MM/DD/YYYY or DD/MM/YYYY', suggest: 'Reformat to YYYY-MM-DD' },
+        { re: /^\d{6}$/, fmt: 'YYYYMM', suggest: 'Acceptable as period, e.g. 202603' },
+      ];
+      for (const [k, v] of Object.entries(data)) {
+        if (!v) continue;
+        const sv = String(v).trim();
+        if (/date|period|month|日期|年月/.test(k.toLowerCase())) {
+          for (const p of DATE_PATTERNS) {
+            if (p.re.test(sv) && p.fmt !== 'YYYYMM') {
+              issues.push({ field: k, type: 'date_format', message: `"${sv}" looks like ${p.fmt}`, suggestion: p.suggest });
+              break;
+            }
+          }
+        }
+      }
+      // Type-specific checks
+      if (type === 'costs') {
+        const cat = String(data.category || data['類別'] || data['Category'] || '').trim();
+        if (!cat) issues.push({ field: 'category', type: 'missing', message: 'Missing category', suggestion: 'Row will be skipped without a category' });
+        const amt = parseFloat(String(data.amount || data['金額'] || data['Amount'] || '0'));
+        if (amt === 0) issues.push({ field: 'amount', type: 'zero', message: 'Amount is 0 or missing', suggestion: 'Check if this row has an actual cost value' });
+        const tv = String(data.type || data['類型'] || '').toLowerCase().trim();
+        if (tv && !['direct','overhead','fixed'].includes(tv)) {
+          issues.push({ field: 'type', type: 'invalid_value', message: `Type "${tv}" not recognized`, suggestion: 'Expected: direct, overhead, or fixed' });
+        }
+      } else if (type === 'revenue') {
+        const ch = String(data.channel || data['渠道'] || '').trim();
+        const rev = parseFloat(String(data.revenue || data['收入'] || '0'));
+        if (!ch) issues.push({ field: 'channel', type: 'missing', message: 'Missing channel', suggestion: 'Defaults to "Import" if blank' });
+        if (rev === 0) issues.push({ field: 'revenue', type: 'zero', message: 'Revenue is 0 or missing', suggestion: 'Check if this row has revenue' });
+      }
+      const isSkip = issues.some(i => i.message.includes('will be skipped'));
+      const status = isSkip ? 'skip' : issues.length > 0 ? 'warn' : 'ok';
+      return { sheet, row_num, data, issues, status };
+    });
+    res.json({
+      total: annotated.length,
+      ok: annotated.filter(r => r.status === 'ok').length,
+      warn: annotated.filter(r => r.status === 'warn').length,
+      skip: annotated.filter(r => r.status === 'skip').length,
+      rows: annotated,
+    });
+  } catch (err) { res.status(400).json({ error: err.message }); }
+});
+
+// POST /api/print-finance/import/confirm — re-upload + type → actually import
+app.post('/api/print-finance/import/confirm', pfUpload.single('file'), async (req, res) => {
+  if (!pfDbCheck(res)) return;
+  if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
+  const type = req.body.type;
+  const validTypes = ['revenue', 'costs', 'work-units', 'inventory', 'material_usage', 'machine_log', 'labour_log'];
+  if (!validTypes.includes(type)) {
+    return res.status(400).json({ error: `Invalid type: ${type}` });
+  }
+  const skipWarnings = req.body.skip_warnings === 'true';
+  // Accept AI field_mapping, category, cost_type from request body (sent by frontend after analyze step)
+  let aiMapping = null;
+  let aiCategory = null;
+  let aiCostType = null;
+  try { aiMapping = req.body.field_mapping ? JSON.parse(req.body.field_mapping) : null; } catch {}
+  try { aiCategory = req.body.category || null; } catch {}
+  try { aiCostType = req.body.cost_type || null; } catch {}
+  try {
+    let { rows } = await parseUploadedFile(req.file);
+    // If skip_warnings, annotate rows with dry-run logic and keep only 'ok' ones
+    if (skipWarnings) {
+      const norm = s => String(s).toLowerCase().replace(/[\s_-]/g, '');
+      const DATE_PATTERNS = [
+        { re: /^\d{8}$/, fmt: 'YYYYMMDD' }, { re: /^\d{4}\/\d{1,2}\/\d{1,2}$/, fmt: 'YYYY/MM/DD' },
+        { re: /^\d{1,2}\/\d{1,2}\/\d{4}$/, fmt: 'MM/DD/YYYY' },
+      ];
+      rows = rows.filter(r => {
+        const data = {};
+        for (const [k, v] of Object.entries(r)) { if (!k.startsWith('_')) data[k] = v; }
+        if (aiMapping) { for (const [f, col] of Object.entries(aiMapping)) { if (col && r[col] !== undefined) data[f] = r[col]; } }
+        const issues = [];
+        for (const [k, v] of Object.entries(data)) {
+          if (!v) continue;
+          const sv = String(v).trim();
+          if (/date|period|month|日期|年月/.test(k.toLowerCase())) {
+            for (const p of DATE_PATTERNS) { if (p.re.test(sv)) { issues.push('date_format'); break; } }
+          }
+        }
+        if (type === 'costs') {
+          const cat = String(data.category || data['類別'] || data['Category'] || '').trim();
+          if (!cat) issues.push('missing_category');
+          const amt = parseFloat(String(data.amount || data['金額'] || data['Amount'] || '0'));
+          if (amt === 0) issues.push('zero_amount');
+          const tv = String(data.type || data['類型'] || '').toLowerCase().trim();
+          if (tv && !['direct','overhead','fixed'].includes(tv)) issues.push('invalid_type');
+        } else if (type === 'revenue') {
+          const ch = String(data.channel || data['渠道'] || '').trim();
+          const rev = parseFloat(String(data.revenue || data['收入'] || '0'));
+          if (!ch) issues.push('missing_channel');
+          if (rev === 0) issues.push('zero_revenue');
+        }
+        const isSkip = issues.includes('missing_category');
+        return !isSkip && issues.length === 0; // keep only ok rows
+      });
+    }
+    const result = await importRows(type, rows, aiMapping, aiCategory, aiCostType);
+    // Decode filename from latin1 → utf-8 (multer reads it as latin1 by default)
+    const originalFilename = Buffer.from(req.file.originalname, 'latin1').toString('utf8');
+    // Save file to DB for later download/reference
+    await pool.query(
+      `INSERT INTO pf_uploaded_files (filename, mimetype, size_bytes, imported_as, rows_inserted, data)
+       VALUES ($1,$2,$3,$4,$5,$6)`,
+      [originalFilename, req.file.mimetype, req.file.size, type, result.inserted, req.file.buffer]
+    ).catch(err => console.warn('[print-finance] file save:', err.message));
+    res.json(result);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// GET /api/print-finance/uploads — list saved files (no binary data)
+app.get('/api/print-finance/uploads', async (req, res) => {
+  if (!pfDbCheck(res)) return;
+  try {
+    const { rows } = await pool.query(
+      'SELECT id, filename, mimetype, size_bytes, imported_as, rows_inserted, uploaded_at FROM pf_uploaded_files ORDER BY uploaded_at DESC'
+    );
+    // Attempt to recover mojibaked filenames (latin1-encoded UTF-8) stored before this fix
+    const fixed = rows.map(r => {
+      try {
+        const recovered = Buffer.from(r.filename, 'latin1').toString('utf8');
+        // Only use recovered version if it looks better (contains valid non-ASCII)
+        if (recovered !== r.filename && /[\u0080-\uffff]/.test(recovered)) {
+          return { ...r, filename: recovered };
+        }
+      } catch {}
+      return r;
+    });
+    res.json(fixed);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// GET /api/print-finance/uploads/:id/download — download a saved file
+app.get('/api/print-finance/uploads/:id/download', async (req, res) => {
+  if (!pfDbCheck(res)) return;
+  try {
+    const { rows } = await pool.query('SELECT filename, mimetype, data FROM pf_uploaded_files WHERE id=$1', [req.params.id]);
+    if (!rows.length) return res.status(404).json({ error: 'File not found' });
+    const file = rows[0];
+    res.setHeader('Content-Disposition', `attachment; filename="${file.filename}"`);
+    res.setHeader('Content-Type', file.mimetype);
+    res.send(file.data);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// DELETE /api/print-finance/uploads/:id — delete a saved file
+app.delete('/api/print-finance/uploads/:id', async (req, res) => {
+  if (!pfDbCheck(res)) return;
+  try {
+    const { rowCount } = await pool.query('DELETE FROM pf_uploaded_files WHERE id=$1', [req.params.id]);
+    if (!rowCount) return res.status(404).json({ error: 'File not found' });
+    res.json({ ok: true });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// GET /api/print-finance/uploads/:id/preview — re-parse stored file, return rows + headers
+app.get('/api/print-finance/uploads/:id/preview', async (req, res) => {
+  if (!pfDbCheck(res)) return;
+  try {
+    const { rows: fileRows } = await pool.query('SELECT filename, mimetype, data FROM pf_uploaded_files WHERE id=$1', [req.params.id]);
+    if (!fileRows.length) return res.status(404).json({ error: 'File not found' });
+    const file = fileRows[0];
+    const fakeFile = { originalname: file.filename, mimetype: file.mimetype, buffer: file.data };
+    const { headers, rows, sheet_count, sheets } = await parseUploadedFile(fakeFile);
+    const cleanRows = rows.map(r => {
+      const out = { _sheet: r._sheet, _row: r._row };
+      for (const [k, v] of Object.entries(r)) { if (!k.startsWith('_')) out[k] = v; }
+      return out;
+    });
+    res.json({ filename: file.filename, headers, rows: cleanRows, sheet_count, sheets });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// ============================================================
+// INVOICES
+// ============================================================
+pool.query(`CREATE TABLE IF NOT EXISTS pf_invoices (
+  id SERIAL PRIMARY KEY,
+  invoice_no TEXT NOT NULL UNIQUE,
+  type TEXT NOT NULL DEFAULT 'invoice',
+  client_name TEXT,
+  client_company TEXT,
+  client_email TEXT,
+  client_address TEXT,
+  issue_date DATE DEFAULT CURRENT_DATE,
+  due_date DATE,
+  payment_terms TEXT,
+  notes TEXT,
+  subtotal NUMERIC(12,2) DEFAULT 0,
+  tax_rate NUMERIC(5,2) DEFAULT 0,
+  tax_amount NUMERIC(12,2) DEFAULT 0,
+  total NUMERIC(12,2) DEFAULT 0,
+  status TEXT DEFAULT 'draft',
+  work_unit_ids INTEGER[],
+  created_at TIMESTAMPTZ DEFAULT NOW()
+)`).catch(() => {});
+
+app.get('/api/print-finance/invoices', async (req, res) => {
+  if (!pfDbCheck(res)) return;
+  try {
+    const { rows } = await pool.query('SELECT * FROM pf_invoices ORDER BY created_at DESC');
+    res.json(rows);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.post('/api/print-finance/invoices', async (req, res) => {
+  if (!pfDbCheck(res)) return;
+  try {
+    const {
+      type, client_name, client_company, client_email, client_address,
+      issue_date, due_date, payment_terms, notes,
+      subtotal, tax_rate, tax_amount, total, work_unit_ids,
+    } = req.body;
+    // Auto-generate invoice number
+    const countRes = await pool.query('SELECT COUNT(*) FROM pf_invoices');
+    const seq = String(Number(countRes.rows[0].count) + 1).padStart(4, '0');
+    const prefix = (type === 'quote') ? 'QTE' : 'INV';
+    const invoice_no = `${prefix}-${new Date().getFullYear()}-${seq}`;
+    const { rows } = await pool.query(
+      `INSERT INTO pf_invoices
+       (invoice_no, type, client_name, client_company, client_email, client_address,
+        issue_date, due_date, payment_terms, notes, subtotal, tax_rate, tax_amount, total, work_unit_ids)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15) RETURNING *`,
+      [invoice_no, type||'invoice', client_name||null, client_company||null, client_email||null,
+       client_address||null, issue_date||null, due_date||null, payment_terms||null, notes||null,
+       subtotal||0, tax_rate||0, tax_amount||0, total||0, work_unit_ids||[]]
+    );
+    res.status(201).json(rows[0]);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.patch('/api/print-finance/invoices/:id/status', async (req, res) => {
+  if (!pfDbCheck(res)) return;
+  try {
+    const { status } = req.body;
+    const { rows } = await pool.query(
+      'UPDATE pf_invoices SET status=$1 WHERE id=$2 RETURNING *',
+      [status, req.params.id]
+    );
+    if (!rows.length) return res.status(404).json({ error: 'Not found' });
+    res.json(rows[0]);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.delete('/api/print-finance/invoices/:id', async (req, res) => {
+  if (!pfDbCheck(res)) return;
+  try {
+    await pool.query('DELETE FROM pf_invoices WHERE id=$1', [req.params.id]);
+    res.status(204).end();
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// GET /api/print-finance/invoices/:id/download — generates XLSX invoice
+app.get('/api/print-finance/invoices/:id/download', async (req, res) => {
+  if (!pfDbCheck(res)) return;
+  try {
+    const { rows: invRows } = await pool.query('SELECT * FROM pf_invoices WHERE id=$1', [req.params.id]);
+    if (!invRows.length) return res.status(404).json({ error: 'Invoice not found' });
+    const inv = invRows[0];
+
+    // Fetch work units for this invoice
+    let lineItems = [];
+    if (inv.work_unit_ids && inv.work_unit_ids.length) {
+      const { rows: wuRows } = await pool.query(
+        'SELECT * FROM pf_work_units WHERE id = ANY($1) ORDER BY created_at',
+        [inv.work_unit_ids]
+      );
+      lineItems = wuRows;
+    }
+
+    const ExcelJS = require('exceljs');
+    const wb = new ExcelJS.Workbook();
+    wb.creator = '3D Print Finance';
+    const ws = wb.addWorksheet(inv.type === 'quote' ? 'Quote' : 'Invoice');
+    ws.pageSetup = { paperSize: 9, orientation: 'portrait', margins: { left: 0.7, right: 0.7, top: 0.75, bottom: 0.75, header: 0.3, footer: 0.3 } };
+
+    const DARK = 'FF1E293B';
+    const ACCENT = 'FF3B82F6';
+    const MID = 'FF334155';
+    const LIGHT = 'FFF1F5F9';
+    const WHITE = 'FFFFFFFF';
+    const RED = 'FFEF4444';
+
+    const setCell = (row, col, value, opts = {}) => {
+      const cell = ws.getCell(row, col);
+      cell.value = value;
+      if (opts.bold) cell.font = { ...(cell.font||{}), bold: true, ...opts.font };
+      else if (opts.font) cell.font = opts.font;
+      if (opts.fill) cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: opts.fill } };
+      if (opts.align) cell.alignment = { horizontal: opts.align, vertical: 'middle', wrapText: true };
+      if (opts.numFmt) cell.numFmt = opts.numFmt;
+      if (opts.border) cell.border = opts.border;
+      return cell;
+    };
+
+    ws.columns = [
+      { key: 'A', width: 6 },
+      { key: 'B', width: 22 },
+      { key: 'C', width: 16 },
+      { key: 'D', width: 10 },
+      { key: 'E', width: 10 },
+      { key: 'F', width: 14 },
+      { key: 'G', width: 14 },
+    ];
+
+    // ── Row 1-2: Company header ──────────────────────────────
+    ws.mergeCells('A1:D2');
+    const hdr = ws.getCell('A1');
+    hdr.value = '3D PRINT FACTORY';
+    hdr.font = { bold: true, size: 16, color: { argb: WHITE } };
+    hdr.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: DARK } };
+    hdr.alignment = { horizontal: 'left', vertical: 'middle' };
+    ws.getRow(1).height = 22;
+    ws.getRow(2).height = 22;
+
+    ws.mergeCells('E1:G2');
+    const docType = ws.getCell('E1');
+    docType.value = inv.type === 'quote' ? 'QUOTATION' : 'INVOICE';
+    docType.font = { bold: true, size: 18, color: { argb: WHITE } };
+    docType.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: ACCENT } };
+    docType.alignment = { horizontal: 'right', vertical: 'middle' };
+
+    // ── Row 3: spacer ──
+    ws.getRow(3).height = 6;
+
+    // ── Row 4-7: Invoice meta ──
+    const issueDateStr = inv.issue_date ? new Date(inv.issue_date).toLocaleDateString('en-US', { year:'numeric', month:'short', day:'numeric' }) : '—';
+    const dueDateStr = inv.due_date ? new Date(inv.due_date).toLocaleDateString('en-US', { year:'numeric', month:'short', day:'numeric' }) : '—';
+    [
+      ['Invoice #', inv.invoice_no],
+      ['Issue Date', issueDateStr],
+      ['Due Date', dueDateStr],
+      ['Status', (inv.status || 'draft').toUpperCase()],
+    ].forEach(([label, val], i) => {
+      const r = 4 + i;
+      ws.mergeCells(`A${r}:B${r}`);
+      setCell(r, 1, label, { font: { color: { argb: 'FF64748B' }, size: 9 }, align: 'left' });
+      ws.mergeCells(`C${r}:G${r}`);
+      setCell(r, 3, val, { bold: true, align: 'right', font: { bold: true, size: 10, color: { argb: i === 3 ? ACCENT : 'FF1E293B' } } });
+    });
+
+    // ── Row 9: BILL TO header ──
+    ws.getRow(9).height = 8;
+    ws.mergeCells('A10:G10');
+    const billHdr = ws.getCell('A10');
+    billHdr.value = 'BILL TO';
+    billHdr.font = { bold: true, size: 8, color: { argb: WHITE } };
+    billHdr.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: MID } };
+    billHdr.alignment = { horizontal: 'left', vertical: 'middle' };
+    ws.getRow(10).height = 16;
+
+    const clientLines = [
+      inv.client_name || '—',
+      inv.client_company || '',
+      inv.client_email || '',
+      inv.client_address || '',
+    ].filter(Boolean);
+    clientLines.forEach((line, i) => {
+      const r = 11 + i;
+      ws.mergeCells(`A${r}:G${r}`);
+      setCell(r, 1, line, { font: { bold: i === 0, size: 10, color: { argb: DARK } } });
+    });
+
+    // ── Line items header ──
+    const itemStart = 11 + clientLines.length + 2;
+    ws.getRow(itemStart - 1).height = 6;
+    const colHeaders = ['#', 'Description', 'Material', 'Grams', 'Hours', 'Unit Price', 'Amount'];
+    colHeaders.forEach((h, ci) => {
+      const cell = ws.getCell(itemStart, ci + 1);
+      cell.value = h;
+      cell.font = { bold: true, size: 9, color: { argb: WHITE } };
+      cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: DARK } };
+      cell.alignment = { horizontal: ci === 1 ? 'left' : 'right', vertical: 'middle' };
+      cell.border = { bottom: { style: 'thin', color: { argb: ACCENT } } };
+    });
+    ws.getRow(itemStart).height = 18;
+
+    // ── Line items ──
+    let rowIdx = itemStart + 1;
+    lineItems.forEach((w, i) => {
+      const isEven = i % 2 === 0;
+      const fillColor = isEven ? LIGHT : WHITE;
+      const amount = Number(w.revenue);
+      [w.id ? String(i + 1) : '', w.name, w.material || '', w.grams, w.hours, amount, amount].forEach((val, ci) => {
+        const cell = ws.getCell(rowIdx, ci + 1);
+        cell.value = val;
+        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: fillColor } };
+        cell.font = { size: 9, color: { argb: DARK } };
+        cell.alignment = { horizontal: ci <= 1 ? 'left' : 'right', vertical: 'middle' };
+        if (ci >= 5) cell.numFmt = '"$"#,##0.00';
+      });
+      ws.getRow(rowIdx).height = 16;
+      rowIdx++;
+    });
+
+    if (lineItems.length === 0) {
+      ws.mergeCells(`A${rowIdx}:G${rowIdx}`);
+      setCell(rowIdx, 1, 'No line items selected', { font: { italic: true, color: { argb: 'FF94A3B8' } }, align: 'center' });
+      rowIdx++;
+    }
+
+    // ── Totals ──
+    rowIdx++;
+    const totalsData = [
+      ['Subtotal', Number(inv.subtotal)],
+      [`Tax (${Number(inv.tax_rate).toFixed(1)}%)`, Number(inv.tax_amount)],
+      ['TOTAL DUE', Number(inv.total)],
+    ];
+    totalsData.forEach(([label, val], i) => {
+      const isTotal = i === 2;
+      ws.mergeCells(`A${rowIdx}:E${rowIdx}`);
+      ws.mergeCells(`F${rowIdx}:G${rowIdx}`);
+      const lc = ws.getCell(rowIdx, 1);
+      lc.value = label;
+      lc.font = { bold: isTotal, size: isTotal ? 11 : 9, color: { argb: isTotal ? WHITE : DARK } };
+      lc.alignment = { horizontal: 'right', vertical: 'middle' };
+      if (isTotal) lc.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: ACCENT } };
+      const vc = ws.getCell(rowIdx, 6);
+      vc.value = val;
+      vc.numFmt = '"$"#,##0.00';
+      vc.font = { bold: isTotal, size: isTotal ? 12 : 10, color: { argb: isTotal ? WHITE : DARK } };
+      vc.alignment = { horizontal: 'right', vertical: 'middle' };
+      if (isTotal) vc.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: ACCENT } };
+      ws.getRow(rowIdx).height = isTotal ? 22 : 16;
+      rowIdx++;
+    });
+
+    // ── Footer ──
+    rowIdx += 2;
+    if (inv.payment_terms) {
+      ws.mergeCells(`A${rowIdx}:G${rowIdx}`);
+      setCell(rowIdx, 1, `Payment Terms: ${inv.payment_terms}`, { font: { italic: true, size: 9, color: { argb: '64748b'.toUpperCase() } } });
+      rowIdx++;
+    }
+    if (inv.notes) {
+      ws.mergeCells(`A${rowIdx}:G${rowIdx}`);
+      setCell(rowIdx, 1, `Notes: ${inv.notes}`, { font: { italic: true, size: 9, color: { argb: '64748b'.toUpperCase() } } });
+    }
+
+    xlsxHeaders(res, `${inv.invoice_no}.xlsx`);
+    await wb.xlsx.write(res);
+    res.end();
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// GET /api/print-finance/job-pnl
+// Returns per-job P&L: revenue, direct cost, overhead_alloc, gross profit, margin %
+app.get('/api/print-finance/job-pnl', async (req, res) => {
+  if (!pfDbCheck(res)) return;
+  try {
+    const [wuRes, costRes, revRes] = await Promise.all([
+      pool.query(`
+        SELECT job_id,
+               SUM(revenue)        AS revenue,
+               SUM(direct_cost)    AS direct_cost,
+               SUM(overhead_alloc) AS overhead_alloc,
+               SUM(hours)          AS hours,
+               SUM(grams)          AS grams,
+               COUNT(*)            AS unit_count,
+               array_agg(DISTINCT material) FILTER (WHERE material IS NOT NULL AND material <> '') AS materials,
+               array_agg(DISTINCT status)   AS statuses
+        FROM pf_work_units
+        WHERE job_id IS NOT NULL AND job_id <> ''
+        GROUP BY job_id
+        ORDER BY job_id
+      `),
+      pool.query(`SELECT COALESCE(SUM(amount),0) AS total_fixed FROM pf_cost_entries WHERE type='fixed'`),
+      pool.query(`SELECT COALESCE(SUM(revenue),0) AS total_rev FROM pf_revenue_entries`),
+    ]);
+    const totalFixed = Number(costRes.rows[0].total_fixed);
+    const totalRev = Number(revRes.rows[0].total_rev);
+    const jobs = wuRes.rows.map(r => {
+      const rev = Number(r.revenue);
+      const direct = Number(r.direct_cost);
+      const overhead = Number(r.overhead_alloc);
+      const totalCost = direct + overhead;
+      const grossProfit = rev - totalCost;
+      const grossMargin = rev > 0 ? (grossProfit / rev) * 100 : null;
+      const fixedAlloc = totalRev > 0 && rev > 0 ? (rev / totalRev) * totalFixed : 0;
+      const contribProfit = grossProfit - fixedAlloc;
+      const contribMargin = rev > 0 ? (contribProfit / rev) * 100 : null;
+      return {
+        job_id: r.job_id,
+        unit_count: Number(r.unit_count),
+        hours: Number(r.hours),
+        grams: Number(r.grams),
+        materials: r.materials || [],
+        statuses: r.statuses || [],
+        revenue: rev,
+        direct_cost: direct,
+        overhead_alloc: overhead,
+        total_cost: totalCost,
+        gross_profit: grossProfit,
+        gross_margin_pct: grossMargin,
+        fixed_alloc: fixedAlloc,
+        contrib_profit: contribProfit,
+        contrib_margin_pct: contribMargin,
+        is_profitable: grossProfit > 0,
+      };
+    });
+    const totals = jobs.reduce((acc, j) => ({
+      revenue: acc.revenue + j.revenue,
+      direct_cost: acc.direct_cost + j.direct_cost,
+      overhead_alloc: acc.overhead_alloc + j.overhead_alloc,
+      gross_profit: acc.gross_profit + j.gross_profit,
+    }), { revenue: 0, direct_cost: 0, overhead_alloc: 0, gross_profit: 0 });
+    res.json({ jobs, totals, total_fixed_costs: totalFixed });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// --- Material Rates ---
+pool.query(`CREATE TABLE IF NOT EXISTS pf_material_rates (
+  id SERIAL PRIMARY KEY,
+  material TEXT NOT NULL UNIQUE,
+  machine_rate_per_hr NUMERIC(10,4) NOT NULL DEFAULT 0,
+  filament_cost_per_g NUMERIC(10,4) NOT NULL DEFAULT 0,
+  notes TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+)`).catch(() => {});
+
+app.get('/api/print-finance/material-rates', async (req, res) => {
+  if (!pfDbCheck(res)) return;
+  try {
+    const { rows } = await pool.query('SELECT * FROM pf_material_rates ORDER BY material');
+    res.json(rows);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.post('/api/print-finance/material-rates', async (req, res) => {
+  if (!pfDbCheck(res)) return;
+  try {
+    const { material, machine_rate_per_hr, filament_cost_per_g, notes } = req.body;
+    if (!material) return res.status(400).json({ error: 'material is required' });
+    const { rows } = await pool.query(
+      `INSERT INTO pf_material_rates (material, machine_rate_per_hr, filament_cost_per_g, notes)
+       VALUES ($1,$2,$3,$4)
+       ON CONFLICT (material) DO UPDATE
+         SET machine_rate_per_hr=$2, filament_cost_per_g=$3, notes=$4
+       RETURNING *`,
+      [material, machine_rate_per_hr||0, filament_cost_per_g||0, notes||null]
+    );
+    res.status(201).json(rows[0]);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.put('/api/print-finance/material-rates/:id', async (req, res) => {
+  if (!pfDbCheck(res)) return;
+  try {
+    const { material, machine_rate_per_hr, filament_cost_per_g, notes } = req.body;
+    const { rows } = await pool.query(
+      `UPDATE pf_material_rates SET material=$1, machine_rate_per_hr=$2, filament_cost_per_g=$3, notes=$4
+       WHERE id=$5 RETURNING *`,
+      [material, machine_rate_per_hr||0, filament_cost_per_g||0, notes||null, req.params.id]
+    );
+    if (!rows.length) return res.status(404).json({ error: 'Not found' });
+    res.json(rows[0]);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.delete('/api/print-finance/material-rates/:id', async (req, res) => {
+  if (!pfDbCheck(res)) return;
+  try {
+    await pool.query('DELETE FROM pf_material_rates WHERE id=$1', [req.params.id]);
+    res.status(204).end();
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// --- Named Scenarios ---
+// Auto-create table if missing
+pool.query(`CREATE TABLE IF NOT EXISTS pf_scenarios (
+  id SERIAL PRIMARY KEY,
+  name TEXT NOT NULL,
+  volume_mult NUMERIC(6,3) NOT NULL DEFAULT 1,
+  price_adj NUMERIC(6,2) NOT NULL DEFAULT 0,
+  overhead_adj NUMERIC(6,2) NOT NULL DEFAULT 0,
+  notes TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+)`).catch(() => {});
+
+app.get('/api/print-finance/scenarios', async (req, res) => {
+  if (!pfDbCheck(res)) return;
+  try {
+    const { rows } = await pool.query('SELECT * FROM pf_scenarios ORDER BY created_at DESC');
+    res.json(rows);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.post('/api/print-finance/scenarios', async (req, res) => {
+  if (!pfDbCheck(res)) return;
+  try {
+    const { name, volume_mult, price_adj, overhead_adj, notes } = req.body;
+    if (!name) return res.status(400).json({ error: 'name is required' });
+    const { rows } = await pool.query(
+      `INSERT INTO pf_scenarios (name, volume_mult, price_adj, overhead_adj, notes)
+       VALUES ($1,$2,$3,$4,$5) RETURNING *`,
+      [name, volume_mult||1, price_adj||0, overhead_adj||0, notes||null]
+    );
+    res.status(201).json(rows[0]);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.delete('/api/print-finance/scenarios/:id', async (req, res) => {
+  if (!pfDbCheck(res)) return;
+  try {
+    await pool.query('DELETE FROM pf_scenarios WHERE id=$1', [req.params.id]);
+    res.status(204).end();
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// GET /api/print-finance/allocate-overhead/preview
+// Returns proposed allocations without writing to DB
+app.get('/api/print-finance/allocate-overhead/preview', async (req, res) => {
+  if (!pfDbCheck(res)) return;
+  try {
+    const [costRes, wuRes] = await Promise.all([
+      pool.query(`SELECT COALESCE(SUM(amount), 0) AS total FROM pf_cost_entries WHERE type = 'overhead'`),
+      pool.query(`SELECT id, job_id, name, hours, overhead_alloc FROM pf_work_units ORDER BY hours DESC`),
+    ]);
+    const totalOverhead = Number(costRes.rows[0].total);
+    const totalHours = wuRes.rows.reduce((s, r) => s + Number(r.hours), 0);
+    const ratePerHour = totalHours > 0 ? totalOverhead / totalHours : 0;
+    const allocations = wuRes.rows.map(r => ({
+      id: r.id,
+      job_id: r.job_id,
+      name: r.name,
+      hours: Number(r.hours),
+      current_alloc: Number(r.overhead_alloc),
+      proposed_alloc: totalHours > 0 ? Number(r.hours) * ratePerHour : 0,
+    }));
+    res.json({ total_overhead: totalOverhead, total_hours: totalHours, rate_per_hour: ratePerHour, allocations });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// POST /api/print-finance/allocate-overhead
+// Applies overhead allocation to all work units by print-hours ratio
+app.post('/api/print-finance/allocate-overhead', async (req, res) => {
+  if (!pfDbCheck(res)) return;
+  try {
+    const [costRes, wuRes] = await Promise.all([
+      pool.query(`SELECT COALESCE(SUM(amount), 0) AS total FROM pf_cost_entries WHERE type = 'overhead'`),
+      pool.query(`SELECT id, name, hours FROM pf_work_units WHERE hours > 0`),
+    ]);
+    const totalOverhead = Number(costRes.rows[0].total);
+    const totalHours = wuRes.rows.reduce((s, r) => s + Number(r.hours), 0);
+    if (totalHours === 0) return res.status(400).json({ error: 'No work units with recorded hours to allocate to' });
+    const ratePerHour = totalOverhead / totalHours;
+    let updated = 0;
+    for (const wu of wuRes.rows) {
+      const alloc = Number(wu.hours) * ratePerHour;
+      await pool.query(`UPDATE pf_work_units SET overhead_alloc=$1, updated_at=NOW() WHERE id=$2`, [alloc.toFixed(4), wu.id]);
+      updated++;
+    }
+    res.json({ total_overhead: totalOverhead, total_hours: totalHours, rate_per_hour: ratePerHour, updated });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// QR & Barcode Generator Module
+// ─────────────────────────────────────────────────────────────────────────────
+{
+  const QRCode = require('qrcode');
+  const bwipjs = require('bwip-js');
+  const bcrypt = require('bcryptjs');
+  const jwt = require('jsonwebtoken');
+  const sharp = require('sharp');
+
+  const QR_JWT_SECRET = process.env.QR_JWT_SECRET || process.env.JWT_SECRET || 'qr-generator-secret-change-in-prod';
+  const QR_FREE_DAILY_LIMIT = 10;
+
+  // ── Middleware ──────────────────────────────────────────────────────────────
+  function qrAuth(req, res, next) {
+    const auth = req.headers.authorization;
+    if (!auth || !auth.startsWith('Bearer ')) return res.status(401).json({ error: 'Unauthorised' });
+    try {
+      req.qrUser = jwt.verify(auth.slice(7), QR_JWT_SECRET);
+      next();
+    } catch {
+      res.status(401).json({ error: 'Invalid or expired token' });
+    }
+  }
+
+  function qrAuthOptional(req, res, next) {
+    const auth = req.headers.authorization;
+    if (auth && auth.startsWith('Bearer ')) {
+      try { req.qrUser = jwt.verify(auth.slice(7), QR_JWT_SECRET); } catch {}
+    }
+    next();
+  }
+
+  // ── DB init (called from server.listen) ────────────────────────────────────
+  async function initQrDb() {
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS qr_users (
+        id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        email       VARCHAR(255) UNIQUE NOT NULL,
+        password_hash VARCHAR(255) NOT NULL,
+        name        VARCHAR(255),
+        plan        VARCHAR(50) DEFAULT 'free',
+        credits     INTEGER DEFAULT 0,
+        free_gens_today INTEGER DEFAULT 0,
+        free_reset_date DATE DEFAULT CURRENT_DATE,
+        created_at  TIMESTAMPTZ DEFAULT NOW(),
+        updated_at  TIMESTAMPTZ DEFAULT NOW()
+      )
+    `);
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS qr_generations (
+        id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        user_id     UUID REFERENCES qr_users(id) ON DELETE SET NULL,
+        type        VARCHAR(50) NOT NULL,
+        content     TEXT NOT NULL,
+        options     JSONB DEFAULT '{}',
+        credits_used INTEGER DEFAULT 0,
+        created_at  TIMESTAMPTZ DEFAULT NOW()
+      )
+    `);
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS qr_topups (
+        id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        user_id     UUID REFERENCES qr_users(id) ON DELETE CASCADE,
+        credits     INTEGER NOT NULL,
+        amount_usd  DECIMAL(10,2) NOT NULL,
+        payment_ref VARCHAR(255),
+        status      VARCHAR(50) DEFAULT 'completed',
+        created_at  TIMESTAMPTZ DEFAULT NOW()
+      )
+    `);
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS qr_nfc_orders (
+        id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        use_case      VARCHAR(100),
+        material      VARCHAR(50),
+        nfc_chip      VARCHAR(50),
+        quantity      INTEGER DEFAULT 1,
+        custom_colour VARCHAR(20),
+        accent_colour VARCHAR(20),
+        name          VARCHAR(255) NOT NULL,
+        email         VARCHAR(255) NOT NULL,
+        phone         VARCHAR(100),
+        notes         TEXT,
+        qr_content    TEXT,
+        status        VARCHAR(50) DEFAULT 'pending',
+        created_at    TIMESTAMPTZ DEFAULT NOW()
+      )
+    `);
+    console.log('✅ QR Generator tables ready');
+  }
+
+  // ── Helpers ─────────────────────────────────────────────────────────────────
+  async function getOrResetFreeGens(userId) {
+    const r = await pool.query(`SELECT free_gens_today, free_reset_date FROM qr_users WHERE id=$1`, [userId]);
+    if (!r.rows[0]) return 0;
+    const { free_gens_today, free_reset_date } = r.rows[0];
+    const today = new Date().toISOString().slice(0, 10);
+    if (free_reset_date < today) {
+      await pool.query(`UPDATE qr_users SET free_gens_today=0, free_reset_date=$1, updated_at=NOW() WHERE id=$2`, [today, userId]);
+      return 0;
+    }
+    return free_gens_today;
+  }
+
+  function calcCreditCost(opts) {
+    let cost = 0;
+    if (opts.logoData) cost += 2;
+    if (opts.format === 'svg') cost += 1;
+    if (opts.size > 500) cost += 1;
+    return cost;
+  }
+
+  async function generateQR(content, opts = {}) {
+    const { size = 300, fgColor = '#000000', bgColor = '#ffffff', errorLevel = 'M', format = 'png', logoData } = opts;
+    if (format === 'svg') {
+      const svg = await QRCode.toString(content, {
+        type: 'svg', width: size,
+        color: { dark: fgColor, light: bgColor },
+        errorCorrectionLevel: errorLevel,
+      });
+      return { data: Buffer.from(svg).toString('base64'), mimeType: 'image/svg+xml', ext: 'svg' };
+    }
+    let buf = await QRCode.toBuffer(content, {
+      width: size,
+      color: { dark: fgColor, light: bgColor },
+      errorCorrectionLevel: errorLevel,
+    });
+    if (logoData) {
+      const logoBase64 = logoData.includes(',') ? logoData.split(',')[1] : logoData;
+      const logoBuf = Buffer.from(logoBase64, 'base64');
+      const logoSize = Math.floor(size * 0.22);
+      const resizedLogo = await sharp(logoBuf).resize(logoSize, logoSize, { fit: 'contain', background: { r: 255, g: 255, b: 255, alpha: 1 } }).png().toBuffer();
+      buf = await sharp(buf).composite([{ input: resizedLogo, gravity: 'centre' }]).png().toBuffer();
+    }
+    return { data: buf.toString('base64'), mimeType: 'image/png', ext: 'png' };
+  }
+
+  const BWIP_TYPE_MAP = {
+    ean13: 'ean13', ean8: 'ean8', upca: 'upca', code128: 'code128',
+    code39: 'code39', qr: 'qrcode',
+  };
+
+  async function generateBarcode(type, content, opts = {}) {
+    const { height = 80, scale = 3, showText = true, fgColor = '#000000', bgColor = '#ffffff' } = opts;
+    const fg = fgColor.replace('#', '');
+    const bg = bgColor.replace('#', '');
+    const bcid = BWIP_TYPE_MAP[type] || 'code128';
+    const buf = await bwipjs.toBuffer({
+      bcid, text: content,
+      scale, height: Math.floor(height / 4),
+      includetext: showText,
+      textxalign: 'center',
+      barcolor: fg,
+      backgroundcolor: bg,
+    });
+    return { data: buf.toString('base64'), mimeType: 'image/png', ext: 'png' };
+  }
+
+  // ── Auth Endpoints ──────────────────────────────────────────────────────────
+  app.post('/api/qr/auth/register', async (req, res) => {
+    const { email, password, name } = req.body;
+    if (!email || !password) return res.status(400).json({ error: 'Email and password required' });
+    if (password.length < 8) return res.status(400).json({ error: 'Password must be at least 8 characters' });
+    try {
+      const hash = await bcrypt.hash(password, 12);
+      const r = await pool.query(
+        `INSERT INTO qr_users (email, password_hash, name) VALUES ($1,$2,$3) RETURNING id, email, name, plan, credits, free_gens_today`,
+        [email.toLowerCase().trim(), hash, name || '']
+      );
+      const user = r.rows[0];
+      const token = jwt.sign({ id: user.id, email: user.email }, QR_JWT_SECRET, { expiresIn: '30d' });
+      res.json({ token, user: { id: user.id, email: user.email, name: user.name, plan: user.plan, credits: user.credits, freeGensToday: user.free_gens_today } });
+    } catch (err) {
+      if (err.code === '23505') return res.status(409).json({ error: 'Email already registered' });
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.post('/api/qr/auth/login', async (req, res) => {
+    const { email, password } = req.body;
+    if (!email || !password) return res.status(400).json({ error: 'Email and password required' });
+    try {
+      const r = await pool.query(`SELECT * FROM qr_users WHERE email=$1`, [email.toLowerCase().trim()]);
+      const user = r.rows[0];
+      if (!user) return res.status(401).json({ error: 'Invalid email or password' });
+      const ok = await bcrypt.compare(password, user.password_hash);
+      if (!ok) return res.status(401).json({ error: 'Invalid email or password' });
+      const freeGens = await getOrResetFreeGens(user.id);
+      const token = jwt.sign({ id: user.id, email: user.email }, QR_JWT_SECRET, { expiresIn: '30d' });
+      res.json({ token, user: { id: user.id, email: user.email, name: user.name, plan: user.plan, credits: user.credits, freeGensToday: freeGens } });
+    } catch (err) { res.status(500).json({ error: err.message }); }
+  });
+
+  app.get('/api/qr/auth/me', qrAuth, async (req, res) => {
+    try {
+      const r = await pool.query(`SELECT id, email, name, plan, credits, free_gens_today, free_reset_date FROM qr_users WHERE id=$1`, [req.qrUser.id]);
+      if (!r.rows[0]) return res.status(404).json({ error: 'User not found' });
+      const user = r.rows[0];
+      const freeGens = await getOrResetFreeGens(user.id);
+      res.json({ id: user.id, email: user.email, name: user.name, plan: user.plan, credits: user.credits, freeGensToday: freeGens, freeLimit: QR_FREE_DAILY_LIMIT });
+    } catch (err) { res.status(500).json({ error: err.message }); }
+  });
+
+  // ── Generate Endpoint ───────────────────────────────────────────────────────
+  app.post('/api/qr/generate', qrAuthOptional, async (req, res) => {
+    const { type = 'qr', content, fgColor = '#000000', bgColor = '#ffffff',
+            errorLevel = 'M', format = 'png', logoData, showText = true, height = 80 } = req.body;
+    // Clamp size: guests max 300, authenticated max 2000
+    const rawSize = Math.min(Math.max(Number(req.body.size) || 300, 100), 2000);
+    const size = req.qrUser ? rawSize : Math.min(rawSize, 300);
+    if (!content || !content.trim()) return res.status(400).json({ error: 'Content is required' });
+
+    const isQR = type === 'qr';
+    const premiumCost = calcCreditCost({ logoData, format, size });
+    const isFreeGen = premiumCost === 0;
+
+    // Unauthenticated: only basic QR/barcode, max 300px (already clamped above), no logo/SVG
+    if (!req.qrUser) {
+      if (logoData) return res.status(402).json({ error: 'Logo embedding requires an account', code: 'LOGIN_REQUIRED' });
+      if (format === 'svg') return res.status(402).json({ error: 'SVG export requires an account', code: 'LOGIN_REQUIRED' });
+      try {
+        const result = isQR
+          ? await generateQR(content.trim(), { size, fgColor, bgColor, errorLevel, format: 'png' })
+          : await generateBarcode(type, content.trim(), { height, scale: 3, showText, fgColor, bgColor });
+        return res.json({ ...result, creditsUsed: 0, freeGen: true });
+      } catch (err) { return res.status(400).json({ error: err.message }); }
+    }
+
+    // Authenticated user
+    const freeGens = await getOrResetFreeGens(req.qrUser.id);
+    let creditsUsed = premiumCost;
+    let isFree = false;
+
+    if (isFreeGen && freeGens < QR_FREE_DAILY_LIMIT) {
+      // Use free allowance
+      isFree = true;
+      creditsUsed = 0;
+    } else if (creditsUsed > 0 || freeGens >= QR_FREE_DAILY_LIMIT) {
+      if (isFreeGen) creditsUsed = 1; // beyond free limit costs 1 credit
+      // Check credits
+      const ur = await pool.query(`SELECT credits FROM qr_users WHERE id=$1`, [req.qrUser.id]);
+      if (ur.rows[0].credits < creditsUsed) {
+        return res.status(402).json({ error: 'Insufficient credits', code: 'INSUFFICIENT_CREDITS', creditsNeeded: creditsUsed, creditsAvailable: ur.rows[0].credits });
+      }
+    }
+
+    try {
+      const result = isQR
+        ? await generateQR(content.trim(), { size, fgColor, bgColor, errorLevel, format, logoData })
+        : await generateBarcode(type, content.trim(), { height, scale: Math.max(2, Math.floor(size / 100)), showText, fgColor, bgColor });
+
+      // Deduct credits / increment free count
+      if (isFree) {
+        await pool.query(`UPDATE qr_users SET free_gens_today=free_gens_today+1, updated_at=NOW() WHERE id=$1`, [req.qrUser.id]);
+      } else {
+        await pool.query(`UPDATE qr_users SET credits=credits-$1, updated_at=NOW() WHERE id=$2`, [creditsUsed, req.qrUser.id]);
+      }
+
+      // Log generation
+      await pool.query(
+        `INSERT INTO qr_generations (user_id, type, content, options, credits_used) VALUES ($1,$2,$3,$4,$5)`,
+        [req.qrUser.id, type, content.trim(), JSON.stringify({ size, fgColor, bgColor, format, hasLogo: !!logoData }), creditsUsed]
+      );
+
+      const updatedUser = await pool.query(`SELECT credits, free_gens_today FROM qr_users WHERE id=$1`, [req.qrUser.id]);
+      res.json({ ...result, creditsUsed, freeGen: isFree, credits: updatedUser.rows[0].credits, freeGensToday: updatedUser.rows[0].free_gens_today });
+    } catch (err) { res.status(400).json({ error: err.message }); }
+  });
+
+  // ── Batch Generate ──────────────────────────────────────────────────────────
+  app.post('/api/qr/batch', qrAuth, async (req, res) => {
+    const { items, type = 'qr', size = 300, fgColor = '#000000', bgColor = '#ffffff',
+            errorLevel = 'M', showText = true, height = 80 } = req.body;
+    if (!Array.isArray(items) || items.length === 0) return res.status(400).json({ error: 'Items array required' });
+    if (items.length > 100) return res.status(400).json({ error: 'Max 100 items per batch' });
+
+    const creditsNeeded = items.length;
+    const ur = await pool.query(`SELECT credits FROM qr_users WHERE id=$1`, [req.qrUser.id]);
+    if (ur.rows[0].credits < creditsNeeded) {
+      return res.status(402).json({ error: 'Insufficient credits', code: 'INSUFFICIENT_CREDITS', creditsNeeded, creditsAvailable: ur.rows[0].credits });
+    }
+
+    const results = [];
+    for (const item of items) {
+      if (!item || !item.trim()) { results.push({ content: item, error: 'Empty content' }); continue; }
+      try {
+        const isQR = type === 'qr';
+        const result = isQR
+          ? await generateQR(item.trim(), { size, fgColor, bgColor, errorLevel })
+          : await generateBarcode(type, item.trim(), { height, scale: 3, showText, fgColor, bgColor });
+        results.push({ content: item, ...result });
+      } catch (err) {
+        results.push({ content: item, error: err.message });
+      }
+    }
+
+    const successCount = results.filter(r => !r.error).length;
+    await pool.query(`UPDATE qr_users SET credits=credits-$1, updated_at=NOW() WHERE id=$2`, [successCount, req.qrUser.id]);
+    await pool.query(
+      `INSERT INTO qr_generations (user_id, type, content, options, credits_used) VALUES ($1,$2,$3,$4,$5)`,
+      [req.qrUser.id, `batch_${type}`, `batch:${items.length}`, JSON.stringify({ size, fgColor, bgColor }), successCount]
+    );
+
+    const updatedUser = await pool.query(`SELECT credits FROM qr_users WHERE id=$1`, [req.qrUser.id]);
+    res.json({ results, creditsUsed: successCount, credits: updatedUser.rows[0].credits });
+  });
+
+  // ── History ─────────────────────────────────────────────────────────────────
+  app.get('/api/qr/history', qrAuth, async (req, res) => {
+    try {
+      const r = await pool.query(
+        `SELECT id, type, content, options, credits_used, created_at FROM qr_generations WHERE user_id=$1 ORDER BY created_at DESC LIMIT 50`,
+        [req.qrUser.id]
+      );
+      res.json({ history: r.rows });
+    } catch (err) { res.status(500).json({ error: err.message }); }
+  });
+
+  // ── Topup Packages ──────────────────────────────────────────────────────────
+  app.get('/api/qr/topup/packages', (req, res) => {
+    res.json({ packages: [
+      { id: 'starter', name: 'Starter', credits: 50,   price: 5.00,  popular: false, description: 'Great for personal use' },
+      { id: 'popular', name: 'Popular', credits: 200,  price: 15.00, popular: true,  description: 'Best value for small teams' },
+      { id: 'business',name: 'Business',credits: 500,  price: 30.00, popular: false, description: 'For growing businesses' },
+      { id: 'enterprise',name:'Enterprise',credits:2000,price: 99.00, popular: false, description: 'Unlimited scale' },
+    ]});
+  });
+
+  // ── Simulate Topup (replace with Stripe later) ─────────────────────────────
+  app.post('/api/qr/topup', qrAuth, async (req, res) => {
+    const PACKAGES = { starter: { credits: 50, price: 5.00 }, popular: { credits: 200, price: 15.00 }, business: { credits: 500, price: 30.00 }, enterprise: { credits: 2000, price: 99.00 } };
+    const { packageId } = req.body;
+    const pkg = PACKAGES[packageId];
+    if (!pkg) return res.status(400).json({ error: 'Invalid package' });
+    try {
+      const ref = `SIM-${Date.now()}`;
+      await pool.query(`INSERT INTO qr_topups (user_id, credits, amount_usd, payment_ref) VALUES ($1,$2,$3,$4)`, [req.qrUser.id, pkg.credits, pkg.price, ref]);
+      await pool.query(`UPDATE qr_users SET credits=credits+$1, updated_at=NOW() WHERE id=$2`, [pkg.credits, req.qrUser.id]);
+      const ur = await pool.query(`SELECT credits FROM qr_users WHERE id=$1`, [req.qrUser.id]);
+      res.json({ success: true, creditsAdded: pkg.credits, totalCredits: ur.rows[0].credits, ref });
+    } catch (err) { res.status(500).json({ error: err.message }); }
+  });
+
+  // ── NFC 3D Print Order Endpoint ─────────────────────────────────────────────
+  app.post('/api/qr/nfc-order', async (req, res) => {
+    const { useCase, material, nfcChip, quantity, customColour, accentColour, name, email, phone, notes, qrContent } = req.body;
+    if (!name || !email) return res.status(400).json({ error: 'Name and email are required' });
+    try {
+      await pool.query(`
+        INSERT INTO qr_nfc_orders
+          (use_case, material, nfc_chip, quantity, custom_colour, accent_colour, name, email, phone, notes, qr_content)
+        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
+      `, [useCase, material, nfcChip, quantity || 1, customColour, accentColour, name.trim(), email.trim().toLowerCase(), phone?.trim() || '', notes?.trim() || '', qrContent || '']);
+      res.json({ success: true, message: 'Order enquiry received. We will be in touch within 24 hours.' });
+    } catch (err) { res.status(500).json({ error: err.message }); }
+  });
+
+  // ── Register DB init ─────────────────────────────────────────────────────────
+  if (!global.__qrDbInitRegistered) {
+    global.__qrDbInitRegistered = true;
+    setImmediate(async () => {
+      if (process.env.DATABASE_URL) {
+        try { await initQrDb(); } catch (e) { console.error('⚠️ QR DB init failed:', e.message); }
+      }
+    });
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+
 const errorHandler = (err, req, res, next) => {
   const status = err.status || err.statusCode || 500;
   console.error('❌ Unhandled error:', err.message || err);
@@ -7114,6 +9864,27 @@ server.listen(port, '0.0.0.0', async () => {
   // TEDx visual generation is now triggered manually from the admin panel.
   // Use GET /api/tedx/visuals + POST /api/tedx/generate to list and generate images.
   console.log('🎨 TEDx visuals: auto-generation disabled — use admin panel to generate images');
+
+  // Ensure radiance_media table exists
+  try {
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS radiance_media (
+        id SERIAL PRIMARY KEY,
+        filename TEXT NOT NULL,
+        original_name TEXT NOT NULL,
+        url TEXT NOT NULL,
+        mime_type TEXT NOT NULL,
+        size INTEGER NOT NULL,
+        data BYTEA,
+        uploaded_at TIMESTAMPTZ DEFAULT NOW()
+      )
+    `);
+    // Add data column for Postgres BYTEA storage if not already present
+    await pool.query(`ALTER TABLE radiance_media ADD COLUMN IF NOT EXISTS data BYTEA`);
+    console.log('✅ radiance_media table ready');
+  } catch (err) {
+    console.error('⚠️  radiance_media table init failed:', err.message);
+  }
 
   // Initialize scheduler for Topic Intelligence
   if (process.env.DATABASE_URL) {

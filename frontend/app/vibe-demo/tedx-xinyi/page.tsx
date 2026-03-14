@@ -3,6 +3,9 @@
 import Link from 'next/link';
 import { SiteNav, SiteFooter, Section, SectionLabel, FadeIn, globalStyles, TED_RED, WARM_AMBER } from './components';
 
+// CDN URL map for homepage images — updated by POST /api/tedx-xinyi/sync-cdn
+const IMAGE_CDN_URLS: Record<string, string> = {};
+
 // ==================== DATA ====================
 
 const SPEAKER_COLORS = ['#E62B1E', '#D97706', '#059669', '#7C3AED', '#2563EB', '#DC2626', '#0891B2', '#9333EA'];
@@ -49,7 +52,7 @@ const ENTRY_CARDS = [
     button: '走進故事',
     href: '/vibe-demo/tedx-xinyi/about',
     icon: 'x',
-    image: '/tedx-xinyi/entry-about.webp',
+    image: IMAGE_CDN_URLS['entry-about'] || '/tedx-xinyi/entry-about.webp',
     gradient: `linear-gradient(135deg, ${TED_RED}20 0%, ${TED_RED}08 100%)`,
     accent: TED_RED,
   },
@@ -59,7 +62,7 @@ const ENTRY_CARDS = [
     button: '看我們怎麼做',
     href: '/vibe-demo/tedx-xinyi/sustainability',
     icon: '♻',
-    image: '/tedx-xinyi/entry-sustainability.webp',
+    image: IMAGE_CDN_URLS['entry-sustainability'] || '/tedx-xinyi/entry-sustainability.webp',
     gradient: `linear-gradient(135deg, ${WARM_AMBER}20 0%, ${WARM_AMBER}08 100%)`,
     accent: WARM_AMBER,
   },
@@ -69,7 +72,7 @@ const ENTRY_CARDS = [
     button: '加入社群',
     href: '/vibe-demo/tedx-xinyi/community',
     icon: '◎',
-    image: '/tedx-xinyi/entry-community.webp',
+    image: IMAGE_CDN_URLS['entry-community'] || '/tedx-xinyi/entry-community.webp',
     gradient: 'linear-gradient(135deg, #10B98120 0%, #10B98108 100%)',
     accent: '#10B981',
   },
@@ -89,7 +92,7 @@ export default function TEDxXinyiHome() {
         {/* nanobanana-generated background with CSS fallback */}
         <div className="absolute inset-0">
           <img
-            src="/tedx-xinyi/hero-home.webp"
+            src={IMAGE_CDN_URLS['hero-home'] || '/tedx-xinyi/hero-home.webp'}
             alt=""
             fetchPriority="high"
             decoding="async"
@@ -397,7 +400,7 @@ export default function TEDxXinyiHome() {
               className="px-8 py-3.5 bg-white font-black text-sm rounded-full transition-all hover:scale-105 hover:shadow-lg inline-block"
               style={{ color: TED_RED }}
             >
-              關注本年度大會
+              未來活動
             </Link>
           </FadeIn>
         </div>

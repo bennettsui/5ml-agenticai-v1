@@ -5,13 +5,12 @@ import Link from 'next/link';
 import {
   ArrowLeft, Lock, RefreshCw, ChevronDown, ChevronUp,
   Users, Mail, Clock, Search, Star, Upload, Trash2, Copy,
-  Check, Image as ImageIcon, FileText, BookOpen, Wand2, X,
+  Check, Image as ImageIcon, FileText, BookOpen, Wand2, X, Download,
+  LayoutGrid, Database,
 } from 'lucide-react';
 
-const API_BASE = typeof window !== 'undefined'
-  ? (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080')
-  : 'http://localhost:8080';
-const ADMIN_PASSWORD = '5milesLab01@';
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || '';
+const ADMIN_PASSWORD = '5mileslab';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -68,6 +67,15 @@ interface CaseStudy {
   content_html_en: string | null;
   content_html_zh: string | null;
   updated_at: string | null;
+}
+
+interface ImageSlot {
+  key: string;
+  page: string;
+  label: string;
+  src: string | null;
+  type: string;
+  status: string;
 }
 
 const BLOG_SLUGS = [
@@ -204,7 +212,8 @@ function MediaLibraryTab() {
   const [media, setMedia] = useState<MediaItem[]>([]);
   const [loading, setLoading] = useState(false);
   const [uploading, setUploading] = useState(false);
-  const [copiedId, setCopiedId] = useState<number | null>(null);
+  const [uploadError, setUploadError] = useState('');
+  const [copiedKey, setCopiedKey] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<number | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -224,6 +233,7 @@ function MediaLibraryTab() {
     const file = e.target.files?.[0];
     if (!file) return;
     setUploading(true);
+    setUploadError('');
     try {
       const formData = new FormData();
       formData.append('file', file);
@@ -232,9 +242,14 @@ function MediaLibraryTab() {
         { method: 'POST', body: formData }
       );
       const data = await res.json();
-      if (data.success) await loadMedia();
-    } catch { /* ignore */ }
-    finally {
+      if (data.success) {
+        await loadMedia();
+      } else {
+        setUploadError(data.error || 'Upload failed');
+      }
+    } catch (err) {
+      setUploadError('Network error — could not reach server');
+    } finally {
       setUploading(false);
       if (fileInputRef.current) fileInputRef.current.value = '';
     }
@@ -253,11 +268,14 @@ function MediaLibraryTab() {
     finally { setDeletingId(null); }
   }
 
-  function copyUrl(item: MediaItem) {
-    const fullUrl = `${API_BASE}${item.url}`;
-    navigator.clipboard.writeText(fullUrl);
-    setCopiedId(item.id);
-    setTimeout(() => setCopiedId(null), 2000);
+  function copyText(key: string, text: string) {
+    navigator.clipboard.writeText(text);
+    setCopiedKey(key);
+    setTimeout(() => setCopiedKey(null), 2000);
+  }
+
+  function localUrl(item: MediaItem) {
+    return `${API_BASE}/uploads/radiance/${item.filename}`;
   }
 
   return (
@@ -289,6 +307,13 @@ function MediaLibraryTab() {
         </div>
       </div>
 
+      {uploadError && (
+        <div className="flex items-center gap-2 px-4 py-3 bg-red-500/10 border border-red-500/30 rounded-xl text-red-400 text-sm">
+          <span>{uploadError}</span>
+          <button onClick={() => setUploadError('')} className="ml-auto text-red-400/60 hover:text-red-400">✕</button>
+        </div>
+      )}
+
       {loading && media.length === 0 ? (
         <div className="text-center py-16 text-slate-500">Loading...</div>
       ) : media.length === 0 ? (
@@ -302,26 +327,745 @@ function MediaLibraryTab() {
             <div key={item.id} className="group bg-slate-800/60 border border-slate-700/50 rounded-xl overflow-hidden">
               <div className="aspect-square bg-slate-900 relative">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={`${API_BASE}${item.url}`} alt={item.original_name} className="w-full h-full object-cover" />
+                <img src={item.url} alt={item.original_name} className="w-full h-full object-cover" />
               </div>
               <div className="p-2.5 space-y-2">
                 <p className="text-xs text-slate-400 truncate" title={item.original_name}>{item.original_name}</p>
                 <p className="text-xs text-slate-600">{(item.size / 1024).toFixed(0)} KB</p>
-                <div className="flex gap-1.5">
+                <div className="flex flex-col gap-1">
                   <button
-                    onClick={() => copyUrl(item)}
-                    className="flex-1 flex items-center justify-center gap-1 py-1.5 rounded-lg text-xs bg-slate-700/60 hover:bg-slate-700 text-slate-300 transition-colors"
+                    onClick={() => copyText(`${item.id}-cdn`, item.url)}
+                    className="flex items-center justify-center gap-1 py-1.5 rounded-lg text-xs bg-blue-900/30 hover:bg-blue-900/60 text-blue-300 transition-colors"
                   >
-                    {copiedId === item.id
+                    {copiedKey === `${item.id}-cdn`
                       ? <><Check className="w-3 h-3 text-emerald-400" /> Copied</>
-                      : <><Copy className="w-3 h-3" /> Copy URL</>}
+                      : <><Copy className="w-3 h-3" /> CDN URL</>}
                   </button>
                   <button
-                    onClick={() => handleDelete(item.id)}
-                    disabled={deletingId === item.id}
-                    className="p-1.5 rounded-lg bg-red-900/30 hover:bg-red-900/60 text-red-400 transition-colors"
+                    onClick={() => copyText(`${item.id}-local`, localUrl(item))}
+                    className="flex items-center justify-center gap-1 py-1.5 rounded-lg text-xs bg-slate-700/60 hover:bg-slate-700 text-slate-300 transition-colors"
                   >
-                    <Trash2 className="w-3.5 h-3.5" />
+                    {copiedKey === `${item.id}-local`
+                      ? <><Check className="w-3 h-3 text-emerald-400" /> Copied</>
+                      : <><Copy className="w-3 h-3" /> Local URL</>}
+                  </button>
+                </div>
+                <button
+                  onClick={() => handleDelete(item.id)}
+                  disabled={deletingId === item.id}
+                  className="w-full flex items-center justify-center gap-1 py-1 rounded-lg text-xs bg-red-900/20 hover:bg-red-900/50 text-red-400 transition-colors"
+                >
+                  <Trash2 className="w-3 h-3" /> Delete
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* ── CDN URL Reference Table ── */}
+      {media.length > 0 && (
+        <div className="mt-8">
+          <h3 className="text-sm font-semibold text-slate-300 mb-3">CDN URL Reference</h3>
+          <div className="overflow-x-auto rounded-xl border border-slate-700/50">
+            <table className="w-full text-xs text-left">
+              <thead>
+                <tr className="border-b border-slate-700/50 bg-slate-800/60">
+                  <th className="px-4 py-2.5 text-slate-400 font-medium">File</th>
+                  <th className="px-4 py-2.5 text-slate-400 font-medium">CDN URL</th>
+                  <th className="px-4 py-2.5 text-slate-400 font-medium">Local URL</th>
+                  <th className="px-4 py-2.5 text-slate-400 font-medium w-20">Size</th>
+                </tr>
+              </thead>
+              <tbody>
+                {media.map((item, i) => (
+                  <tr key={item.id} className={`border-b border-slate-700/50 ${i % 2 === 0 ? '' : 'bg-white/[0.02]'}`}>
+                    <td className="px-4 py-2.5 text-slate-300 max-w-[120px] truncate" title={item.original_name}>
+                      {item.original_name}
+                    </td>
+                    <td className="px-4 py-2.5">
+                      <div className="flex items-center gap-2">
+                        <span className="text-blue-400 truncate max-w-[280px]" title={item.url}>{item.url}</span>
+                        <button onClick={() => copyText(`t-${item.id}-cdn`, item.url)} className="shrink-0 text-slate-500 hover:text-blue-400 transition-colors">
+                          {copiedKey === `t-${item.id}-cdn` ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
+                        </button>
+                      </div>
+                    </td>
+                    <td className="px-4 py-2.5">
+                      <div className="flex items-center gap-2">
+                        <span className="text-slate-400 truncate max-w-[200px]" title={localUrl(item)}>{localUrl(item)}</span>
+                        <button onClick={() => copyText(`t-${item.id}-local`, localUrl(item))} className="shrink-0 text-slate-500 hover:text-slate-300 transition-colors">
+                          {copiedKey === `t-${item.id}-local` ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
+                        </button>
+                      </div>
+                    </td>
+                    <td className="px-4 py-2.5 text-slate-500">{(item.size / 1024).toFixed(0)} KB</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Image Slots Tab ──────────────────────────────────────────────────────────
+
+function ImageSlotsTab() {
+  const [slots, setSlots] = useState<ImageSlot[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [copiedKey, setCopiedKey] = useState<string | null>(null);
+
+  useEffect(() => { loadSlots(); }, []); // eslint-disable-line
+
+  async function loadSlots() {
+    setLoading(true);
+    try {
+      const res = await fetch(`${API_BASE}/api/radiance/admin/image-slots?password=${encodeURIComponent(ADMIN_PASSWORD)}`);
+      const data = await res.json();
+      if (data.success) setSlots(data.slots);
+    } catch { /* ignore */ }
+    finally { setLoading(false); }
+  }
+
+  function copyUrl(key: string, url: string) {
+    navigator.clipboard.writeText(url);
+    setCopiedKey(key);
+    setTimeout(() => setCopiedKey(null), 2000);
+  }
+
+  const groups = [
+    { label: 'Homepage — Heroes',       filter: (s: ImageSlot) => s.page === 'Homepage' && s.type === 'local' },
+    { label: 'Homepage — Client Logos', filter: (s: ImageSlot) => s.page === 'Homepage' && s.type === 'cdn' },
+    { label: 'Case Studies',            filter: (s: ImageSlot) => s.page === 'Case Studies' },
+    { label: 'Blog Posts',              filter: (s: ImageSlot) => s.page === 'Blog' },
+  ].map(g => ({ ...g, items: slots.filter(g.filter) }));
+
+  const filled = slots.filter(s => s.status !== 'missing').length;
+
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-lg font-semibold text-white">Image Slots</h2>
+          {slots.length > 0 && (
+            <p className="text-xs text-slate-500 mt-0.5">{filled}/{slots.length} filled</p>
+          )}
+        </div>
+        <button onClick={loadSlots} disabled={loading} className="p-2 rounded-lg bg-slate-800 hover:bg-slate-700/80 border border-slate-700/50 text-slate-400 transition-colors">
+          <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+        </button>
+      </div>
+
+      {loading && slots.length === 0 ? (
+        <div className="text-center py-16 text-slate-500">Loading slots…</div>
+      ) : (
+        groups.map(group => group.items.length === 0 ? null : (
+          <div key={group.label} className="bg-slate-800/60 border border-slate-700/50 rounded-2xl overflow-hidden">
+            <div className="px-5 py-3 border-b border-slate-700/50 flex items-center justify-between">
+              <h3 className="text-sm font-semibold text-white">{group.label}</h3>
+              <span className="text-xs text-slate-500">
+                {group.items.filter(s => s.status !== 'missing').length}/{group.items.length} filled
+              </span>
+            </div>
+            <div className="divide-y divide-slate-700/30">
+              {group.items.map(slot => (
+                <div key={slot.key} className="flex items-center gap-3 px-5 py-3 hover:bg-white/[0.02] transition-colors">
+                  <div className="w-10 h-10 rounded-lg bg-slate-900 overflow-hidden shrink-0 border border-slate-700/50">
+                    {slot.src ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        src={slot.src.startsWith('/') ? `${API_BASE}${slot.src}` : slot.src}
+                        alt=""
+                        className="w-full h-full object-cover"
+                      />
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center">
+                        <ImageIcon className="w-4 h-4 text-slate-600" />
+                      </div>
+                    )}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm text-white truncate">{slot.label}</p>
+                    {slot.src ? (
+                      <p className="text-xs text-slate-500 font-mono truncate" title={slot.src}>{slot.src}</p>
+                    ) : (
+                      <p className="text-xs text-slate-600 italic">No image assigned</p>
+                    )}
+                  </div>
+                  <span className={`text-xs px-2 py-0.5 rounded-full border shrink-0 ${
+                    slot.type === 'local'  ? 'bg-blue-500/10 text-blue-400 border-blue-500/20' :
+                    slot.type === 'cdn'    ? 'bg-purple-500/10 text-purple-400 border-purple-500/20' :
+                    'bg-slate-500/10 text-slate-400 border-slate-500/20'
+                  }`}>{slot.type}</span>
+                  <span className={`text-xs px-2 py-0.5 rounded-full border shrink-0 ${
+                    slot.status === 'missing'
+                      ? 'bg-red-500/10 text-red-400 border-red-500/20'
+                      : 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
+                  }`}>{slot.status === 'missing' ? 'Missing' : 'Filled'}</span>
+                  {slot.src && (
+                    <button
+                      onClick={() => copyUrl(slot.key, slot.src!)}
+                      className="shrink-0 p-1.5 rounded-lg bg-slate-700/60 hover:bg-slate-700 text-slate-400 transition-colors"
+                    >
+                      {copiedKey === slot.key
+                        ? <Check className="w-3.5 h-3.5 text-emerald-400" />
+                        : <Copy className="w-3.5 h-3.5" />}
+                    </button>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        ))
+      )}
+    </div>
+  );
+}
+
+// ─── Image Records Tab ────────────────────────────────────────────────────────
+
+function ImageRecordsTab() {
+  const [media, setMedia] = useState<MediaItem[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [copiedKey, setCopiedKey] = useState<string | null>(null);
+  const [deletingId, setDeletingId] = useState<number | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [uploading, setUploading] = useState(false);
+  const [uploadError, setUploadError] = useState('');
+
+  useEffect(() => { loadMedia(); }, []); // eslint-disable-line
+
+  async function loadMedia() {
+    setLoading(true);
+    try {
+      const res = await fetch(`${API_BASE}/api/radiance/admin/media?password=${encodeURIComponent(ADMIN_PASSWORD)}`);
+      const data = await res.json();
+      if (data.success) setMedia(data.media);
+    } catch { /* ignore */ }
+    finally { setLoading(false); }
+  }
+
+  async function handleUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploading(true);
+    setUploadError('');
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      const res = await fetch(
+        `${API_BASE}/api/radiance/admin/media/upload?password=${encodeURIComponent(ADMIN_PASSWORD)}`,
+        { method: 'POST', body: formData }
+      );
+      const data = await res.json();
+      if (data.success) await loadMedia();
+      else setUploadError(data.error || 'Upload failed');
+    } catch { setUploadError('Network error'); }
+    finally { setUploading(false); if (fileInputRef.current) fileInputRef.current.value = ''; }
+  }
+
+  async function handleDelete(id: number) {
+    if (!confirm('Delete this record?')) return;
+    setDeletingId(id);
+    try {
+      await fetch(
+        `${API_BASE}/api/radiance/admin/media/${id}?password=${encodeURIComponent(ADMIN_PASSWORD)}`,
+        { method: 'DELETE' }
+      );
+      setMedia(prev => prev.filter(m => m.id !== id));
+    } catch { /* ignore */ }
+    finally { setDeletingId(null); }
+  }
+
+  function copyText(key: string, text: string) {
+    navigator.clipboard.writeText(text);
+    setCopiedKey(key);
+    setTimeout(() => setCopiedKey(null), 2000);
+  }
+
+  return (
+    <div className="space-y-5">
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-lg font-semibold text-white">Image Records</h2>
+          {media.length > 0 && <p className="text-xs text-slate-500 mt-0.5">{media.length} records in database</p>}
+        </div>
+        <div className="flex items-center gap-3">
+          <button onClick={loadMedia} disabled={loading} className="p-2 rounded-lg bg-slate-800 hover:bg-slate-700/80 border border-slate-700/50 text-slate-400 transition-colors">
+            <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+          </button>
+          <label className={`flex items-center gap-2 px-4 py-2 rounded-xl cursor-pointer font-medium text-sm transition-colors ${
+            uploading ? 'bg-purple-800 text-purple-200 cursor-not-allowed' : 'bg-purple-600 hover:bg-purple-700 text-white'
+          }`}>
+            <Upload className="w-4 h-4" />
+            {uploading ? 'Uploading...' : 'Upload Image'}
+            <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={handleUpload} disabled={uploading} />
+          </label>
+        </div>
+      </div>
+
+      {uploadError && (
+        <div className="flex items-center gap-2 px-4 py-3 bg-red-500/10 border border-red-500/30 rounded-xl text-red-400 text-sm">
+          <span>{uploadError}</span>
+          <button onClick={() => setUploadError('')} className="ml-auto text-red-400/60 hover:text-red-400">✕</button>
+        </div>
+      )}
+
+      {loading && media.length === 0 ? (
+        <div className="text-center py-16 text-slate-500">Loading records…</div>
+      ) : media.length === 0 ? (
+        <div className="text-center py-16 text-slate-500">
+          <Database className="w-10 h-10 mx-auto mb-3 opacity-40" />
+          <p>No image records yet</p>
+        </div>
+      ) : (
+        <div className="bg-slate-800/60 border border-slate-700/50 rounded-2xl overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs text-left">
+              <thead>
+                <tr className="border-b border-slate-700/50">
+                  <th className="px-4 py-3 text-slate-400 font-medium w-10">ID</th>
+                  <th className="px-4 py-3 text-slate-400 font-medium w-12">Thumb</th>
+                  <th className="px-4 py-3 text-slate-400 font-medium">Filename</th>
+                  <th className="px-4 py-3 text-slate-400 font-medium">CDN URL</th>
+                  <th className="px-4 py-3 text-slate-400 font-medium w-20">Size</th>
+                  <th className="px-4 py-3 text-slate-400 font-medium w-24">Uploaded</th>
+                  <th className="px-4 py-3 text-slate-400 font-medium w-12"></th>
+                </tr>
+              </thead>
+              <tbody>
+                {media.map((item, i) => (
+                  <tr key={item.id} className={`border-b border-slate-700/30 hover:bg-white/[0.02] ${i % 2 !== 0 ? 'bg-white/[0.01]' : ''}`}>
+                    <td className="px-4 py-2.5 text-slate-500 font-mono">{item.id}</td>
+                    <td className="px-4 py-2.5">
+                      <div className="w-8 h-8 rounded bg-slate-900 overflow-hidden border border-slate-700/50">
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img src={item.url} alt="" className="w-full h-full object-cover" />
+                      </div>
+                    </td>
+                    <td className="px-4 py-2.5 text-slate-300 max-w-[160px] truncate" title={item.original_name}>
+                      {item.original_name}
+                    </td>
+                    <td className="px-4 py-2.5">
+                      <div className="flex items-center gap-2 max-w-[300px]">
+                        <span className="text-blue-400 truncate font-mono" title={item.url}>{item.url}</span>
+                        <button
+                          onClick={() => copyText(`rec-${item.id}`, item.url)}
+                          className="shrink-0 text-slate-500 hover:text-blue-400 transition-colors"
+                        >
+                          {copiedKey === `rec-${item.id}`
+                            ? <Check className="w-3.5 h-3.5 text-emerald-400" />
+                            : <Copy className="w-3.5 h-3.5" />}
+                        </button>
+                      </div>
+                    </td>
+                    <td className="px-4 py-2.5 text-slate-500">{(item.size / 1024).toFixed(0)} KB</td>
+                    <td className="px-4 py-2.5 text-slate-500">{new Date(item.uploaded_at).toLocaleDateString()}</td>
+                    <td className="px-4 py-2.5">
+                      <button
+                        onClick={() => handleDelete(item.id)}
+                        disabled={deletingId === item.id}
+                        className="p-1.5 rounded-lg bg-red-900/20 hover:bg-red-900/50 text-red-400 transition-colors disabled:opacity-40"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── News Clippings Tab ───────────────────────────────────────────────────────
+
+interface NewsClipping {
+  id: number;
+  url: string;
+  alt: string;
+  outlet: string;
+  headline: string;
+  sort_order: number;
+}
+
+function NewsClippingsTab() {
+  const [clippings, setClippings] = useState<NewsClipping[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [adding, setAdding] = useState(false);
+  const [deletingId, setDeletingId] = useState<number | null>(null);
+  const [showAddForm, setShowAddForm] = useState(false);
+  const [form, setForm] = useState({ url: '', outlet: '', headline: '', alt: '' });
+  const [addError, setAddError] = useState('');
+  const [copiedId, setCopiedId] = useState<number | null>(null);
+
+  useEffect(() => { loadClippings(); }, []); // eslint-disable-line
+
+  async function loadClippings() {
+    setLoading(true);
+    try {
+      const res = await fetch(`${API_BASE}/api/radiance/news-clippings`);
+      const data = await res.json();
+      if (data.success) setClippings(data.clippings);
+    } catch { /* ignore */ }
+    finally { setLoading(false); }
+  }
+
+  async function handleAdd(e: React.FormEvent) {
+    e.preventDefault();
+    if (!form.url.trim()) { setAddError('URL is required'); return; }
+    setAdding(true);
+    setAddError('');
+    try {
+      const res = await fetch(
+        `${API_BASE}/api/radiance/admin/news-clippings?password=${encodeURIComponent(ADMIN_PASSWORD)}`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ ...form, sort_order: clippings.length }),
+        }
+      );
+      const data = await res.json();
+      if (data.success) {
+        await loadClippings();
+        setForm({ url: '', outlet: '', headline: '', alt: '' });
+        setShowAddForm(false);
+      } else {
+        setAddError(data.error || 'Failed to add');
+      }
+    } catch { setAddError('Network error'); }
+    finally { setAdding(false); }
+  }
+
+  async function handleDelete(id: number) {
+    if (!confirm('Remove this clipping?')) return;
+    setDeletingId(id);
+    try {
+      await fetch(
+        `${API_BASE}/api/radiance/admin/news-clippings/${id}?password=${encodeURIComponent(ADMIN_PASSWORD)}`,
+        { method: 'DELETE' }
+      );
+      setClippings(prev => prev.filter(c => c.id !== id));
+    } catch { /* ignore */ }
+    finally { setDeletingId(null); }
+  }
+
+  function copyUrl(id: number, url: string) {
+    navigator.clipboard.writeText(url);
+    setCopiedId(id);
+    setTimeout(() => setCopiedId(null), 2000);
+  }
+
+  return (
+    <div className="space-y-5">
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-lg font-semibold text-white">News Clippings</h2>
+          {clippings.length > 0 && <p className="text-xs text-slate-500 mt-0.5">{clippings.length} clippings</p>}
+        </div>
+        <div className="flex items-center gap-3">
+          <button onClick={loadClippings} disabled={loading} className="p-2 rounded-lg bg-slate-800 hover:bg-slate-700/80 border border-slate-700/50 text-slate-400 transition-colors">
+            <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+          </button>
+          <button
+            onClick={() => { setShowAddForm(!showAddForm); setAddError(''); }}
+            className="flex items-center gap-2 px-4 py-2 rounded-xl font-medium text-sm bg-purple-600 hover:bg-purple-700 text-white transition-colors"
+          >
+            {showAddForm ? <X className="w-4 h-4" /> : <Upload className="w-4 h-4" />}
+            {showAddForm ? 'Cancel' : 'Add Clipping'}
+          </button>
+        </div>
+      </div>
+
+      {showAddForm && (
+        <form onSubmit={handleAdd} className="bg-slate-800/60 border border-slate-700/50 rounded-2xl p-5 space-y-4">
+          <h3 className="text-sm font-semibold text-white">Add News Clipping</h3>
+          <div className="space-y-3">
+            <div>
+              <label className="block text-xs text-slate-400 mb-1">Image URL <span className="text-red-400">*</span></label>
+              <input
+                type="url"
+                value={form.url}
+                onChange={e => setForm(f => ({ ...f, url: e.target.value }))}
+                placeholder="https://..."
+                className="w-full px-3 py-2 rounded-lg bg-slate-900 border border-slate-600 text-white text-sm focus:outline-none focus:ring-2 focus:ring-purple-500 placeholder-slate-600"
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-xs text-slate-400 mb-1">Media Outlet</label>
+                <input
+                  type="text"
+                  value={form.outlet}
+                  onChange={e => setForm(f => ({ ...f, outlet: e.target.value }))}
+                  placeholder="South China Morning Post"
+                  className="w-full px-3 py-2 rounded-lg bg-slate-900 border border-slate-600 text-white text-sm focus:outline-none focus:ring-2 focus:ring-purple-500 placeholder-slate-600"
+                />
+              </div>
+              <div>
+                <label className="block text-xs text-slate-400 mb-1">Headline</label>
+                <input
+                  type="text"
+                  value={form.headline}
+                  onChange={e => setForm(f => ({ ...f, headline: e.target.value }))}
+                  placeholder="Article headline…"
+                  className="w-full px-3 py-2 rounded-lg bg-slate-900 border border-slate-600 text-white text-sm focus:outline-none focus:ring-2 focus:ring-purple-500 placeholder-slate-600"
+                />
+              </div>
+            </div>
+          </div>
+          {addError && <p className="text-sm text-red-400">{addError}</p>}
+          {form.url && (
+            <div className="rounded-lg overflow-hidden w-32 h-20 bg-slate-900 border border-slate-700/50">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={form.url} alt="" className="w-full h-full object-cover" />
+            </div>
+          )}
+          <button
+            type="submit"
+            disabled={adding}
+            className="flex items-center gap-2 px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white text-sm font-medium rounded-xl transition-colors disabled:opacity-50"
+          >
+            {adding ? <><RefreshCw className="w-3.5 h-3.5 animate-spin" /> Adding…</> : 'Add Clipping'}
+          </button>
+        </form>
+      )}
+
+      {loading && clippings.length === 0 ? (
+        <div className="text-center py-16 text-slate-500">Loading clippings…</div>
+      ) : clippings.length === 0 ? (
+        <div className="text-center py-16 text-slate-500">
+          <FileText className="w-10 h-10 mx-auto mb-3 opacity-40" />
+          <p>No clippings yet</p>
+          <p className="text-xs mt-1">Upload clipping screenshots to Media Library, then add them here by URL.</p>
+        </div>
+      ) : (
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
+          {clippings.map(clip => (
+            <div key={clip.id} className="group bg-slate-800/60 border border-slate-700/50 rounded-xl overflow-hidden">
+              <div className="aspect-[4/3] bg-slate-900 relative">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={clip.url} alt={clip.alt || clip.headline} className="w-full h-full object-cover" />
+              </div>
+              <div className="p-2.5 space-y-1.5">
+                {clip.outlet && <p className="text-xs font-semibold text-purple-400 truncate">{clip.outlet}</p>}
+                {clip.headline && <p className="text-xs text-slate-300 truncate" title={clip.headline}>{clip.headline}</p>}
+                <div className="flex gap-1.5">
+                  <button
+                    onClick={() => copyUrl(clip.id, clip.url)}
+                    className="flex-1 flex items-center justify-center gap-1 py-1 rounded-lg text-xs bg-slate-700/60 hover:bg-slate-700 text-slate-300 transition-colors"
+                  >
+                    {copiedId === clip.id ? <><Check className="w-3 h-3 text-emerald-400" /> Copied</> : <><Copy className="w-3 h-3" /> URL</>}
+                  </button>
+                  <button
+                    onClick={() => handleDelete(clip.id)}
+                    disabled={deletingId === clip.id}
+                    className="p-1 rounded-lg bg-red-900/30 hover:bg-red-900/60 text-red-400 transition-colors disabled:opacity-40"
+                  >
+                    <Trash2 className="w-3 h-3" />
+                  </button>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── PR Gallery Tab ───────────────────────────────────────────────────────────
+
+interface PrPhoto {
+  id: number;
+  url: string;
+  alt: string;
+  caption_en: string;
+  caption_zh: string;
+  sort_order: number;
+}
+
+function PrGalleryTab() {
+  const [photos, setPhotos] = useState<PrPhoto[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [adding, setAdding] = useState(false);
+  const [deletingId, setDeletingId] = useState<number | null>(null);
+  const [showAddForm, setShowAddForm] = useState(false);
+  const [form, setForm] = useState({ url: '', caption_en: '', caption_zh: '', alt: '' });
+  const [addError, setAddError] = useState('');
+  const [copiedId, setCopiedId] = useState<number | null>(null);
+
+  useEffect(() => { loadPhotos(); }, []); // eslint-disable-line
+
+  async function loadPhotos() {
+    setLoading(true);
+    try {
+      const res = await fetch(`${API_BASE}/api/radiance/pr-gallery`);
+      const data = await res.json();
+      if (data.success) setPhotos(data.photos);
+    } catch { /* ignore */ }
+    finally { setLoading(false); }
+  }
+
+  async function handleAdd(e: React.FormEvent) {
+    e.preventDefault();
+    if (!form.url.trim()) { setAddError('URL is required'); return; }
+    setAdding(true);
+    setAddError('');
+    try {
+      const res = await fetch(
+        `${API_BASE}/api/radiance/admin/pr-gallery?password=${encodeURIComponent(ADMIN_PASSWORD)}`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ ...form, sort_order: photos.length }),
+        }
+      );
+      const data = await res.json();
+      if (data.success) {
+        await loadPhotos();
+        setForm({ url: '', caption_en: '', caption_zh: '', alt: '' });
+        setShowAddForm(false);
+      } else {
+        setAddError(data.error || 'Failed to add');
+      }
+    } catch { setAddError('Network error'); }
+    finally { setAdding(false); }
+  }
+
+  async function handleDelete(id: number) {
+    if (!confirm('Remove this photo from the gallery?')) return;
+    setDeletingId(id);
+    try {
+      await fetch(
+        `${API_BASE}/api/radiance/admin/pr-gallery/${id}?password=${encodeURIComponent(ADMIN_PASSWORD)}`,
+        { method: 'DELETE' }
+      );
+      setPhotos(prev => prev.filter(p => p.id !== id));
+    } catch { /* ignore */ }
+    finally { setDeletingId(null); }
+  }
+
+  function copyUrl(id: number, url: string) {
+    navigator.clipboard.writeText(url);
+    setCopiedId(id);
+    setTimeout(() => setCopiedId(null), 2000);
+  }
+
+  return (
+    <div className="space-y-5">
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-lg font-semibold text-white">PR Event Gallery</h2>
+          {photos.length > 0 && <p className="text-xs text-slate-500 mt-0.5">{photos.length} photos</p>}
+        </div>
+        <div className="flex items-center gap-3">
+          <button onClick={loadPhotos} disabled={loading} className="p-2 rounded-lg bg-slate-800 hover:bg-slate-700/80 border border-slate-700/50 text-slate-400 transition-colors">
+            <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+          </button>
+          <button
+            onClick={() => { setShowAddForm(!showAddForm); setAddError(''); }}
+            className="flex items-center gap-2 px-4 py-2 rounded-xl font-medium text-sm bg-purple-600 hover:bg-purple-700 text-white transition-colors"
+          >
+            {showAddForm ? <X className="w-4 h-4" /> : <Upload className="w-4 h-4" />}
+            {showAddForm ? 'Cancel' : 'Add Photo'}
+          </button>
+        </div>
+      </div>
+
+      {showAddForm && (
+        <form onSubmit={handleAdd} className="bg-slate-800/60 border border-slate-700/50 rounded-2xl p-5 space-y-4">
+          <h3 className="text-sm font-semibold text-white">Add Photo to Gallery</h3>
+          <div className="space-y-3">
+            <div>
+              <label className="block text-xs text-slate-400 mb-1">Image URL <span className="text-red-400">*</span></label>
+              <input
+                type="url"
+                value={form.url}
+                onChange={e => setForm(f => ({ ...f, url: e.target.value }))}
+                placeholder="https://..."
+                className="w-full px-3 py-2 rounded-lg bg-slate-900 border border-slate-600 text-white text-sm focus:outline-none focus:ring-2 focus:ring-purple-500 placeholder-slate-600"
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-xs text-slate-400 mb-1">Caption (EN)</label>
+                <input
+                  type="text"
+                  value={form.caption_en}
+                  onChange={e => setForm(f => ({ ...f, caption_en: e.target.value }))}
+                  placeholder="Press Conference"
+                  className="w-full px-3 py-2 rounded-lg bg-slate-900 border border-slate-600 text-white text-sm focus:outline-none focus:ring-2 focus:ring-purple-500 placeholder-slate-600"
+                />
+              </div>
+              <div>
+                <label className="block text-xs text-slate-400 mb-1">Caption (中文)</label>
+                <input
+                  type="text"
+                  value={form.caption_zh}
+                  onChange={e => setForm(f => ({ ...f, caption_zh: e.target.value }))}
+                  placeholder="新聞發布會"
+                  className="w-full px-3 py-2 rounded-lg bg-slate-900 border border-slate-600 text-white text-sm focus:outline-none focus:ring-2 focus:ring-purple-500 placeholder-slate-600"
+                />
+              </div>
+            </div>
+          </div>
+          {addError && <p className="text-sm text-red-400">{addError}</p>}
+          {form.url && (
+            <div className="rounded-lg overflow-hidden w-32 h-20 bg-slate-900 border border-slate-700/50">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={form.url} alt="" className="w-full h-full object-cover" />
+            </div>
+          )}
+          <button
+            type="submit"
+            disabled={adding}
+            className="flex items-center gap-2 px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white text-sm font-medium rounded-xl transition-colors disabled:opacity-50"
+          >
+            {adding ? <><RefreshCw className="w-3.5 h-3.5 animate-spin" /> Adding…</> : 'Add to Gallery'}
+          </button>
+        </form>
+      )}
+
+      {loading && photos.length === 0 ? (
+        <div className="text-center py-16 text-slate-500">Loading gallery…</div>
+      ) : photos.length === 0 ? (
+        <div className="text-center py-16 text-slate-500">
+          <ImageIcon className="w-10 h-10 mx-auto mb-3 opacity-40" />
+          <p>No photos in gallery yet</p>
+          <p className="text-xs mt-1">Upload photos to the Media Library first, then add them here by URL.</p>
+        </div>
+      ) : (
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
+          {photos.map(photo => (
+            <div key={photo.id} className="group bg-slate-800/60 border border-slate-700/50 rounded-xl overflow-hidden">
+              <div className="aspect-[4/3] bg-slate-900 relative">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={photo.url} alt={photo.alt || photo.caption_en} className="w-full h-full object-cover" />
+              </div>
+              <div className="p-2.5 space-y-2">
+                {(photo.caption_en || photo.caption_zh) && (
+                  <p className="text-xs text-slate-300 truncate">{photo.caption_en || photo.caption_zh}</p>
+                )}
+                <div className="flex gap-1.5">
+                  <button
+                    onClick={() => copyUrl(photo.id, photo.url)}
+                    className="flex-1 flex items-center justify-center gap-1 py-1 rounded-lg text-xs bg-slate-700/60 hover:bg-slate-700 text-slate-300 transition-colors"
+                  >
+                    {copiedId === photo.id ? <><Check className="w-3 h-3 text-emerald-400" /> Copied</> : <><Copy className="w-3 h-3" /> URL</>}
+                  </button>
+                  <button
+                    onClick={() => handleDelete(photo.id)}
+                    disabled={deletingId === photo.id}
+                    className="p-1 rounded-lg bg-red-900/30 hover:bg-red-900/60 text-red-400 transition-colors disabled:opacity-40"
+                  >
+                    <Trash2 className="w-3 h-3" />
                   </button>
                 </div>
               </div>
@@ -366,12 +1110,12 @@ function MediaPickerModal({ onSelect, onClose }: { onSelect: (url: string) => vo
               {media.map(item => (
                 <button
                   key={item.id}
-                  onClick={() => { onSelect(`${API_BASE}${item.url}`); onClose(); }}
+                  onClick={() => { onSelect(item.url); onClose(); }}
                   className="group aspect-square bg-slate-900 rounded-lg overflow-hidden border border-slate-700/50 hover:border-purple-500 transition-colors"
                 >
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img
-                    src={`${API_BASE}${item.url}`}
+                    src={item.url}
                     alt={item.original_name}
                     className="w-full h-full object-cover group-hover:opacity-90 transition-opacity"
                   />
@@ -1023,6 +1767,48 @@ function VisualSection({
   );
 }
 
+function SitePackTab() {
+  const [downloading, setDownloading] = useState(false);
+
+  async function downloadPack() {
+    setDownloading(true);
+    try {
+      const res = await fetch(`${API_BASE}/api/radiance/admin/site-pack?password=${encodeURIComponent(ADMIN_PASSWORD)}`);
+      if (!res.ok) throw new Error('Server error ' + res.status);
+      const blob = await res.blob();
+      const date = new Date().toISOString().slice(0, 10);
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `radiance-site-pack-${date}.zip`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      alert('Failed to download site pack: ' + (err as Error).message);
+    } finally {
+      setDownloading(false);
+    }
+  }
+
+  return (
+    <div className="max-w-lg">
+      <h2 className="text-lg font-semibold text-white mb-2">Pack Website Files</h2>
+      <p className="text-sm text-slate-400 mb-6">
+        Downloads a ZIP of all Radiance static HTML pages, uploaded media, and assets — ready for handoff or backup.
+      </p>
+      <button
+        onClick={downloadPack}
+        disabled={downloading}
+        className="flex items-center gap-2 px-5 py-3 rounded-xl text-sm font-medium bg-emerald-600/20 hover:bg-emerald-600/40 text-emerald-300 border border-emerald-500/30 transition-colors disabled:opacity-50"
+      >
+        {downloading
+          ? <><RefreshCw className="w-4 h-4 animate-spin" /> Packing…</>
+          : <><Download className="w-4 h-4" /> Download Site Pack</>}
+      </button>
+    </div>
+  );
+}
+
 function ImageGenerationTab() {
   const [bsVisuals, setBsVisuals] = useState<VisualItem[]>([]);
   const [xinyiVisuals, setXinyiVisuals] = useState<VisualItem[]>([]);
@@ -1042,6 +1828,7 @@ function ImageGenerationTab() {
   const [deletingId, setDeletingId] = useState<number | null>(null);
   const uploadRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
+  const [publishingRadiance, setPublishingRadiance] = useState(false);
 
   useEffect(() => { loadVisuals(); loadMedia(); }, []); // eslint-disable-line
 
@@ -1061,6 +1848,26 @@ function ImageGenerationTab() {
       setError('Failed to load visual list: ' + (err as Error).message);
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function publishRadiancePack() {
+    setPublishingRadiance(true);
+    try {
+      const res = await fetch(`${API_BASE}/api/radiance/admin/site-pack?password=${encodeURIComponent(ADMIN_PASSWORD)}`);
+      if (!res.ok) throw new Error('Server error');
+      const blob = await res.blob();
+      const date = new Date().toISOString().slice(0, 10);
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `radiance-site-pack-${date}.zip`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      alert('Failed to download site pack: ' + (err as Error).message);
+    } finally {
+      setPublishingRadiance(false);
     }
   }
 
@@ -1111,7 +1918,7 @@ function ImageGenerationTab() {
   }
 
   function copyMediaUrl(item: MediaItem) {
-    navigator.clipboard.writeText(`${API_BASE}${item.url}`);
+    navigator.clipboard.writeText(item.url);
     setCopiedId(item.id);
     setTimeout(() => setCopiedId(null), 2000);
   }
@@ -1182,6 +1989,16 @@ function ImageGenerationTab() {
         <div className="flex items-center justify-between mb-4">
           <h3 className="text-base font-semibold text-white">Radiance Media Library</h3>
           <div className="flex items-center gap-2">
+            <button
+              onClick={publishRadiancePack}
+              disabled={publishingRadiance}
+              title="Download full site pack (HTML + images + uploads)"
+              className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-sm font-medium bg-emerald-600/20 hover:bg-emerald-600/40 text-emerald-300 border border-emerald-500/30 transition-colors disabled:opacity-50"
+            >
+              {publishingRadiance
+                ? <><RefreshCw className="w-4 h-4 animate-spin" /> Packing…</>
+                : <><FileText className="w-4 h-4" /> Publish Site Pack</>}
+            </button>
             <button onClick={loadMedia} disabled={mediaLoading} className="p-2 rounded-lg bg-slate-800 hover:bg-slate-700/80 border border-slate-700/50 text-slate-400 transition-colors">
               <RefreshCw className={`w-4 h-4 ${mediaLoading ? 'animate-spin' : ''}`} />
             </button>
@@ -1206,7 +2023,7 @@ function ImageGenerationTab() {
               <div key={item.id} className="bg-slate-800/60 border border-slate-700/50 rounded-xl overflow-hidden">
                 <div className="aspect-square bg-slate-900">
                   {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={`${API_BASE}${item.url}`} alt={item.original_name} className="w-full h-full object-cover" />
+                  <img src={item.url} alt={item.original_name} className="w-full h-full object-cover" />
                 </div>
                 <div className="p-2 space-y-1.5">
                   <p className="text-xs text-slate-400 truncate" title={item.original_name}>{item.original_name}</p>
@@ -1231,14 +2048,19 @@ function ImageGenerationTab() {
 
 // ─── Main Admin Panel ─────────────────────────────────────────────────────────
 
-type AdminTab = 'enquiries' | 'media' | 'blog' | 'case-studies' | 'images';
+type AdminTab = 'enquiries' | 'image-slots' | 'image-records' | 'media' | 'pr-gallery' | 'news-clippings' | 'blog' | 'case-studies' | 'images' | 'site-pack';
 
 const NAV_ITEMS: { id: AdminTab; label: string; icon: React.ReactNode }[] = [
-  { id: 'enquiries', label: 'Enquiries', icon: <Mail className="w-4 h-4" /> },
-  { id: 'media', label: 'Media Library', icon: <ImageIcon className="w-4 h-4" /> },
-  { id: 'blog', label: 'Blog CMS', icon: <FileText className="w-4 h-4" /> },
-  { id: 'case-studies', label: 'Case Studies', icon: <BookOpen className="w-4 h-4" /> },
-  { id: 'images', label: 'Image Gen', icon: <Wand2 className="w-4 h-4" /> },
+  { id: 'enquiries',      label: 'Enquiries',        icon: <Mail className="w-4 h-4" /> },
+  { id: 'image-slots',    label: 'Image Slots',      icon: <LayoutGrid className="w-4 h-4" /> },
+  { id: 'image-records',  label: 'Image Records',    icon: <Database className="w-4 h-4" /> },
+  { id: 'media',          label: 'Media Library',    icon: <ImageIcon className="w-4 h-4" /> },
+  { id: 'pr-gallery',     label: 'PR Gallery',       icon: <Star className="w-4 h-4" /> },
+  { id: 'news-clippings', label: 'News Clippings',   icon: <FileText className="w-4 h-4" /> },
+  { id: 'blog',           label: 'Blog CMS',         icon: <BookOpen className="w-4 h-4" /> },
+  { id: 'case-studies',   label: 'Case Studies',     icon: <BookOpen className="w-4 h-4" /> },
+  { id: 'images',         label: 'Image Gen',        icon: <Wand2 className="w-4 h-4" /> },
+  { id: 'site-pack',      label: 'Pack Website',     icon: <Download className="w-4 h-4" /> },
 ];
 
 export default function RadianceAdminPage() {
@@ -1326,10 +2148,15 @@ export default function RadianceAdminPage() {
               onRefresh={loadSubmissions}
             />
           )}
+          {activeTab === 'image-slots' && <ImageSlotsTab />}
+          {activeTab === 'image-records' && <ImageRecordsTab />}
           {activeTab === 'media' && <MediaLibraryTab />}
+          {activeTab === 'pr-gallery' && <PrGalleryTab />}
+          {activeTab === 'news-clippings' && <NewsClippingsTab />}
           {activeTab === 'blog' && <BlogCmsTab />}
           {activeTab === 'case-studies' && <CaseStudiesCmsTab />}
           {activeTab === 'images' && <ImageGenerationTab />}
+          {activeTab === 'site-pack' && <SitePackTab />}
         </main>
       </div>
     </div>

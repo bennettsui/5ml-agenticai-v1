@@ -302,6 +302,39 @@ module.exports = function createCrmRoutes(db) {
     }
   });
 
+  // Update project (brief, deliverables, status, etc.)
+  router.put('/projects/:id', async (req, res) => {
+    try {
+      const { name, type, brief, start_date, end_date, status, success_flag, deliverables } = req.body;
+
+      // Build SET clauses dynamically so we only touch provided fields
+      const sets = ['updated_at = NOW()'];
+      const params = [req.params.id];
+
+      if (name !== undefined) { params.push(name?.trim() || null); sets.push(`name = $${params.length}`); }
+      if (type !== undefined) { params.push(type || null); sets.push(`type = $${params.length}`); }
+      if (brief !== undefined) { params.push(brief); sets.push(`brief = $${params.length}`); }
+      if (start_date !== undefined) { params.push(start_date || null); sets.push(`start_date = $${params.length}`); }
+      if (end_date !== undefined) { params.push(end_date || null); sets.push(`end_date = $${params.length}`); }
+      if (status !== undefined) { params.push(status || null); sets.push(`status = $${params.length}`); }
+      if (success_flag !== undefined) { params.push(success_flag || null); sets.push(`success_flag = $${params.length}`); }
+      if (deliverables !== undefined) { params.push(JSON.stringify(deliverables)); sets.push(`deliverables = $${params.length}`); }
+
+      const result = await pool.query(
+        `UPDATE crm_projects SET ${sets.join(', ')} WHERE id = $1 RETURNING *`,
+        params
+      );
+
+      if (result.rows.length === 0) {
+        return res.status(404).json({ detail: 'Project not found' });
+      }
+      res.json(result.rows[0]);
+    } catch (error) {
+      console.error('Error updating project:', error);
+      res.status(500).json({ detail: error.message });
+    }
+  });
+
   // ==========================================
   // FEEDBACK
   // ==========================================
@@ -624,6 +657,207 @@ module.exports = function createCrmRoutes(db) {
       daily_cost_limit_usd: 50,
       budget_warning: false,
     });
+  });
+
+  // ==========================================
+  // PROJECT ATTACHMENTS
+  // ==========================================
+
+  const multer = require('multer');
+  const path = require('path');
+  const deepseekService = require('../services/deepseekService');
+
+  // Files are stored as bytea in Postgres — no disk writes, no ephemeral-filesystem issues.
+  const crmUpload = multer({
+    storage: multer.memoryStorage(),
+    limits: { fileSize: 20 * 1024 * 1024 }, // 20 MB
+  });
+
+  /** Columns returned to the client — excludes file_data (raw bytes) */
+  const ATTACHMENT_COLS = 'id, project_id, original_name, filename, file_path, mime_type, size, summary, uploaded_at';
+
+  /** True when a file is a PDF based on MIME type or extension */
+  function isPdfFile(mimeType, originalName) {
+    return (mimeType || '').includes('pdf') || (originalName || '').toLowerCase().endsWith('.pdf');
+  }
+
+  /** Try to extract text from a Buffer; returns null if unsupported */
+  async function tryExtractText(buf, mimeType, originalName) {
+    if (isPdfFile(mimeType, originalName)) {
+      try {
+        const pdfParse = require('pdf-parse');
+        const data = await pdfParse(buf);
+        const text = (data.text || '').trim();
+        if (!text) return null;
+        return text.length > 40000 ? text.slice(0, 40000) + '\n[truncated]' : text;
+      } catch {
+        return null;
+      }
+    }
+
+    const textMimes = ['text/', 'application/json', 'application/xml'];
+    const textExts = ['.txt', '.md', '.csv', '.json', '.xml', '.html', '.htm', '.js', '.ts', '.py', '.log'];
+    const couldBeText = textMimes.some(m => (mimeType || '').startsWith(m));
+    const hasTextExt = textExts.some(e => (originalName || '').toLowerCase().endsWith(e));
+    if (!couldBeText && !hasTextExt) return null;
+
+    try {
+      const content = buf.toString('utf8');
+      return content.length > 40000 ? content.slice(0, 40000) + '\n[truncated]' : content;
+    } catch {
+      return null;
+    }
+  }
+
+  /** Generate a DeepSeek summary for text content */
+  async function generateSummary(text, fileName) {
+    try {
+      const result = await deepseekService.analyze(
+        'You are a document analyst. Summarize the document concisely in 2-4 sentences, focusing on key information, purpose, and any important data points.',
+        `File: ${fileName}\n\n${text}`,
+        { maxTokens: 300, temperature: 0.3 }
+      );
+      return result.content || null;
+    } catch {
+      return null;
+    }
+  }
+
+  // Upload attachment — file stored as bytea in Postgres, no disk I/O
+  router.post('/projects/:id/attachments', crmUpload.single('file'), async (req, res) => {
+    try {
+      if (!req.file) return res.status(400).json({ detail: 'No file uploaded' });
+
+      const projectCheck = await pool.query('SELECT id FROM crm_projects WHERE id = $1', [req.params.id]);
+      if (projectCheck.rows.length === 0) return res.status(404).json({ detail: 'Project not found' });
+
+      // Auto-summarize if content is readable
+      let summary = null;
+      const textContent = await tryExtractText(req.file.buffer, req.file.mimetype, req.file.originalname);
+      if (textContent) summary = await generateSummary(textContent, req.file.originalname);
+
+      const filename = `${Date.now()}-${Math.random().toString(36).slice(2)}${path.extname(req.file.originalname)}`;
+
+      const result = await pool.query(
+        `INSERT INTO crm_project_attachments
+           (project_id, original_name, filename, file_path, mime_type, size, summary, file_data)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+         RETURNING ${ATTACHMENT_COLS}`,
+        [
+          req.params.id,
+          req.file.originalname,
+          filename,
+          `/uploads/crm/${req.params.id}/${filename}`,
+          req.file.mimetype || null,
+          req.file.size || null,
+          summary,
+          req.file.buffer,
+        ]
+      );
+
+      res.status(201).json(result.rows[0]);
+    } catch (error) {
+      console.error('Error uploading attachment:', error);
+      res.status(500).json({ detail: error.message });
+    }
+  });
+
+  // List attachments — exclude file_data (raw bytes) from list response
+  router.get('/projects/:id/attachments', async (req, res) => {
+    try {
+      const result = await pool.query(
+        `SELECT ${ATTACHMENT_COLS} FROM crm_project_attachments WHERE project_id = $1 ORDER BY uploaded_at DESC`,
+        [req.params.id]
+      );
+      res.json(result.rows);
+    } catch (error) {
+      console.error('Error listing attachments:', error);
+      res.status(500).json({ detail: error.message });
+    }
+  });
+
+  // Download attachment — reads bytes from Postgres
+  router.get('/projects/:id/attachments/:attachmentId/download', async (req, res) => {
+    try {
+      const result = await pool.query(
+        'SELECT original_name, mime_type, file_data FROM crm_project_attachments WHERE id = $1 AND project_id = $2',
+        [req.params.attachmentId, req.params.id]
+      );
+      if (result.rows.length === 0) return res.status(404).json({ detail: 'Attachment not found' });
+      const { original_name, mime_type, file_data } = result.rows[0];
+      if (!file_data) return res.status(404).json({ detail: 'File data not stored in database' });
+      res.setHeader('Content-Type', mime_type || 'application/octet-stream');
+      res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(original_name)}"`);
+      res.send(file_data);
+    } catch (error) {
+      console.error('Error downloading attachment:', error);
+      res.status(500).json({ detail: error.message });
+    }
+  });
+
+  // (Re-)generate AI summary — reads bytes from Postgres, no disk needed
+  router.post('/projects/:id/attachments/:attachmentId/summarize', async (req, res) => {
+    try {
+      const attResult = await pool.query(
+        'SELECT id, original_name, mime_type, file_data FROM crm_project_attachments WHERE id = $1 AND project_id = $2',
+        [req.params.attachmentId, req.params.id]
+      );
+      if (attResult.rows.length === 0) return res.status(404).json({ detail: 'Attachment not found' });
+      const att = attResult.rows[0];
+
+      if (!att.file_data) {
+        return res.status(422).json({ detail: 'No file data stored. Re-upload the file to generate a summary.' });
+      }
+
+      const buf = att.file_data; // pg returns Buffer for BYTEA
+      let summary = null;
+      if (isPdfFile(att.mime_type, att.original_name)) {
+        try {
+          const llm = require('../lib/llm');
+          const base64 = buf.toString('base64');
+          const result = await llm.chat('haiku', [
+            {
+              role: 'user',
+              content: [
+                { type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: base64 } },
+                { type: 'text', text: `Summarize this PDF concisely in 2-4 sentences. File: ${att.original_name}` },
+              ],
+            },
+          ], { maxTokens: 300 });
+          summary = result.text || null;
+        } catch (e) {
+          return res.status(500).json({ detail: 'PDF summarization failed: ' + e.message });
+        }
+      } else {
+        const text = await tryExtractText(buf, att.mime_type, att.original_name);
+        if (!text) return res.status(422).json({ detail: 'File cannot be read as text' });
+        summary = await generateSummary(text, att.original_name);
+      }
+
+      const updated = await pool.query(
+        `UPDATE crm_project_attachments SET summary = $1 WHERE id = $2 RETURNING ${ATTACHMENT_COLS}`,
+        [summary, att.id]
+      );
+      res.json(updated.rows[0]);
+    } catch (error) {
+      console.error('Error summarizing attachment:', error);
+      res.status(500).json({ detail: error.message });
+    }
+  });
+
+  // Delete an attachment — no disk cleanup needed
+  router.delete('/projects/:id/attachments/:attachmentId', async (req, res) => {
+    try {
+      const result = await pool.query(
+        'DELETE FROM crm_project_attachments WHERE id = $1 AND project_id = $2 RETURNING id',
+        [req.params.attachmentId, req.params.id]
+      );
+      if (result.rows.length === 0) return res.status(404).json({ detail: 'Attachment not found' });
+      res.status(204).send();
+    } catch (error) {
+      console.error('Error deleting attachment:', error);
+      res.status(500).json({ detail: error.message });
+    }
   });
 
   return router;

@@ -14,6 +14,36 @@ const GROUP = 'Topic Intelligence';
 // Store scheduled jobs
 const scheduledJobs = new Map();
 
+// ─── Postgres advisory lock helpers (prevents duplicate cron runs across Fly machines) ───
+
+/** djb2 hash → positive 32-bit int, suitable for pg_advisory_lock */
+function _hashJobKey(str) {
+  let h = 5381;
+  for (let i = 0; i < str.length; i++) h = ((h << 5) + h + str.charCodeAt(i)) & 0x7fffffff;
+  return h;
+}
+
+let _pool = null; // set in initialize()
+
+async function _tryAcquireJobLock(jobId) {
+  if (!_pool) return true; // no DB — allow (single-machine dev)
+  try {
+    const key = _hashJobKey('scheduler:' + jobId);
+    const { rows } = await _pool.query('SELECT pg_try_advisory_lock($1) AS ok', [key]);
+    return rows[0].ok;
+  } catch {
+    return true; // if lock check fails, allow through (fail-open)
+  }
+}
+
+async function _releaseJobLock(jobId) {
+  if (!_pool) return;
+  try {
+    const key = _hashJobKey('scheduler:' + jobId);
+    await _pool.query('SELECT pg_advisory_unlock($1)', [key]);
+  } catch {}
+}
+
 // Dependencies will be injected
 let db = null;
 let scanFunction = null;
@@ -53,7 +83,15 @@ async function processQueue() {
     }
 
     const jobId = `intelligence:${type}-${topicId}`;
-    runningScans.add(topicId);
+
+    // Acquire a Postgres advisory lock so only one Fly machine runs this job at a time
+    const gotLock = await _tryAcquireJobLock(jobId);
+    if (!gotLock) {
+      console.log(`[Scheduler] Skipping ${type} scan for "${topicName}" - another machine already running it`);
+      runningScans.delete(topicId); // was added above; undo
+      continue;
+    }
+
     const startTime = Date.now();
     console.log(`[Scheduler] 🔄 Starting ${type} scan for: ${topicName}`);
     registry.markRunning(jobId);
@@ -73,6 +111,7 @@ async function processQueue() {
       registry.markFailed(jobId, error.message);
     } finally {
       runningScans.delete(topicId);
+      await _releaseJobLock(jobId);
     }
 
     // Yield to the event loop between scans so cron ticks aren't delayed
@@ -87,6 +126,7 @@ async function processQueue() {
  */
 function initialize(database, scanFn, digestFn) {
   db = database;
+  _pool = database.pool || null; // expose pg Pool for advisory locks
   scanFunction = scanFn;
   digestFunction = digestFn || null;
   console.log('[Scheduler] Scheduler initialized');
