@@ -261,7 +261,10 @@ async function processReceiptBatch(batchId, dropboxUrl, clientName, uploadedFile
     console.log(`🧠 OCR: Google Vision + DeepSeek`);
     console.log(`${'='.repeat(60)}\n`);
 
-    // Step 1: Set status
+    // Step 1: Ensure schema (must run before any column references)
+    await ensureReceiptsSchema();
+
+    // Step 2: Set status
     await db.query(
       "UPDATE receipt_batches SET status='processing', ocr_provider='google-vision', updated_at=NOW() WHERE batch_id=$1",
       [batchId]
@@ -269,7 +272,7 @@ async function processReceiptBatch(batchId, dropboxUrl, clientName, uploadedFile
     await logProcessing(batchId, 'info', 'batch_start', 'Processing started — Google Vision + DeepSeek');
     wsServer.sendStatus(batchId, { status: 'processing', progress: 5 });
 
-    // Step 2: Env check
+    // Step 3a: Env check
     if (!useUploads && !process.env.DROPBOX_ACCESS_TOKEN) {
       throw new Error('DROPBOX_ACCESS_TOKEN not configured');
     }
@@ -279,9 +282,8 @@ async function processReceiptBatch(batchId, dropboxUrl, clientName, uploadedFile
     if (!process.env.DEEPSEEK_API_KEY) {
       throw new Error('DEEPSEEK_API_KEY not configured');
     }
-    await ensureReceiptsSchema();
 
-    // Step 3: Collect files
+    // Step 3b: Collect files
     wsServer.sendProgress(batchId, { progress: 10, message: useUploads ? 'Preparing uploads...' : 'Downloading from Dropbox...' });
 
     if (useUploads) {
