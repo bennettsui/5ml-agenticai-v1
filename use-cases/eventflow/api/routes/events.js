@@ -209,4 +209,52 @@ router.post('/:id/attendees/:attendeeId/checkin', requireAuth, async (req, res) 
   }
 });
 
+// ─── Form Fields ──────────────────────────────────────────────────────────────
+
+// GET /api/eventflow/events/:id/form-fields  (also used publicly via public routes)
+router.get('/:id/form-fields', requireAuth, async (req, res) => {
+  try {
+    const event = await db.findEventById(parseInt(req.params.id));
+    if (!event || event.organizer_id !== req.organizer.id) return res.status(403).json({ error: 'Forbidden' });
+    const fields = await db.listFormFields(event.id);
+    res.json({ fields });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// POST /api/eventflow/events/:id/form-fields
+router.post('/:id/form-fields', requireAuth, async (req, res) => {
+  try {
+    const event = await db.findEventById(parseInt(req.params.id));
+    if (!event || event.organizer_id !== req.organizer.id) return res.status(403).json({ error: 'Forbidden' });
+    const { field_key, field_type, label, placeholder, required, options, sort_order } = req.body;
+    if (!label || !field_key) return res.status(400).json({ error: 'label and field_key are required' });
+    const field = await db.createFormField(event.id, { field_key, field_type, label, placeholder, required, options, sort_order });
+    res.status(201).json({ field });
+  } catch (err) {
+    if (err.code === '23505') return res.status(409).json({ error: 'Field key already exists for this event' });
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// PATCH /api/eventflow/events/:id/form-fields/:fid
+router.patch('/:id/form-fields/:fid', requireAuth, async (req, res) => {
+  try {
+    const event = await db.findEventById(parseInt(req.params.id));
+    if (!event || event.organizer_id !== req.organizer.id) return res.status(403).json({ error: 'Forbidden' });
+    const field = await db.updateFormField(parseInt(req.params.fid), event.id, req.body);
+    if (!field) return res.status(404).json({ error: 'Field not found' });
+    res.json({ field });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// DELETE /api/eventflow/events/:id/form-fields/:fid
+router.delete('/:id/form-fields/:fid', requireAuth, async (req, res) => {
+  try {
+    const event = await db.findEventById(parseInt(req.params.id));
+    if (!event || event.organizer_id !== req.organizer.id) return res.status(403).json({ error: 'Forbidden' });
+    await db.deleteFormField(parseInt(req.params.fid), event.id);
+    res.json({ ok: true });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
 module.exports = router;

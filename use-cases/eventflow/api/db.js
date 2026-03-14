@@ -40,6 +40,8 @@ async function init() {
       timezone       TEXT NOT NULL DEFAULT 'Asia/Hong_Kong',
       status         TEXT NOT NULL DEFAULT 'draft'
                        CHECK(status IN ('draft','published','ended','cancelled')),
+      is_public      BOOLEAN NOT NULL DEFAULT true,
+      category       TEXT,
       capacity       INTEGER,
       checkin_pin    TEXT NOT NULL DEFAULT '0000',
       settings       JSONB NOT NULL DEFAULT '{}',
@@ -141,11 +143,54 @@ async function init() {
     );
   `);
 
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS ef_wishlist (
+      id           SERIAL PRIMARY KEY,
+      author_type  TEXT NOT NULL DEFAULT 'participant' CHECK(author_type IN ('organizer','participant')),
+      author_name  TEXT,
+      author_email TEXT,
+      title        TEXT NOT NULL,
+      description  TEXT,
+      category     TEXT NOT NULL DEFAULT 'general' CHECK(category IN ('feature','ux','integration','ai','general')),
+      votes        INTEGER NOT NULL DEFAULT 0,
+      status       TEXT NOT NULL DEFAULT 'open' CHECK(status IN ('open','planned','done','declined')),
+      created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+  `);
+
   await pool.query(`CREATE INDEX IF NOT EXISTS idx_ef_ns_pending ON ef_notification_schedule(scheduled_at) WHERE status = 'pending';`);
   await pool.query(`CREATE INDEX IF NOT EXISTS idx_ef_attendees_event ON ef_attendees(event_id);`);
   await pool.query(`CREATE INDEX IF NOT EXISTS idx_ef_attendees_code ON ef_attendees(registration_code);`);
   await pool.query(`CREATE INDEX IF NOT EXISTS idx_ef_events_slug ON ef_events(slug);`);
   await pool.query(`CREATE INDEX IF NOT EXISTS idx_ef_events_status ON ef_events(status);`);
+  await pool.query(`CREATE INDEX IF NOT EXISTS idx_ef_wishlist_votes ON ef_wishlist(votes DESC);`);
+
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS ef_form_fields (
+      id          SERIAL PRIMARY KEY,
+      event_id    INTEGER NOT NULL REFERENCES ef_events(id) ON DELETE CASCADE,
+      field_key   TEXT NOT NULL,
+      field_type  TEXT NOT NULL DEFAULT 'text'
+                    CHECK(field_type IN ('text','email','phone','number','textarea','select','checkbox','date')),
+      label       TEXT NOT NULL,
+      placeholder TEXT,
+      required    BOOLEAN NOT NULL DEFAULT false,
+      options     JSONB,
+      sort_order  INTEGER NOT NULL DEFAULT 0,
+      created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      UNIQUE(event_id, field_key)
+    );
+  `);
+  await pool.query(`CREATE INDEX IF NOT EXISTS idx_ef_form_fields_event ON ef_form_fields(event_id, sort_order);`);
+
+  // Migrate existing ef_events — add is_public, category columns if missing
+  await pool.query(`
+    DO $$ BEGIN
+      ALTER TABLE ef_events ADD COLUMN IF NOT EXISTS is_public BOOLEAN NOT NULL DEFAULT true;
+      ALTER TABLE ef_events ADD COLUMN IF NOT EXISTS category TEXT;
+    EXCEPTION WHEN others THEN NULL;
+    END $$;
+  `).catch(() => {});
 
   // Migrate plan column to allow explab_staff (safe to run multiple times)
   await pool.query(`
@@ -217,8 +262,8 @@ async function createEvent(organizerId, data) {
   const { rows } = await pool.query(
     `INSERT INTO ef_events
        (organizer_id, slug, title, description, banner_url, location, location_detail,
-        start_at, end_at, timezone, capacity, checkin_pin, settings)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)
+        start_at, end_at, timezone, capacity, checkin_pin, settings, is_public, category)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)
      RETURNING *`,
     [
       organizerId, slug, data.title, data.description || null,
@@ -229,6 +274,8 @@ async function createEvent(organizerId, data) {
       data.capacity || null,
       data.checkin_pin || String(Math.floor(1000 + Math.random() * 9000)),
       JSON.stringify(data.settings || {}),
+      data.is_public !== false,
+      data.category || null,
     ]
   );
   return rows[0];
@@ -243,7 +290,8 @@ async function resolveSlug(slug, attempt = 0) {
 
 async function updateEvent(id, organizerId, fields) {
   const allowed = ['title','description','banner_url','location','location_detail',
-                   'start_at','end_at','timezone','capacity','checkin_pin','settings','status'];
+                   'start_at','end_at','timezone','capacity','checkin_pin','settings','status',
+                   'is_public','category'];
   const entries = Object.entries(fields).filter(([k]) => allowed.includes(k));
   if (!entries.length) return findEventById(id);
   const set = entries.map(([k], i) => `${k} = $${i + 1}`).join(', ');
@@ -273,10 +321,12 @@ async function findEventById(id) {
   return rows[0] || null;
 }
 
-async function listEvents({ organizerId, status, search, limit = 20, offset = 0 } = {}) {
+async function listEvents({ organizerId, status, search, category, publicOnly = false, limit = 20, offset = 0 } = {}) {
   const conds = []; const params = []; let i = 1;
   if (organizerId) { conds.push(`e.organizer_id = $${i++}`); params.push(organizerId); }
   if (status)      { conds.push(`e.status = $${i++}`);       params.push(status); }
+  if (category)    { conds.push(`e.category = $${i++}`);     params.push(category); }
+  if (publicOnly)  { conds.push(`e.is_public = true`); }
   if (search)      { conds.push(`(e.title ILIKE $${i} OR e.location ILIKE $${i})`); params.push(`%${search}%`); i++; }
   const where = conds.length ? `WHERE ${conds.join(' AND ')}` : '';
   const { rows } = await pool.query(
@@ -284,6 +334,15 @@ async function listEvents({ organizerId, status, search, limit = 20, offset = 0 
      FROM ef_events e JOIN ef_organizers o ON e.organizer_id = o.id
      ${where} ORDER BY e.start_at ASC LIMIT $${i} OFFSET $${i+1}`,
     [...params, limit, offset]
+  );
+  return rows;
+}
+
+async function listCategories() {
+  const { rows } = await pool.query(
+    `SELECT category, COUNT(*)::int AS count
+     FROM ef_events WHERE status = 'published' AND is_public = true AND category IS NOT NULL
+     GROUP BY category ORDER BY count DESC`
   );
   return rows;
 }
@@ -587,6 +646,44 @@ async function markNotificationFailed(id, error) {
   );
 }
 
+// ─── Wishlist ──────────────────────────────────────────────────────────────────
+
+async function createWishlistItem({ author_type, author_name, author_email, title, description, category }) {
+  const { rows } = await pool.query(
+    `INSERT INTO ef_wishlist (author_type, author_name, author_email, title, description, category)
+     VALUES ($1,$2,$3,$4,$5,$6) RETURNING *`,
+    [author_type || 'participant', author_name || null, author_email || null,
+     title, description || null, category || 'general']
+  );
+  return rows[0];
+}
+
+async function listWishlistItems({ status, category, limit = 50, offset = 0 } = {}) {
+  const conds = []; const params = []; let i = 1;
+  if (status)   { conds.push(`status = $${i++}`);   params.push(status); }
+  if (category) { conds.push(`category = $${i++}`); params.push(category); }
+  const where = conds.length ? `WHERE ${conds.join(' AND ')}` : '';
+  const { rows } = await pool.query(
+    `SELECT * FROM ef_wishlist ${where} ORDER BY votes DESC, created_at DESC LIMIT $${i} OFFSET $${i+1}`,
+    [...params, limit, offset]
+  );
+  return rows;
+}
+
+async function voteWishlistItem(id) {
+  const { rows } = await pool.query(
+    `UPDATE ef_wishlist SET votes = votes + 1 WHERE id = $1 RETURNING *`, [id]
+  );
+  return rows[0] || null;
+}
+
+async function updateWishlistStatus(id, status) {
+  const { rows } = await pool.query(
+    `UPDATE ef_wishlist SET status = $1 WHERE id = $2 RETURNING *`, [status, id]
+  );
+  return rows[0] || null;
+}
+
 async function getNotificationLog(eventId, limit = 100) {
   const { rows } = await pool.query(
     `SELECT ns.*, a.first_name, a.last_name, a.email
@@ -599,12 +696,51 @@ async function getNotificationLog(eventId, limit = 100) {
   return rows;
 }
 
+// ─── Form Fields ──────────────────────────────────────────────────────────────
+
+async function listFormFields(eventId) {
+  const { rows } = await pool.query(
+    `SELECT * FROM ef_form_fields WHERE event_id = $1 ORDER BY sort_order, id`, [eventId]
+  );
+  return rows;
+}
+
+async function createFormField(eventId, { field_key, field_type, label, placeholder, required, options, sort_order }) {
+  // sanitize field_key: alphanumeric + underscore only
+  const safeKey = String(field_key).replace(/[^a-zA-Z0-9_]/g, '_').toLowerCase().substring(0, 50);
+  const { rows } = await pool.query(
+    `INSERT INTO ef_form_fields (event_id, field_key, field_type, label, placeholder, required, options, sort_order)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING *`,
+    [eventId, safeKey, field_type || 'text', String(label).substring(0, 100),
+     placeholder ? String(placeholder).substring(0, 200) : null,
+     required === true, options || null, sort_order || 0]
+  );
+  return rows[0];
+}
+
+async function updateFormField(id, eventId, updates) {
+  const allowed = ['field_type','label','placeholder','required','options','sort_order'];
+  const entries = Object.entries(updates).filter(([k]) => allowed.includes(k));
+  if (!entries.length) return null;
+  const set = entries.map(([k], i) => `${k} = $${i + 1}`).join(', ');
+  const vals = entries.map(([, v]) => v);
+  const { rows } = await pool.query(
+    `UPDATE ef_form_fields SET ${set} WHERE id = $${vals.length + 1} AND event_id = $${vals.length + 2} RETURNING *`,
+    [...vals, id, eventId]
+  );
+  return rows[0] || null;
+}
+
+async function deleteFormField(id, eventId) {
+  await pool.query(`DELETE FROM ef_form_fields WHERE id = $1 AND event_id = $2`, [id, eventId]);
+}
+
 module.exports = {
   init,
   // organizer
   createOrganizer, findOrganizerByEmail, findOrganizerById, updateOrganizer,
   // events
-  createEvent, updateEvent, findEventBySlug, findEventById, listEvents, deleteEvent, generateSlug,
+  createEvent, updateEvent, findEventBySlug, findEventById, listEvents, listCategories, deleteEvent, generateSlug,
   // tiers
   createTier, listTiers, updateTier, deleteTier, incrementTierSold,
   // contacts
@@ -616,4 +752,8 @@ module.exports = {
   createPayment, updatePaymentStatus,
   // notifications
   scheduleAllChannels, getDueNotifications, markNotificationSent, markNotificationFailed, getNotificationLog,
+  // wishlist
+  createWishlistItem, listWishlistItems, voteWishlistItem, updateWishlistStatus,
+  // form fields
+  listFormFields, createFormField, updateFormField, deleteFormField,
 };

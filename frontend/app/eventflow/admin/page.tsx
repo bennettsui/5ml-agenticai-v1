@@ -18,10 +18,15 @@ interface Organizer {
   event_count: number; attendee_count: number; created_at: string;
 }
 interface Event {
-  id: number; slug: string; title: string; status: string; start_at: string;
-  organizer_name: string; organizer_email: string; registered: number; checked_in: number;
+  id: number; slug: string; title: string; status: string; is_public: boolean; category: string | null;
+  start_at: string; organizer_name: string; organizer_email: string; registered: number; checked_in: number;
 }
 interface NotifSummary { type: string; channel: string; status: string; count: number; }
+interface WishlistItem {
+  id: number; title: string; description: string | null;
+  category: string; status: string; votes: number;
+  author_name: string | null; author_type: string; created_at: string;
+}
 
 const PLAN_LABELS: Record<string, { label: string; color: string }> = {
   free:         { label: 'Free',          color: 'text-slate-400 bg-slate-700' },
@@ -36,7 +41,14 @@ const STATUS_COLORS: Record<string, string> = {
   cancelled: 'text-red-400 bg-red-500/15',
 };
 
-type Tab = 'overview' | 'organizers' | 'events' | 'notifications';
+const WISHLIST_STATUS_COLORS: Record<string, string> = {
+  open:     'text-blue-400 bg-blue-500/15',
+  planned:  'text-amber-400 bg-amber-500/15',
+  done:     'text-green-400 bg-green-500/15',
+  declined: 'text-slate-500 bg-slate-700',
+};
+
+type Tab = 'overview' | 'organizers' | 'events' | 'notifications' | 'wishlist';
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
@@ -46,15 +58,17 @@ export default function AdminPage() {
   const [authErr, setAuthErr] = useState('');
   const [tab, setTab] = useState<Tab>('overview');
 
-  const [stats, setStats]     = useState<Stats | null>(null);
-  const [byStatus, setByStatus] = useState<ByStatus[]>([]);
+  const [stats, setStats]           = useState<Stats | null>(null);
+  const [byStatus, setByStatus]     = useState<ByStatus[]>([]);
   const [recentEvents, setRecentEvents] = useState<RecentEvent[]>([]);
   const [organizers, setOrganizers] = useState<Organizer[]>([]);
-  const [events, setEvents]   = useState<Event[]>([]);
+  const [events, setEvents]         = useState<Event[]>([]);
   const [notifSummary, setNotifSummary] = useState<NotifSummary[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [planUpdating, setPlanUpdating] = useState<number | null>(null);
+  const [wishlist, setWishlist]     = useState<WishlistItem[]>([]);
+  const [loading, setLoading]       = useState(false);
+  const [planUpdating, setPlanUpdating]             = useState<number | null>(null);
   const [eventStatusUpdating, setEventStatusUpdating] = useState<number | null>(null);
+  const [wishlistUpdating, setWishlistUpdating]     = useState<number | null>(null);
 
   function headers() { return { 'x-admin-secret': secret }; }
 
@@ -95,6 +109,14 @@ export default function AdminPage() {
     setLoading(false);
   }
 
+  async function loadWishlist() {
+    setLoading(true);
+    const r = await fetch(`${API}/api/eventflow/wishlist?limit=100`, { headers: headers() });
+    const data = await r.json();
+    setWishlist(data.items || []);
+    setLoading(false);
+  }
+
   async function updatePlan(orgId: number, plan: string) {
     setPlanUpdating(orgId);
     await fetch(`${API}/api/eventflow/admin/organizers/${orgId}`, {
@@ -115,11 +137,22 @@ export default function AdminPage() {
     setEventStatusUpdating(null);
   }
 
+  async function updateWishlistStatus(itemId: number, status: string) {
+    setWishlistUpdating(itemId);
+    await fetch(`${API}/api/eventflow/wishlist/${itemId}`, {
+      method: 'PATCH', headers: { ...headers(), 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status }),
+    });
+    await loadWishlist();
+    setWishlistUpdating(null);
+  }
+
   useEffect(() => {
     if (!authed) return;
     if (tab === 'organizers') loadOrganizers();
     if (tab === 'events')     loadEvents();
     if (tab === 'notifications') loadNotifications();
+    if (tab === 'wishlist')   loadWishlist();
   }, [tab, authed]);
 
   // ─── Login gate ─────────────────────────────────────────────────────────────
@@ -159,6 +192,7 @@ export default function AdminPage() {
     { key: 'organizers',    label: `Organizers (${stats?.organizers ?? '…'})` },
     { key: 'events',        label: `Events (${stats?.events ?? '…'})` },
     { key: 'notifications', label: 'Notifications' },
+    { key: 'wishlist',      label: '💡 Wishlist' },
   ];
 
   return (
@@ -180,10 +214,10 @@ export default function AdminPage() {
 
       <div className="max-w-7xl mx-auto px-6 py-8">
         {/* Tabs */}
-        <div className="flex gap-1 border-b border-white/[0.06] mb-8">
+        <div className="flex gap-1 border-b border-white/[0.06] mb-8 overflow-x-auto">
           {TABS.map(({ key, label }) => (
             <button key={key} onClick={() => setTab(key)}
-              className={`px-4 py-2.5 text-sm font-medium transition-colors -mb-px border-b-2 ${
+              className={`px-4 py-2.5 text-sm font-medium transition-colors -mb-px border-b-2 whitespace-nowrap ${
                 tab === key ? 'text-amber-400 border-amber-400' : 'text-slate-500 border-transparent hover:text-slate-300'
               }`}>
               {label}
@@ -331,6 +365,7 @@ export default function AdminPage() {
                     <th className="text-left px-6 py-3">Date</th>
                     <th className="text-center px-6 py-3">Registered</th>
                     <th className="text-center px-6 py-3">Check-ins</th>
+                    <th className="text-left px-6 py-3">Visibility</th>
                     <th className="text-left px-6 py-3">Status</th>
                     <th className="px-6 py-3" />
                   </tr>
@@ -340,7 +375,12 @@ export default function AdminPage() {
                     <tr key={ev.id} className="border-b border-slate-700/50 hover:bg-white/[0.02] transition-colors">
                       <td className="px-6 py-4">
                         <div className="font-semibold text-sm">{ev.title}</div>
-                        <div className="text-xs text-slate-600 font-mono">{ev.slug}</div>
+                        <div className="flex items-center gap-1.5 mt-0.5">
+                          <div className="text-xs text-slate-600 font-mono">{ev.slug}</div>
+                          {ev.category && (
+                            <span className="text-xs text-violet-400 bg-violet-500/10 px-1.5 py-0.5 rounded-full">{ev.category}</span>
+                          )}
+                        </div>
                       </td>
                       <td className="px-6 py-4 text-slate-400 text-sm">
                         <div>{ev.organizer_name}</div>
@@ -351,6 +391,11 @@ export default function AdminPage() {
                       </td>
                       <td className="px-6 py-4 text-center font-bold text-blue-400">{ev.registered}</td>
                       <td className="px-6 py-4 text-center font-bold text-green-400">{ev.checked_in}</td>
+                      <td className="px-6 py-4">
+                        <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${ev.is_public ? 'bg-green-500/10 text-green-400' : 'bg-slate-700 text-slate-400'}`}>
+                          {ev.is_public ? '🌐 Public' : '🔒 Private'}
+                        </span>
+                      </td>
                       <td className="px-6 py-4">
                         <span className={`text-xs font-semibold px-2.5 py-1 rounded-full ${STATUS_COLORS[ev.status] || STATUS_COLORS.cancelled}`}>{ev.status}</span>
                       </td>
@@ -412,6 +457,68 @@ export default function AdminPage() {
                           }`}>{n.status}</span>
                         </td>
                         <td className="px-6 py-3 text-center font-bold text-white">{n.count}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Wishlist */}
+        {tab === 'wishlist' && (
+          <div className="space-y-4">
+            {loading ? (
+              <div className="p-8 text-center text-slate-500">Loading…</div>
+            ) : wishlist.length === 0 ? (
+              <div className="p-12 text-center text-slate-500">
+                <div className="text-4xl mb-3">💡</div>
+                <p>No wishlist items yet.</p>
+              </div>
+            ) : (
+              <div className="bg-slate-800/60 border border-white/[0.08] rounded-2xl overflow-hidden">
+                <table className="w-full">
+                  <thead>
+                    <tr className="text-xs font-semibold text-slate-500 uppercase tracking-wider border-b border-white/[0.06]">
+                      <th className="text-left px-6 py-3">Idea</th>
+                      <th className="text-left px-6 py-3">Category</th>
+                      <th className="text-center px-6 py-3">Votes</th>
+                      <th className="text-left px-6 py-3">Author</th>
+                      <th className="text-left px-6 py-3">Date</th>
+                      <th className="text-left px-6 py-3">Status</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {wishlist.map((item) => (
+                      <tr key={item.id} className="border-b border-slate-700/50 hover:bg-white/[0.02] transition-colors">
+                        <td className="px-6 py-4 max-w-xs">
+                          <div className="font-semibold text-sm">{item.title}</div>
+                          {item.description && (
+                            <div className="text-xs text-slate-500 mt-0.5 line-clamp-1">{item.description}</div>
+                          )}
+                        </td>
+                        <td className="px-6 py-4 text-xs text-slate-400">{item.category}</td>
+                        <td className="px-6 py-4 text-center font-bold text-amber-400">{item.votes}</td>
+                        <td className="px-6 py-4 text-xs text-slate-400">
+                          <div>{item.author_name || 'Anonymous'}</div>
+                          <div className="text-slate-600">{item.author_type}</div>
+                        </td>
+                        <td className="px-6 py-4 text-xs text-slate-500">
+                          {new Date(item.created_at).toLocaleDateString('en-HK', { month: 'short', day: 'numeric' })}
+                        </td>
+                        <td className="px-6 py-4">
+                          <select
+                            value={item.status}
+                            disabled={wishlistUpdating === item.id}
+                            onChange={(e) => updateWishlistStatus(item.id, e.target.value)}
+                            className="text-xs bg-slate-900 border border-white/[0.08] text-white rounded-lg px-2 py-1 focus:outline-none focus:border-amber-500/50">
+                            <option value="open">open</option>
+                            <option value="planned">planned</option>
+                            <option value="done">done</option>
+                            <option value="declined">declined</option>
+                          </select>
+                        </td>
                       </tr>
                     ))}
                   </tbody>

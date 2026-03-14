@@ -9,6 +9,11 @@ const API = process.env.NEXT_PUBLIC_API_URL || '';
 function token() { return typeof window !== 'undefined' ? localStorage.getItem('ef_token') || '' : ''; }
 function authHeaders() { return { Authorization: `Bearer ${token()}`, 'Content-Type': 'application/json' }; }
 
+const EVENT_CATEGORIES = [
+  'Conference', 'Workshop', 'Networking', 'Concert', 'Exhibition',
+  'Seminar', 'Hackathon', 'Charity', 'Sports', 'Community', 'Other',
+];
+
 interface Tier {
   name: string;
   description: string;
@@ -20,6 +25,7 @@ export default function NewEventPage() {
   const router = useRouter();
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+  const [aiLoading, setAiLoading] = useState(false);
 
   const [form, setForm] = useState({
     title: '',
@@ -31,13 +37,15 @@ export default function NewEventPage() {
     end_at: '',
     timezone: 'Asia/Hong_Kong',
     checkin_pin: '',
+    is_public: true,
+    category: '',
   });
 
   const [tiers, setTiers] = useState<Tier[]>([
     { name: 'General Admission', description: '', capacity: '', price: '0' },
   ]);
 
-  function setField(key: string, value: string) {
+  function setField(key: string, value: string | boolean) {
     setForm((f) => ({ ...f, [key]: value }));
   }
 
@@ -54,6 +62,26 @@ export default function NewEventPage() {
     setTiers((t) => t.filter((_, idx) => idx !== i));
   }
 
+  async function generateDescription() {
+    if (!form.title) return;
+    setAiLoading(true);
+    try {
+      const r = await fetch(`${API}/api/eventflow/ai/describe`, {
+        method: 'POST',
+        headers: authHeaders(),
+        body: JSON.stringify({
+          title: form.title,
+          location: form.location,
+          category: form.category,
+          start_at: form.start_at,
+        }),
+      });
+      const data = await r.json();
+      if (data.text) setField('description', data.text);
+    } catch {}
+    setAiLoading(false);
+  }
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(''); setSaving(true);
@@ -61,6 +89,7 @@ export default function NewEventPage() {
     try {
       const payload = {
         ...form,
+        category: form.category || null,
         tiers: tiers.map((t) => ({
           name: t.name,
           description: t.description || null,
@@ -113,9 +142,51 @@ export default function NewEventPage() {
               className="w-full px-4 py-3 bg-slate-900/60 border border-white/[0.08] rounded-xl text-white text-sm focus:outline-none focus:border-amber-500/50 transition-colors" />
           </div>
 
+          {/* Category */}
           <div>
-            <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1.5">Description</label>
-            <textarea rows={4} placeholder="Tell attendees about your event…" value={form.description}
+            <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1.5">Category</label>
+            <select value={form.category} onChange={(e) => setField('category', e.target.value)}
+              className="w-full px-4 py-3 bg-slate-900/60 border border-white/[0.08] rounded-xl text-white text-sm focus:outline-none focus:border-amber-500/50 transition-colors">
+              <option value="">— No category —</option>
+              {EVENT_CATEGORIES.map((cat) => <option key={cat} value={cat}>{cat}</option>)}
+            </select>
+          </div>
+
+          {/* Public / Private toggle */}
+          <div className="flex items-center justify-between bg-slate-900/40 border border-white/[0.06] rounded-xl p-4">
+            <div>
+              <div className="text-sm font-semibold text-white">
+                {form.is_public ? '🌐 Public Event' : '🔒 Private Event'}
+              </div>
+              <div className="text-xs text-slate-500 mt-0.5">
+                {form.is_public
+                  ? 'Visible in the public event listing'
+                  : 'Hidden from listing — only accessible via direct link'}
+              </div>
+            </div>
+            <button type="button"
+              onClick={() => setField('is_public', !form.is_public)}
+              className={`relative w-11 h-6 rounded-full transition-colors ${form.is_public ? 'bg-amber-500' : 'bg-slate-700'}`}>
+              <span className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform ${form.is_public ? 'translate-x-5' : ''}`} />
+            </button>
+          </div>
+
+          {/* Description with AI assist */}
+          <div>
+            <div className="flex items-center justify-between mb-1.5">
+              <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wide">Description</label>
+              <button type="button"
+                onClick={generateDescription}
+                disabled={aiLoading || !form.title}
+                className="flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-lg bg-violet-500/15 text-violet-300 hover:bg-violet-500/25 disabled:opacity-40 transition-colors">
+                {aiLoading ? (
+                  <><span className="w-3 h-3 border border-violet-300/50 border-t-violet-300 rounded-full animate-spin" />Generating…</>
+                ) : (
+                  <>✨ AI Generate</>
+                )}
+              </button>
+            </div>
+            <textarea rows={5} placeholder="Tell attendees about your event… or use AI to generate one above." value={form.description}
               onChange={(e) => setField('description', e.target.value)}
               className="w-full px-4 py-3 bg-slate-900/60 border border-white/[0.08] rounded-xl text-white text-sm focus:outline-none focus:border-amber-500/50 transition-colors resize-none" />
           </div>

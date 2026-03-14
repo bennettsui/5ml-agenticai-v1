@@ -115,7 +115,59 @@ const FLOWS: Flow[] = [
       { icon: '📈', label: 'Platform Stats', sub: 'All organizers, events, attendees' },
       { icon: '🏢', label: 'Manage Organizers', sub: 'Set plan: Free / Pro / ExpLab Staff', highlight: true },
       { icon: '📅', label: 'Manage Events', sub: 'Change status, delete events' },
+      { icon: '💡', label: 'Wishlist Admin', sub: 'Review & curate community requests', highlight: true },
       { icon: '📩', label: 'Notifications', sub: 'View notification pipeline status' },
+    ],
+  },
+  {
+    id: 'ai-studio',
+    title: 'AI Studio Flow',
+    role: 'Organizer — AI Tools',
+    color: 'purple',
+    accent: '#a855f7',
+    icon: '🤖',
+    steps: [
+      { icon: '📅', label: 'Select Event', sub: 'Open event management → AI Studio tab' },
+      { icon: '✍️', label: 'Event Description', sub: 'AI generates SEO-friendly copy', highlight: true },
+      { icon: '📣', label: 'Social Posts', sub: 'LinkedIn, Twitter, Facebook captions' },
+      { icon: '📧', label: 'Email Draft', sub: 'Announcement email for attendees', highlight: true },
+      { icon: '📋', label: 'Agenda Builder', sub: 'Structured schedule from your notes' },
+      { icon: '🎨', label: 'Banner Prompt', sub: 'Midjourney / DALL-E prompt for art' },
+      { icon: '📋', label: 'Copy & Use', sub: 'Paste generated content into your tools' },
+    ],
+  },
+  {
+    id: 'wishlist',
+    title: 'Wishlist Board Flow',
+    role: 'Community Members',
+    color: 'green',
+    accent: '#22c55e',
+    icon: '💡',
+    link: { href: '/eventflow/wishlist', label: 'Open Wishlist' },
+    steps: [
+      { icon: '🌐', label: 'Browse Wishlist', sub: 'Public board at /eventflow/wishlist' },
+      { icon: '➕', label: 'Submit Idea', sub: 'Suggest a topic, speaker, or format', highlight: true },
+      { icon: '👍', label: 'Vote on Ideas', sub: 'Upvote community suggestions' },
+      { icon: '🏷️', label: 'Filter by Category', sub: 'Tech, Business, Community, etc.' },
+      { icon: '📊', label: 'Admin Review', sub: 'Organizers see top-voted ideas', highlight: true },
+      { icon: '🎉', label: 'Event Created', sub: 'Wishlist → real event announced' },
+    ],
+  },
+  {
+    id: 'rsvp-form',
+    title: 'Custom RSVP Form Flow',
+    role: 'Organizer — Form Builder',
+    color: 'amber',
+    accent: '#f59e0b',
+    icon: '📋',
+    steps: [
+      { icon: '📅', label: 'Event Settings', sub: 'Open event → RSVP Form tab' },
+      { icon: '🔒', label: 'Core Fields', sub: 'First/Last name, Email always required' },
+      { icon: '📝', label: 'Toggle Optional', sub: 'Make phone, org, title required or not' },
+      { icon: '➕', label: 'Add Custom Fields', sub: 'Text, select, date, checkbox, etc.', highlight: true },
+      { icon: '💾', label: 'Save & Preview', sub: 'Changes live immediately on event page' },
+      { icon: '👤', label: 'Participant Fills', sub: 'Custom fields shown in RSVP form', highlight: true },
+      { icon: '🗃️', label: 'Responses Stored', sub: 'In attendee metadata, exportable' },
     ],
   },
 ];
@@ -248,10 +300,10 @@ export default function FlowsPage() {
         {/* System architecture summary */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-16">
           {[
-            { icon: '🗄️', title: 'Database', items: ['ef_organizers', 'ef_events', 'ef_ticket_tiers', 'ef_attendees', 'ef_contacts', 'ef_notification_schedule'] },
-            { icon: '🔐', title: 'Auth Layers', items: ['JWT (organizers)', 'PIN (kiosk/reception)', 'x-admin-secret (super admin)', '30-day token expiry'] },
+            { icon: '🗄️', title: 'Database', items: ['ef_organizers', 'ef_events', 'ef_ticket_tiers', 'ef_attendees', 'ef_contacts', 'ef_notification_schedule', 'ef_form_fields', 'ef_wishlist'] },
+            { icon: '🔐', title: 'Auth & Security', items: ['JWT (organizers)', 'PIN (kiosk/reception)', 'x-admin-secret (super admin)', 'reCAPTCHA v3 (signup/login)', 'Input sanitization (XSS/SQLi)'] },
             { icon: '📡', title: 'Real-time', items: ['SSE event streams', 'Live check-in counter', 'Organizer dashboard sync', 'Kiosk auto-refresh'] },
-            { icon: '📬', title: 'Notifications', items: ['Email (all)', 'WhatsApp (opt-in)', 'LINE (opt-in)', 'Scheduled engine (cron)'] },
+            { icon: '🤖', title: 'AI Features', items: ['Event description (SEO)', 'Social media copy', 'Email drafts', 'Agenda builder', 'Banner prompt generator', 'DeepSeek → Anthropic fallback'] },
           ].map((section) => (
             <div key={section.title} className="bg-slate-900/40 border border-white/[0.06] rounded-xl p-5">
               <div className="flex items-center gap-2 mb-4">
@@ -273,12 +325,13 @@ export default function FlowsPage() {
         {/* Quick access links */}
         <div className="border-t border-white/[0.06] pt-10">
           <h2 className="text-lg font-bold mb-6 text-slate-300">Quick Access</h2>
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
             {[
               { href: '/eventflow', icon: '🌐', label: 'Public Events' },
               { href: '/eventflow/organizer', icon: '🏢', label: 'Organizer' },
               { href: '/eventflow/checkin', icon: '🖥️', label: 'Kiosk' },
               { href: '/eventflow/reception', icon: '🎫', label: 'Reception' },
+              { href: '/eventflow/wishlist', icon: '💡', label: 'Wishlist' },
               { href: '/eventflow/admin', icon: '⚡', label: 'Admin' },
             ].map(({ href, icon, label }) => (
               <Link key={href} href={href}

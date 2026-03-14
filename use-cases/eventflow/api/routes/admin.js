@@ -102,12 +102,13 @@ router.patch('/organizers/:id', async (req, res) => {
 // GET /api/eventflow/admin/events
 router.get('/events', async (req, res) => {
   try {
-    const { status, limit = 50, offset = 0 } = req.query;
+    const { status, category, limit = 50, offset = 0 } = req.query;
     const conds = []; const params = []; let i = 1;
-    if (status) { conds.push(`e.status = $${i++}`); params.push(status); }
+    if (status)   { conds.push(`e.status = $${i++}`);   params.push(status); }
+    if (category) { conds.push(`e.category = $${i++}`); params.push(category); }
     const where = conds.length ? `WHERE ${conds.join(' AND ')}` : '';
     const { rows } = await pool.query(
-      `SELECT e.id, e.slug, e.title, e.status, e.start_at, e.end_at, e.location,
+      `SELECT e.id, e.slug, e.title, e.status, e.is_public, e.category, e.start_at, e.end_at, e.location,
               o.id AS organizer_id, o.name AS organizer_name, o.email AS organizer_email,
               COUNT(a.id)::int    AS registered,
               COUNT(a.id) FILTER (WHERE a.status = 'checked_in')::int AS checked_in

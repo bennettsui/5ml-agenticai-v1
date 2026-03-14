@@ -5,18 +5,44 @@ const bcrypt  = require('bcryptjs');
 const db      = require('../db');
 const { signToken, requireAuth } = require('../auth');
 
+const RECAPTCHA_SECRET = process.env.RECAPTCHA_SECRET_KEY || '';
+const RECAPTCHA_THRESHOLD = 0.5;
+
+async function verifyRecaptcha(token, action) {
+  if (!RECAPTCHA_SECRET) return; // skip if not configured
+  if (!token) throw new Error('reCAPTCHA token required');
+  const resp = await fetch(
+    `https://www.google.com/recaptcha/api/siteverify?secret=${encodeURIComponent(RECAPTCHA_SECRET)}&response=${encodeURIComponent(token)}`,
+    { method: 'POST' }
+  );
+  const data = await resp.json();
+  if (!data.success || data.score < RECAPTCHA_THRESHOLD) {
+    throw new Error('reCAPTCHA verification failed');
+  }
+}
+
+// Input sanitization helper
+function sanitize(v, maxLen = 200) {
+  if (v == null) return '';
+  return String(v).replace(/<[^>]*>/g, '').replace(/[<>'"`;]/g, '').trim().substring(0, maxLen);
+}
+
 // POST /api/eventflow/organizer/signup
 router.post('/signup', async (req, res) => {
   try {
-    const { name, email, password } = req.body;
+    await verifyRecaptcha(req.body.recaptcha_token, 'signup');
+    const name  = sanitize(req.body.name, 100);
+    const email = sanitize(req.body.email, 254).toLowerCase();
+    const { password } = req.body;
     if (!name || !email || !password) return res.status(400).json({ error: 'name, email and password required' });
+    if (!email.includes('@')) return res.status(400).json({ error: 'Invalid email address' });
     if (password.length < 8) return res.status(400).json({ error: 'Password must be at least 8 characters' });
 
     const existing = await db.findOrganizerByEmail(email);
     if (existing) return res.status(409).json({ error: 'Email already registered' });
 
     const passwordHash = await bcrypt.hash(password, 12);
-    const organizer = await db.createOrganizer({ name, email: email.toLowerCase(), passwordHash });
+    const organizer = await db.createOrganizer({ name, email, passwordHash });
 
     const token = signToken({ id: organizer.id, email: organizer.email, name: organizer.name });
     res.status(201).json({ token, organizer });
@@ -29,6 +55,7 @@ router.post('/signup', async (req, res) => {
 // POST /api/eventflow/organizer/login
 router.post('/login', async (req, res) => {
   try {
+    await verifyRecaptcha(req.body.recaptcha_token, 'login');
     const { email, password } = req.body;
     if (!email || !password) return res.status(400).json({ error: 'email and password required' });
 
