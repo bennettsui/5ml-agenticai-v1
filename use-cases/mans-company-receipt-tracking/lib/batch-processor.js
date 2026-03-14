@@ -19,12 +19,11 @@ let schemaEnsured = false;
 
 async function ensureReceiptsSchema() {
   if (schemaEnsured) return;
-  await db.query(`
-    ALTER TABLE receipts ADD COLUMN IF NOT EXISTS ocr_boxes  JSONB;
-    ALTER TABLE receipts ADD COLUMN IF NOT EXISTS image_data TEXT;
-    ALTER TABLE receipts ADD COLUMN IF NOT EXISTS remarks    TEXT;
-    ALTER TABLE receipt_batches ADD COLUMN IF NOT EXISTS ocr_provider VARCHAR(50) DEFAULT 'google-vision';
-  `);
+  // pg does not support multiple statements in one query() call — run separately
+  await db.query(`ALTER TABLE receipts ADD COLUMN IF NOT EXISTS ocr_boxes  JSONB`);
+  await db.query(`ALTER TABLE receipts ADD COLUMN IF NOT EXISTS image_data TEXT`);
+  await db.query(`ALTER TABLE receipts ADD COLUMN IF NOT EXISTS remarks    TEXT`);
+  await db.query(`ALTER TABLE receipt_batches ADD COLUMN IF NOT EXISTS ocr_provider VARCHAR(50) DEFAULT 'google-vision'`);
   schemaEnsured = true;
 }
 

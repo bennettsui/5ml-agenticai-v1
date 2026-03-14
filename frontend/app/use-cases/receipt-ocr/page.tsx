@@ -309,8 +309,11 @@ export default function ReceiptOCRPage() {
     setLogs(prev => [...prev, { ts, msg, level }]);
   }, []);
 
+  // Track which log IDs we've already shown from polling
+  const shownLogStepsRef = useRef<Set<string>>(new Set());
+
   const startLiveUpdates = useCallback((bid: string) => {
-    // Polling fallback
+    // Polling — also surfaces recent_logs from the DB into the live log panel
     pollRef.current = setInterval(async () => {
       try {
         const r = await fetch(apiUrl(`/api/receipts/batches/${bid}/status`));
@@ -318,10 +321,24 @@ export default function ReceiptOCRPage() {
         const d = await r.json();
         if (d.status) {
           setBatchStatus(d);
+
+          // Surface any DB log entries not yet shown
+          if (Array.isArray(d.recent_logs)) {
+            for (const entry of [...d.recent_logs].reverse()) {
+              const key = `${entry.created_at}_${entry.step}`;
+              if (!shownLogStepsRef.current.has(key)) {
+                shownLogStepsRef.current.add(key);
+                const level = entry.log_level === 'error' ? 'error' : entry.log_level === 'warning' ? 'warning' : 'info';
+                addLog(entry.message, level);
+              }
+            }
+          }
+
           if (d.status === 'completed' || d.status === 'failed') {
             clearInterval(pollRef.current!);
-            if (d.status === 'completed') {
-              addLog('Processing complete!', 'info');
+            if (d.status === 'failed') {
+              // Fetch the last error log and show it prominently
+              addLog(`Batch failed — check logs above for details`, 'error');
             }
           }
         }
@@ -769,8 +786,15 @@ export default function ReceiptOCRPage() {
                       </button>
                     )}
                     {isFailed && (
-                      <div className="text-red-400 text-sm flex items-center gap-2">
-                        <AlertCircle className="w-4 h-4" /> Processing failed. {batchStatus?.message}
+                      <div className="space-y-1">
+                        <div className="text-red-400 text-sm flex items-center gap-2">
+                          <AlertCircle className="w-4 h-4" /> Processing failed — see log above for details.
+                        </div>
+                        {batchStatus?.message && (
+                          <div className="text-red-500 text-xs font-mono bg-red-950/40 border border-red-900/50 rounded px-3 py-1.5">
+                            {batchStatus.message}
+                          </div>
+                        )}
                       </div>
                     )}
                     {isProcessing && (
