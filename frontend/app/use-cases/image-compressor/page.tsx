@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useRef, useCallback } from 'react';
-import { Upload, Download, Image as ImageIcon, Sliders, X, CheckCircle } from 'lucide-react';
+import { Upload, Download, Image as ImageIcon, Sliders, X, CheckCircle, FolderDown } from 'lucide-react';
 
 interface CompressedResult {
   originalName: string;
@@ -12,6 +12,7 @@ interface CompressedResult {
   height: number;
   quality: number;
   format: string;
+  alreadyOptimized: boolean;
 }
 
 function formatBytes(bytes: number) {
@@ -55,16 +56,32 @@ export default function ImageCompressorPage() {
           const q = format === 'png' ? undefined : quality / 100;
           canvas.toBlob((blob) => {
             if (!blob) { reject(new Error('Compression failed')); return; }
-            resolve({
-              originalName: file.name,
-              originalSize: file.size,
-              compressedSize: blob.size,
-              compressedUrl: URL.createObjectURL(blob),
-              width: w,
-              height: h,
-              quality,
-              format,
-            });
+            // If re-encoded output is larger than the original, serve the original instead
+            if (blob.size >= file.size) {
+              resolve({
+                originalName: file.name,
+                originalSize: file.size,
+                compressedSize: file.size,
+                compressedUrl: URL.createObjectURL(file),
+                width: w,
+                height: h,
+                quality,
+                format,
+                alreadyOptimized: true,
+              });
+            } else {
+              resolve({
+                originalName: file.name,
+                originalSize: file.size,
+                compressedSize: blob.size,
+                compressedUrl: URL.createObjectURL(blob),
+                width: w,
+                height: h,
+                quality,
+                format,
+                alreadyOptimized: false,
+              });
+            }
           }, mimeType, q);
         };
         img.onerror = () => reject(new Error('Failed to load image'));
@@ -209,12 +226,30 @@ export default function ImageCompressorPage() {
           <div className="space-y-3">
             <div className="flex items-center justify-between mb-2">
               <h2 className="text-sm font-semibold text-slate-300">{results.length} image{results.length > 1 ? 's' : ''} compressed</h2>
-              <button
-                onClick={() => { results.forEach(r => URL.revokeObjectURL(r.compressedUrl)); setResults([]); }}
-                className="text-xs text-slate-500 hover:text-slate-300 transition-colors"
-              >
-                Clear all
-              </button>
+              <div className="flex items-center gap-3">
+                {results.length > 1 && (
+                  <button
+                    onClick={() => results.forEach((r, i) => {
+                      setTimeout(() => {
+                        const a = document.createElement('a');
+                        a.href = r.compressedUrl;
+                        const ext = r.format === 'jpeg' ? 'jpg' : r.format;
+                        a.download = r.originalName.replace(/\.[^.]+$/, '') + `_compressed.${ext}`;
+                        a.click();
+                      }, i * 200);
+                    })}
+                    className="flex items-center gap-1.5 text-xs text-teal-400 hover:text-teal-300 transition-colors font-medium"
+                  >
+                    <FolderDown className="w-3.5 h-3.5" /> Download all
+                  </button>
+                )}
+                <button
+                  onClick={() => { results.forEach(r => URL.revokeObjectURL(r.compressedUrl)); setResults([]); }}
+                  className="text-xs text-slate-500 hover:text-slate-300 transition-colors"
+                >
+                  Clear all
+                </button>
+              </div>
             </div>
             {results.map((r, i) => (
               <div key={i} className="bg-slate-800/60 border border-slate-700/50 rounded-xl p-4 flex items-center gap-4">
@@ -228,10 +263,17 @@ export default function ImageCompressorPage() {
                   <div className="flex items-center gap-3 mt-1.5">
                     <span className="text-xs text-slate-500 line-through">{formatBytes(r.originalSize)}</span>
                     <span className="text-xs text-teal-400 font-medium">{formatBytes(r.compressedSize)}</span>
-                    <span className="flex items-center gap-1 text-xs font-semibold text-emerald-400">
-                      <CheckCircle className="w-3 h-3" />
-                      {savings(r.originalSize, r.compressedSize)}% smaller
-                    </span>
+                    {r.alreadyOptimized ? (
+                      <span className="flex items-center gap-1 text-xs font-semibold text-slate-400">
+                        <CheckCircle className="w-3 h-3" />
+                        Already optimized
+                      </span>
+                    ) : (
+                      <span className="flex items-center gap-1 text-xs font-semibold text-emerald-400">
+                        <CheckCircle className="w-3 h-3" />
+                        {savings(r.originalSize, r.compressedSize)}% smaller
+                      </span>
+                    )}
                   </div>
                 </div>
                 {/* Actions */}
