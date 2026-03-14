@@ -24,7 +24,7 @@ function fmt(dt: string, tz: string) {
   });
 }
 
-type Step = 'detail' | 'register' | 'success';
+type Step = 'detail' | 'success';
 
 interface RSVPResult {
   first_name: string; last_name: string; email: string; registration_code: string;
@@ -156,97 +156,97 @@ export default function EventDetailPage({ slug }: { slug: string }) {
             </div>
           </div>
 
-          {/* Right: Registration panel */}
+          {/* Right: Single-step registration panel */}
           <div className="lg:sticky lg:top-24 self-start">
             <div className="bg-slate-800/60 border border-white/[0.08] rounded-2xl p-6">
-              {step === 'detail' && (
-                <>
-                  <h2 className="font-bold text-lg mb-4">Register</h2>
-                  {/* Tiers */}
-                  <div className="space-y-2 mb-6">
-                    {event.tiers.filter((t) => t.is_active).map((tier) => {
-                      const color = TIER_COLORS[tier.color] || TIER_COLORS.default;
-                      const soldOut = tier.capacity !== null && tier.sold >= tier.capacity;
-                      const selected = selectedTier?.id === tier.id;
-                      return (
-                        <button key={tier.id} disabled={soldOut}
-                          onClick={() => setSelectedTier(tier)}
-                          className={`w-full text-left p-4 rounded-xl border transition-all ${
-                            selected ? 'border-amber-500 bg-amber-500/10' :
-                            soldOut ? 'border-white/[0.05] opacity-40 cursor-not-allowed' :
-                            'border-white/[0.08] hover:border-white/20'
-                          }`}>
-                          <div className="flex items-center justify-between">
-                            <div>
-                              <div className="flex items-center gap-2">
-                                <span className="w-2 h-2 rounded-full" style={{ background: color }} />
-                                <span className="font-semibold text-sm">{tier.name}</span>
-                              </div>
-                              {tier.description && <p className="text-slate-500 text-xs mt-1">{tier.description}</p>}
-                              {soldOut && <p className="text-red-400 text-xs mt-1">Sold out</p>}
-                            </div>
-                            <div className="text-right">
-                              <div className={`font-bold text-sm ${tier.price === 0 ? 'text-green-400' : 'text-amber-400'}`}>
-                                {tier.price === 0 ? 'Free' : `${tier.currency} ${(tier.price / 100).toFixed(0)}`}
-                              </div>
-                              {tier.capacity && (
-                                <div className="text-slate-600 text-xs">{tier.capacity - tier.sold} left</div>
-                              )}
-                            </div>
+              <h2 className="font-bold text-lg mb-4">Register</h2>
+
+              {/* Tier selector — only show if multiple active tiers */}
+              {event.tiers.filter((t) => t.is_active).length > 1 && (
+                <div className="space-y-2 mb-5">
+                  {event.tiers.filter((t) => t.is_active).map((tier) => {
+                    const color = TIER_COLORS[tier.color] || TIER_COLORS.default;
+                    const soldOut = tier.capacity !== null && tier.sold >= tier.capacity;
+                    const selected = selectedTier?.id === tier.id;
+                    return (
+                      <button key={tier.id} disabled={soldOut} type="button"
+                        onClick={() => setSelectedTier(tier)}
+                        className={`w-full text-left p-3 rounded-xl border transition-all ${
+                          selected ? 'border-amber-500 bg-amber-500/10' :
+                          soldOut ? 'border-white/[0.05] opacity-40 cursor-not-allowed' :
+                          'border-white/[0.08] hover:border-white/20'
+                        }`}>
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            <span className="w-2 h-2 rounded-full" style={{ background: color }} />
+                            <span className="font-semibold text-sm">{tier.name}</span>
+                            {soldOut && <span className="text-red-400 text-xs">Sold out</span>}
                           </div>
-                        </button>
-                      );
-                    })}
-                  </div>
-                  <button onClick={() => setStep('register')}
-                    className="w-full bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold py-4 rounded-xl transition-colors text-base">
-                    {selectedTier?.price === 0 ? 'Register for free →' : `Get ticket →`}
-                  </button>
-                </>
+                          <span className={`font-bold text-sm ${tier.price === 0 ? 'text-green-400' : 'text-amber-400'}`}>
+                            {tier.price === 0 ? 'Free' : `${tier.currency} ${(tier.price / 100).toFixed(0)}`}
+                          </span>
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
               )}
 
-              {step === 'register' && (
-                <form onSubmit={handleSubmit}>
-                  <div className="flex items-center gap-2 mb-5">
-                    <button type="button" onClick={() => setStep('detail')} className="text-slate-400 hover:text-white">←</button>
-                    <h2 className="font-bold text-lg">Your details</h2>
-                  </div>
-                  <div className="space-y-3">
+              {/* Single-step form */}
+              <form onSubmit={handleSubmit}>
+                <div className="space-y-3">
+                  {/* Name row */}
+                  <div className="grid grid-cols-2 gap-2">
                     {[
-                      { key: 'first_name', label: 'First name', req: true, type: 'text' },
-                      { key: 'last_name',  label: 'Last name',  req: true, type: 'text' },
-                      { key: 'email',      label: 'Email',      req: true, type: 'email' },
-                      { key: 'organization', label: 'Organization', req: false, type: 'text' },
-                      { key: 'phone',      label: 'Phone (for WhatsApp notifications)', req: false, type: 'tel' },
-                    ].map(({ key, label, req, type }) => (
+                      { key: 'first_name', label: 'First name', type: 'text' },
+                      { key: 'last_name',  label: 'Last name',  type: 'text' },
+                    ].map(({ key, label, type }) => (
                       <div key={key}>
-                        <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1.5">{label}{req && ' *'}</label>
-                        <input type={type} required={req} value={(form as any)[key]}
+                        <label className="block text-xs text-slate-500 mb-1">{label} *</label>
+                        <input type={type} required value={(form as any)[key]}
                           onChange={(e) => setForm((f) => ({ ...f, [key]: e.target.value }))}
                           className="w-full px-3 py-2.5 bg-slate-900 border border-white/[0.08] rounded-xl text-white text-sm focus:outline-none focus:border-amber-500/50 transition-colors" />
                       </div>
                     ))}
-                    <div className="pt-1 space-y-2">
-                      {[
-                        { key: 'notify_whatsapp', label: '📱 Notify me via WhatsApp' },
-                        { key: 'notify_line',     label: '💬 Notify me via LINE' },
-                      ].map(({ key, label }) => (
-                        <label key={key} className="flex items-center gap-2 cursor-pointer">
-                          <input type="checkbox" checked={(form as any)[key]}
-                            onChange={(e) => setForm((f) => ({ ...f, [key]: e.target.checked }))}
-                            className="w-4 h-4 rounded accent-amber-500" />
-                          <span className="text-slate-400 text-sm">{label}</span>
-                        </label>
-                      ))}
-                    </div>
                   </div>
-                  <button type="submit" disabled={submitting}
-                    className="mt-5 w-full bg-amber-500 hover:bg-amber-400 disabled:opacity-50 text-slate-950 font-bold py-4 rounded-xl transition-colors text-base">
-                    {submitting ? 'Registering…' : selectedTier?.price === 0 ? 'Confirm Registration →' : 'Proceed to Payment →'}
-                  </button>
-                  <p className="text-slate-600 text-xs text-center mt-3">A confirmation email with your QR code will be sent.</p>
-                </form>
-              )}
+                  <div>
+                    <label className="block text-xs text-slate-500 mb-1">Email *</label>
+                    <input type="email" required value={form.email}
+                      onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))}
+                      className="w-full px-3 py-2.5 bg-slate-900 border border-white/[0.08] rounded-xl text-white text-sm focus:outline-none focus:border-amber-500/50 transition-colors" />
+                  </div>
+                  <div>
+                    <label className="block text-xs text-slate-500 mb-1">Organization</label>
+                    <input type="text" value={form.organization}
+                      onChange={(e) => setForm((f) => ({ ...f, organization: e.target.value }))}
+                      className="w-full px-3 py-2.5 bg-slate-900 border border-white/[0.08] rounded-xl text-white text-sm focus:outline-none focus:border-amber-500/50 transition-colors" />
+                  </div>
+                  <div>
+                    <label className="block text-xs text-slate-500 mb-1">Phone <span className="text-slate-600">(for reminders)</span></label>
+                    <input type="tel" value={form.phone}
+                      onChange={(e) => setForm((f) => ({ ...f, phone: e.target.value }))}
+                      className="w-full px-3 py-2.5 bg-slate-900 border border-white/[0.08] rounded-xl text-white text-sm focus:outline-none focus:border-amber-500/50 transition-colors" />
+                  </div>
+                  <div className="flex gap-4 pt-1">
+                    {[
+                      { key: 'notify_whatsapp', label: 'WhatsApp' },
+                      { key: 'notify_line',     label: 'LINE' },
+                    ].map(({ key, label }) => (
+                      <label key={key} className="flex items-center gap-1.5 cursor-pointer">
+                        <input type="checkbox" checked={(form as any)[key]}
+                          onChange={(e) => setForm((f) => ({ ...f, [key]: e.target.checked }))}
+                          className="w-3.5 h-3.5 rounded accent-amber-500" />
+                        <span className="text-slate-500 text-xs">{label} reminders</span>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+                <button type="submit" disabled={submitting}
+                  className="mt-4 w-full bg-amber-500 hover:bg-amber-400 disabled:opacity-50 text-slate-950 font-bold py-3.5 rounded-xl transition-colors text-base">
+                  {submitting ? 'Registering…' : selectedTier?.price === 0 ? 'Confirm Registration →' : `Get ticket →`}
+                </button>
+                <p className="text-slate-600 text-xs text-center mt-2">QR code sent to your email.</p>
+              </form>
             </div>
           </div>
         </div>

@@ -17,7 +17,7 @@ async function init() {
       name          TEXT NOT NULL,
       email         TEXT UNIQUE NOT NULL,
       password_hash TEXT NOT NULL,
-      plan          TEXT NOT NULL DEFAULT 'free',
+      plan          TEXT NOT NULL DEFAULT 'free' CHECK(plan IN ('free','pro','explab_staff')),
       stripe_account_id TEXT,
       settings      JSONB NOT NULL DEFAULT '{}',
       created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -146,6 +146,16 @@ async function init() {
   await pool.query(`CREATE INDEX IF NOT EXISTS idx_ef_attendees_code ON ef_attendees(registration_code);`);
   await pool.query(`CREATE INDEX IF NOT EXISTS idx_ef_events_slug ON ef_events(slug);`);
   await pool.query(`CREATE INDEX IF NOT EXISTS idx_ef_events_status ON ef_events(status);`);
+
+  // Migrate plan column to allow explab_staff (safe to run multiple times)
+  await pool.query(`
+    DO $$ BEGIN
+      ALTER TABLE ef_organizers DROP CONSTRAINT IF EXISTS ef_organizers_plan_check;
+      ALTER TABLE ef_organizers ADD CONSTRAINT ef_organizers_plan_check
+        CHECK(plan IN ('free','pro','explab_staff'));
+    EXCEPTION WHEN others THEN NULL;
+    END $$;
+  `).catch(() => {});
 
   console.log('[eventflow] DB tables ready');
 }
