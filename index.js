@@ -7166,12 +7166,40 @@ app.post('/api/sme/campaign-review', async (req, res) => {
     },
   });
 
+  // Ghostscript PDFSETTINGS map for built-in fallback compression
+  const GS_PROFILE_SETTINGS = {
+    small:    '/screen',
+    web:      '/ebook',
+    balanced: '/printer',
+    lossless: '/prepress',
+  };
+
+  // Compress a PDF via Ghostscript directly (no Python sidecar needed)
+  function compressWithGhostscript(inputPath, outputPath, profile) {
+    const { execFile } = require('child_process');
+    const setting = GS_PROFILE_SETTINGS[profile] || '/ebook';
+    return new Promise((resolve, reject) => {
+      execFile('gs', [
+        '-sDEVICE=pdfwrite',
+        '-dCompatibilityLevel=1.4',
+        `-dPDFSETTINGS=${setting}`,
+        '-dNOPAUSE', '-dQUIET', '-dBATCH',
+        `-sOutputFile=${outputPath}`,
+        inputPath,
+      ], { timeout: 180000 }, (err, stdout, stderr) => {
+        if (err) return reject(new Error(stderr || err.message));
+        resolve();
+      });
+    });
+  }
+
   app.post('/api/pdf-compress/upload', pdfUpload.single('file'), async (req, res) => {
     if (!req.file) return res.status(400).json({ ok: false, error: 'No PDF file uploaded' });
 
     const { profile = 'balanced', priority = 'quality', tags = '' } = req.body;
     const inputPath = req.file.path;
 
+    // --- Try Python sidecar first ---
     try {
       const PDF_COMPRESS_URL = process.env.PDF_COMPRESSION_SERVICE_URL || 'http://localhost:8082';
       const controller = new AbortController();
@@ -7191,7 +7219,6 @@ app.post('/api/sme/campaign-review', async (req, res) => {
       clearTimeout(timeout);
       const data = await response.json();
 
-      // Convert server output_path to a public URL
       if (data.ok && data.output_path) {
         const outDir = path.join(__dirname, 'uploads', 'pdfs', 'output');
         if (!fs.existsSync(outDir)) fs.mkdirSync(outDir, { recursive: true });
@@ -7203,20 +7230,43 @@ app.post('/api/sme/campaign-review', async (req, res) => {
         data.output_url = `/uploads/pdfs/output/${outFilename}`;
       }
 
-      // Clean up input file
+      try { fs.unlinkSync(inputPath); } catch (_) {}
+      return res.json(data);
+    } catch (sidecarErr) {
+      // Sidecar unavailable — fall through to Ghostscript
+      console.log(`ℹ️  PDF sidecar unavailable (${sidecarErr.message}), using Ghostscript fallback`);
+    }
+
+    // --- Ghostscript fallback ---
+    try {
+      const outDir = path.join(__dirname, 'uploads', 'pdfs', 'output');
+      if (!fs.existsSync(outDir)) fs.mkdirSync(outDir, { recursive: true });
+      const outFilename = `${Date.now()}-${Math.random().toString(36).slice(2)}-compressed.pdf`;
+      const outputPath = path.join(outDir, outFilename);
+
+      await compressWithGhostscript(inputPath, outputPath, profile);
+
+      const inputStat  = fs.statSync(inputPath);
+      const outputStat = fs.statSync(outputPath);
+
       try { fs.unlinkSync(inputPath); } catch (_) {}
 
-      res.json(data);
-    } catch (err) {
+      return res.json({
+        ok: true,
+        tool: 'ghostscript',
+        strategy: `PDFSETTINGS=${GS_PROFILE_SETTINGS[profile] || '/ebook'}`,
+        profile,
+        original_size: inputStat.size,
+        compressed_size: outputStat.size,
+        reduction_percent: Math.round((1 - outputStat.size / inputStat.size) * 100),
+        output_url: `/uploads/pdfs/output/${outFilename}`,
+      });
+    } catch (gsErr) {
       try { fs.unlinkSync(inputPath); } catch (_) {}
-      if (err.name === 'AbortError') {
-        res.status(504).json({ ok: false, error: 'PDF compression service timed out (3 min)' });
-      } else {
-        res.status(503).json({
-          ok: false,
-          error: `PDF Compression Service unavailable: ${err.message}. Start with: cd use-cases/pdf-compression && docker-compose up`,
-        });
-      }
+      return res.status(500).json({
+        ok: false,
+        error: `Compression failed: ${gsErr.message}`,
+      });
     }
   });
 }
