@@ -17,12 +17,12 @@ ENV NODE_EXTRA_CA_CERTS=/etc/ssl/certs/ca-certificates.crt
 
 # Install backend dependencies
 COPY package.json package-lock.json tsconfig.json ./
-RUN npm ci
+RUN npm install
 
 # Build frontend static export
 COPY frontend/package.json frontend/package-lock.json ./frontend/
 WORKDIR /usr/src/app/frontend
-RUN npm ci
+RUN npm install
 COPY frontend/ ./
 ENV NODE_OPTIONS=--max_old_space_size=2048
 RUN npm run build
