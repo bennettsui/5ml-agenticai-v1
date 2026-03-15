@@ -3,6 +3,18 @@
 const express = require('express');
 const router = express.Router();
 const { pool } = require('../../../db');
+const crypto = require('crypto');
+const axios = require('axios');
+
+// ─── Canva Connect credentials ────────────────────────────────────────────────
+const CANVA_CLIENT_ID     = process.env.CANVA_CLIENT_ID;
+const CANVA_CLIENT_SECRET = process.env.CANVA_CLIENT_SECRET;
+const CANVA_BASE_URL      = 'https://api.canva.com/rest/v1';
+const APP_BASE_URL        = process.env.APP_URL || 'https://5ml-agenticai-v1.fly.dev';
+// In-memory PKCE state (short-lived, only during OAuth handshake)
+const _canvaPkceStore = {};   // state → { codeVerifier, returnTo }
+// Persisted token (stored in DB table canva_tokens, also cached here)
+let _canvaToken = null;       // { access_token, refresh_token, expires_at }
 
 // ─── Startup schema guard ────────────────────────────────────────────────────
 // Runs once when module loads; ensures all required columns exist even if
@@ -118,6 +130,15 @@ const { pool } = require('../../../db');
       );
       CREATE INDEX IF NOT EXISTS idx_slide_version_slug_num ON slide_version_history(deck_slug, slide_number);
 
+      -- Canva OAuth tokens (single row, upserted on every auth)
+      CREATE TABLE IF NOT EXISTS canva_tokens (
+        id            INTEGER PRIMARY KEY DEFAULT 1,
+        access_token  TEXT NOT NULL,
+        refresh_token TEXT NOT NULL,
+        expires_at    BIGINT NOT NULL,
+        updated_at    TIMESTAMPTZ DEFAULT NOW()
+      );
+
       -- chat conversation history per slide
       CREATE TABLE IF NOT EXISTS slide_chat_messages (
         id           SERIAL PRIMARY KEY,
@@ -131,6 +152,9 @@ const { pool } = require('../../../db');
       CREATE INDEX IF NOT EXISTS idx_slide_chat ON slide_chat_messages(deck_slug, slide_number, created_at);
     `);
     console.log('✅ [presentation-deck] schema guard OK');
+    // Load any stored Canva token into memory
+    const { rows: tkRows } = await pool.query('SELECT * FROM canva_tokens WHERE id=1');
+    if (tkRows.length) _canvaToken = tkRows[0];
   } catch (e) {
     console.warn('⚠️ [presentation-deck] schema guard error:', e.message);
   }
@@ -1124,9 +1148,9 @@ function pptxAddSlideHeader(sl, pptx, s) {
   sl.addShape(pptx.ShapeType.rect, { x: 0.5, y: 1.62, w: 12.33, h: 0.007, fill: { color: PPTX_BORDER }, line: { color: PPTX_BORDER } });
 }
 
-router.get('/:slug/export/pptx', async (req, res) => {
-  const { slug } = req.params;
-  try {
+// ─── PPTX builder helper ──────────────────────────────────────────────────────
+
+async function buildPptxBuffer(slug) {
     const { rows: dbSlides } = await pool.query(
       `SELECT ps.slide_number, ps.section, ps.layout_type,
               COALESCE(sco.title,    ps.title)    AS title,
@@ -1139,7 +1163,7 @@ router.get('/:slug/export/pptx', async (req, res) => {
        WHERE ps.deck_slug = $1 ORDER BY ps.slide_number`,
       [slug]
     );
-    if (!dbSlides.length) return res.status(404).json({ error: 'No slides found. Seed the presentation first.' });
+    if (!dbSlides.length) throw new Error('No slides found. Seed the presentation first.');
 
     // First generated image URL per slide
     const { rows: imgRows } = await pool.query(
@@ -1276,7 +1300,13 @@ router.get('/:slug/export/pptx', async (req, res) => {
       if (s.notes) sl.addNotes(s.notes);
     }
 
-    const buf = await pptx.write({ outputType: 'nodebuffer' });
+    return await pptx.write({ outputType: 'nodebuffer' });
+}
+
+router.get('/:slug/export/pptx', async (req, res) => {
+  try {
+    const buf = await buildPptxBuffer(req.params.slug);
+    const slug = req.params.slug;
     res.set({
       'Content-Type': 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
       'Content-Disposition': `attachment; filename="5ML-CLP-Tender-${slug}.pptx"`,
@@ -1286,6 +1316,164 @@ router.get('/:slug/export/pptx', async (req, res) => {
   } catch (err) {
     console.error('[presentation-deck] PPTX export error', err);
     res.status(500).json({ error: err.message });
+  }
+});
+
+// ─── Canva Connect OAuth + Push ──────────────────────────────────────────────
+
+function pkceVerifier() {
+  return crypto.randomBytes(48).toString('base64url');
+}
+function pkceChallenge(verifier) {
+  return crypto.createHash('sha256').update(verifier).digest('base64url');
+}
+
+async function saveCanvaToken(tokenData) {
+  _canvaToken = tokenData;
+  try {
+    await pool.query(
+      `INSERT INTO canva_tokens (id, access_token, refresh_token, expires_at, updated_at)
+       VALUES (1, $1, $2, $3, NOW())
+       ON CONFLICT (id) DO UPDATE SET access_token=$1, refresh_token=$2, expires_at=$3, updated_at=NOW()`,
+      [tokenData.access_token, tokenData.refresh_token, tokenData.expires_at]
+    );
+  } catch (e) {
+    console.warn('[canva] token save error:', e.message);
+  }
+}
+
+async function getValidCanvaToken() {
+  if (!_canvaToken) return null;
+  // Refresh if expiring within 5 minutes
+  if (_canvaToken.expires_at - Date.now() < 5 * 60 * 1000) {
+    const res = await axios.post(
+      `${CANVA_BASE_URL}/oauth/token`,
+      new URLSearchParams({ grant_type: 'refresh_token', refresh_token: _canvaToken.refresh_token }),
+      { auth: { username: CANVA_CLIENT_ID, password: CANVA_CLIENT_SECRET } }
+    );
+    await saveCanvaToken({
+      access_token: res.data.access_token,
+      refresh_token: res.data.refresh_token || _canvaToken.refresh_token,
+      expires_at: Date.now() + (res.data.expires_in || 14400) * 1000,
+    });
+  }
+  return _canvaToken.access_token;
+}
+
+// GET /canva/auth  — start OAuth flow, redirect browser to Canva
+router.get('/canva/auth', (req, res) => {
+  const verifier = pkceVerifier();
+  const state    = crypto.randomBytes(16).toString('hex');
+  const returnTo = req.query.returnTo || '/presentation-deck/2603CLPtender/slides';
+  _canvaPkceStore[state] = { verifier, returnTo };
+  // Clean up stale states after 10 min
+  setTimeout(() => delete _canvaPkceStore[state], 10 * 60 * 1000);
+
+  const redirectUri = `${APP_BASE_URL}/api/presentation-deck/canva/callback`;
+  const params = new URLSearchParams({
+    client_id:             CANVA_CLIENT_ID,
+    redirect_uri:          redirectUri,
+    response_type:         'code',
+    scope:                 'design:content:write design:meta:read',
+    code_challenge:        pkceChallenge(verifier),
+    code_challenge_method: 'S256',
+    state,
+  });
+  res.redirect(`https://www.canva.com/api/oauth/authorize?${params}`);
+});
+
+// GET /canva/callback  — Canva redirects here with ?code=&state=
+router.get('/canva/callback', async (req, res) => {
+  const { code, state, error } = req.query;
+  if (error) return res.redirect(`/presentation-deck/2603CLPtender/slides?canva_error=${encodeURIComponent(error)}`);
+  const stored = _canvaPkceStore[state];
+  if (!stored) return res.status(400).send('OAuth state mismatch. Please try again.');
+  delete _canvaPkceStore[state];
+
+  try {
+    const redirectUri = `${APP_BASE_URL}/api/presentation-deck/canva/callback`;
+    const { data } = await axios.post(
+      `${CANVA_BASE_URL}/oauth/token`,
+      new URLSearchParams({ grant_type: 'authorization_code', code, code_verifier: stored.verifier, redirect_uri: redirectUri }),
+      { auth: { username: CANVA_CLIENT_ID, password: CANVA_CLIENT_SECRET } }
+    );
+    await saveCanvaToken({
+      access_token:  data.access_token,
+      refresh_token: data.refresh_token,
+      expires_at:    Date.now() + (data.expires_in || 14400) * 1000,
+    });
+    console.log('[canva] OAuth token stored successfully');
+    res.redirect(`${stored.returnTo}?canva=connected`);
+  } catch (err) {
+    console.error('[canva] token exchange error', err.response?.data || err.message);
+    res.redirect(`/presentation-deck/2603CLPtender/slides?canva_error=${encodeURIComponent('Token exchange failed')}`);
+  }
+});
+
+// GET /canva/status  — is the user connected?
+router.get('/canva/status', (req, res) => {
+  res.json({ connected: !!_canvaToken, expires_at: _canvaToken?.expires_at || null });
+});
+
+// POST /:slug/export/canva  — generate PPTX and push to Canva
+router.post('/:slug/export/canva', async (req, res) => {
+  const { slug } = req.params;
+  const token = await getValidCanvaToken();
+  if (!token) {
+    const authUrl = `/api/presentation-deck/canva/auth?returnTo=/presentation-deck/${slug}/slides`;
+    return res.status(401).json({ error: 'Not connected to Canva', auth_url: authUrl });
+  }
+  try {
+    console.log(`[canva] building PPTX for ${slug}…`);
+    const buf = await buildPptxBuffer(slug);
+
+    const titleB64 = Buffer.from(`CLP Tender — ${slug}`).toString('base64');
+    console.log(`[canva] uploading ${buf.length} bytes…`);
+    const importRes = await axios.post(
+      `${CANVA_BASE_URL}/design-imports`,
+      buf,
+      {
+        headers: {
+          Authorization:     `Bearer ${token}`,
+          'Content-Type':    'application/octet-stream',
+          'Import-Metadata': JSON.stringify({
+            title_base64: titleB64,
+            mime_type: 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+          }),
+        },
+        maxBodyLength: Infinity,
+        maxContentLength: Infinity,
+      }
+    );
+
+    const jobId = importRes.data.job?.id;
+    if (!jobId) throw new Error('No import job ID returned from Canva');
+    console.log(`[canva] import job ${jobId} started`);
+
+    // Poll until done (max ~60s)
+    let editUrl = null;
+    for (let i = 0; i < 30; i++) {
+      await new Promise(r => setTimeout(r, 2000));
+      const { data: statusData } = await axios.get(
+        `${CANVA_BASE_URL}/design-imports/${jobId}`,
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      const job = statusData.job;
+      if (job.status === 'success') {
+        editUrl = job.designs?.[0]?.urls?.edit_url;
+        console.log(`[canva] import succeeded, edit URL: ${editUrl}`);
+        break;
+      }
+      if (job.status === 'failed') {
+        throw new Error(`Canva import failed: ${job.error?.message || JSON.stringify(job.error)}`);
+      }
+    }
+    if (!editUrl) throw new Error('Canva import timed out after 60s');
+    res.json({ ok: true, edit_url: editUrl });
+  } catch (err) {
+    const detail = err.response?.data ? JSON.stringify(err.response.data) : err.message;
+    console.error('[canva] push error', detail);
+    res.status(500).json({ error: detail });
   }
 });
 

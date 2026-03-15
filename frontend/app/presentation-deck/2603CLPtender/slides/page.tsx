@@ -7,7 +7,7 @@ import { presentationData } from '../data';
 import {
   ChevronLeft, ChevronRight, Grid3X3, Image, MessageSquare,
   BrainCircuit, History, RotateCcw, Loader2, CheckCircle2,
-  Zap, Eye, EyeOff, X, Download,
+  Zap, Eye, EyeOff, X, Download, ExternalLink,
 } from 'lucide-react';
 
 const SLUG = '2603CLPtender';
@@ -704,11 +704,21 @@ function SlidesPresenter() {
   const [showBgImage, setShowBgImage] = useState(true);
   const [downloading, setDownloading] = useState(false);
   const [slideFlash, setSlideFlash] = useState(false);
+  const [canvaConnected, setCanvaConnected] = useState<boolean | null>(null);
+  const [pushingToCanva, setPushingToCanva] = useState(false);
 
   // Content overrides from DB (AI/user edits)
   const [overrides, setOverrides] = useState<Record<number, SlideOverride>>({});
   // Generated images indexed by slide_number
   const [genImages, setGenImages] = useState<Record<number, string[]>>({});
+
+  // Check Canva connection on mount (and after ?canva=connected redirect)
+  useEffect(() => {
+    fetch(`/api/presentation-deck/canva/status`)
+      .then(r => r.ok ? r.json() : { connected: false })
+      .then(d => setCanvaConnected(d.connected))
+      .catch(() => setCanvaConnected(false));
+  }, [searchParams]);
 
   // Load overrides once on mount
   useEffect(() => {
@@ -777,6 +787,29 @@ function SlidesPresenter() {
       alert(`PPTX export failed: ${e instanceof Error ? e.message : 'Unknown error'}`);
     } finally {
       setDownloading(false);
+    }
+  }
+
+  async function handlePushToCanva() {
+    if (!canvaConnected) {
+      const returnTo = encodeURIComponent(`/presentation-deck/${SLUG}/slides`);
+      window.location.href = `/api/presentation-deck/canva/auth?returnTo=/presentation-deck/${SLUG}/slides`;
+      return;
+    }
+    setPushingToCanva(true);
+    try {
+      const res = await fetch(`/api/presentation-deck/${SLUG}/export/canva`, { method: 'POST' });
+      if (res.status === 401) {
+        window.location.href = `/api/presentation-deck/canva/auth?returnTo=/presentation-deck/${SLUG}/slides`;
+        return;
+      }
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Push to Canva failed');
+      window.open(data.edit_url, '_blank');
+    } catch (e: unknown) {
+      alert(`Canva push failed: ${e instanceof Error ? e.message : 'Unknown error'}`);
+    } finally {
+      setPushingToCanva(false);
     }
   }
 
@@ -865,6 +898,20 @@ function SlidesPresenter() {
           >
             {downloading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Download className="w-3.5 h-3.5" />}
             {downloading ? 'Exporting…' : 'PPTX'}
+          </button>
+          {/* Push to Canva */}
+          <button
+            onClick={handlePushToCanva}
+            disabled={pushingToCanva}
+            className={`flex items-center gap-1.5 px-2.5 py-1 rounded text-xs font-medium disabled:opacity-50 transition-colors border ${
+              canvaConnected
+                ? 'bg-[#7D2AE7]/10 hover:bg-[#7D2AE7]/20 text-[#7D2AE7] border-[#7D2AE7]/30'
+                : 'bg-slate-100 hover:bg-slate-200 text-slate-600 border-slate-200'
+            }`}
+            title={canvaConnected ? 'Push to Canva' : 'Connect Canva account'}
+          >
+            {pushingToCanva ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <ExternalLink className="w-3.5 h-3.5" />}
+            {pushingToCanva ? 'Pushing…' : canvaConnected ? 'Canva' : 'Connect Canva'}
           </button>
           <div className="h-4 w-px bg-slate-200 mx-0.5" />
           <span className="text-xs text-slate-500 tabular-nums">
