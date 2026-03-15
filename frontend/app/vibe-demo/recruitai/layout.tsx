@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import RecruitChatbot from './components/RecruitChatbot';
+import { LangProvider } from './context/LangContext';
 
 export const metadata: Metadata = {
   metadataBase: new URL('https://5ml-agenticai-v1.fly.dev'),
@@ -69,6 +70,7 @@ export default function RecruitAILayout({
   children: React.ReactNode;
 }) {
   return (
+    <LangProvider>
     <div className="dark">
       <script
         type="application/ld+json"
@@ -102,5 +104,6 @@ export default function RecruitAILayout({
       {children}
       <RecruitChatbot />
     </div>
+    </LangProvider>
   );
 }
