@@ -204,7 +204,7 @@ export default function OrganizerMarketingPage() {
       <nav className="sticky top-0 z-50 border-b border-gray-200 bg-white/95 backdrop-blur-xl shadow-sm">
         <div className="max-w-6xl mx-auto px-6 h-16 flex items-center justify-between">
           <Link href="/eventflow" className="flex items-center gap-2">
-            <span className="text-2xl">🎟️</span>
+            <img src="/eventflow-icon.png" alt="EventFlow" className="w-8 h-8 rounded-lg" />
             <span className="font-black text-xl tracking-tight text-gray-900">EventFlow</span>
             <span className="hidden sm:block text-xs font-bold text-orange-500 bg-orange-50 border border-orange-100 px-2 py-0.5 rounded-full ml-1">For Organizers</span>
           </Link>
@@ -537,7 +537,7 @@ export default function OrganizerMarketingPage() {
           <div className="grid sm:grid-cols-4 gap-8 mb-10">
             <div>
               <div className="flex items-center gap-2 mb-3">
-                <span className="text-xl">🎟️</span>
+                <img src="/eventflow-icon.png" alt="EventFlow" className="w-6 h-6 rounded-md" />
                 <span className="font-black text-white">EventFlow</span>
               </div>
               <p className="text-xs text-gray-500 leading-relaxed">Where great events begin — and relationships last.</p>

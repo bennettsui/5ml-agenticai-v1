@@ -143,7 +143,7 @@ export default function EventsPage() {
       <nav className="sticky top-0 z-50 border-b border-gray-100 bg-white/95 backdrop-blur-xl shadow-sm">
         <div className="max-w-6xl mx-auto px-6 h-16 flex items-center justify-between">
           <Link href="/eventflow" className="flex items-center gap-2">
-            <span className="text-2xl">🎟️</span>
+            <img src="/eventflow-icon.png" alt="EventFlow" className="w-8 h-8 rounded-lg" />
             <span className="font-black text-xl tracking-tight text-gray-900">EventFlow</span>
             <span className="hidden sm:block text-xs font-bold text-blue-600 bg-blue-50 border border-blue-100 px-2 py-0.5 rounded-full ml-1">For Participants</span>
           </Link>
@@ -362,7 +362,7 @@ export default function EventsPage() {
       <footer className="bg-white border-t border-gray-100">
         <div className="max-w-6xl mx-auto px-6 py-8 flex flex-col sm:flex-row items-center justify-between gap-4 text-sm text-gray-400">
           <div className="flex items-center gap-2">
-            <span className="text-lg">🎟️</span>
+            <img src="/eventflow-icon.png" alt="EventFlow" className="w-6 h-6 rounded-md" />
             <span className="font-black text-gray-900">EventFlow</span>
             <span>· Where great events begin</span>
           </div>

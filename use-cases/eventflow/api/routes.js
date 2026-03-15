@@ -20,6 +20,7 @@ router.use('/kol',            require('./routes/kol'));
 router.use('/services',       require('./routes/services'));
 // Discount codes are event-scoped: /events/:eventId/discounts
 router.use('/events/:eventId/discounts', require('./routes/discounts'));
+router.use('/push',           require('./routes/push'));
 
 // DB init + engine start (called once when the router is first required)
 db.init().catch((err) => console.error('[eventflow] DB init failed:', err.message));

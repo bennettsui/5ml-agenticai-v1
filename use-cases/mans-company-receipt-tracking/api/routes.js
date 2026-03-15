@@ -18,8 +18,30 @@ const path = require('path');
 const fs = require('fs').promises;
 const ExcelJS = require('exceljs');
 const crypto = require('crypto');
+const multer = require('multer');
 const { Dropbox } = require('dropbox');
 const { processReceiptBatch } = require('../lib/batch-processor');
+
+// Multer: store uploaded receipts to /tmp/receipt-uploads
+const receiptUploadStorage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    const dir = '/tmp/receipt-uploads';
+    require('fs').mkdirSync(dir, { recursive: true });
+    cb(null, dir);
+  },
+  filename: (req, file, cb) => {
+    const safeName = `${Date.now()}_${file.originalname.replace(/[^a-zA-Z0-9._-]/g, '_')}`;
+    cb(null, safeName);
+  },
+});
+const receiptUpload = multer({
+  storage: receiptUploadStorage,
+  limits: { fileSize: 20 * 1024 * 1024 }, // 20 MB per file
+  fileFilter: (req, file, cb) => {
+    const allowed = ['image/jpeg', 'image/png', 'image/webp', 'image/gif', 'application/pdf'];
+    cb(null, allowed.includes(file.mimetype));
+  },
+});
 
 const normalizeExcelValue = (value) => {
   if (value === null || value === undefined) return '';
@@ -76,14 +98,9 @@ const parseBooleanField = (value, fallback = null) => {
   return fallback;
 };
 
-const normalizeOcrModel = (value) => {
-  if (!value) return 'claude-haiku';
-  if (typeof value !== 'string') return null;
-  const normalized = value.trim().toLowerCase();
-  if (['claude', 'claude-haiku', 'haiku'].includes(normalized)) return 'claude-haiku';
-  if (normalized === 'deepseek') return 'deepseek';
-  return null;
-};
+// All batches now use the Google Vision (Gemini) + DeepSeek pipeline.
+// The ocr_model param is accepted for backwards compatibility but ignored.
+const normalizeOcrModel = (_value) => 'google-vision';
 
 const regenerateExcelForBatch = async (batchId) => {
   const batchResult = await db.query(
@@ -192,37 +209,14 @@ router.post('/process', async (req, res) => {
       });
     }
 
-    if (!ocrModel) {
-      return res.status(400).json({
-        success: false,
-        error: 'Unsupported ocr_model. Use "claude-haiku" or "deepseek".',
-      });
-    }
-
-    // Check if database is configured
     if (!process.env.DATABASE_URL) {
-      return res.status(503).json({
-        success: false,
-        error: 'Database not configured',
-        details: 'DATABASE_URL environment variable is not set. Please configure PostgreSQL database.',
-        help: 'Run: fly postgres create && fly postgres attach <postgres-app-name>',
-      });
+      return res.status(503).json({ success: false, error: 'Database not configured' });
     }
-
-    if (ocrModel === 'deepseek') {
-      if (!process.env.DEEPSEEK_API_KEY) {
-        return res.status(503).json({
-          success: false,
-          error: 'OCR not configured',
-          details: 'DEEPSEEK_API_KEY environment variable is not set.',
-        });
-      }
-    } else if (!process.env.ANTHROPIC_API_KEY) {
-      return res.status(503).json({
-        success: false,
-        error: 'OCR not configured',
-        details: 'ANTHROPIC_API_KEY environment variable is not set.',
-      });
+    if (!process.env.GEMINI_API_KEY) {
+      return res.status(503).json({ success: false, error: 'GEMINI_API_KEY not configured' });
+    }
+    if (!process.env.DEEPSEEK_API_KEY) {
+      return res.status(503).json({ success: false, error: 'DEEPSEEK_API_KEY not configured' });
     }
 
     // Create new batch in database
@@ -292,36 +286,14 @@ router.post('/process-upload', async (req, res) => {
       });
     }
 
-    if (!ocrModel) {
-      return res.status(400).json({
-        success: false,
-        error: 'Unsupported ocr_model. Use "claude-haiku" or "deepseek".',
-      });
-    }
-
     if (!process.env.DATABASE_URL) {
-      return res.status(503).json({
-        success: false,
-        error: 'Database not configured',
-        details: 'DATABASE_URL environment variable is not set. Please configure PostgreSQL database.',
-        help: 'Run: fly postgres create && fly postgres attach <postgres-app-name>',
-      });
+      return res.status(503).json({ success: false, error: 'Database not configured' });
     }
-
-    if (ocrModel === 'deepseek') {
-      if (!process.env.DEEPSEEK_API_KEY) {
-        return res.status(503).json({
-          success: false,
-          error: 'OCR not configured',
-          details: 'DEEPSEEK_API_KEY environment variable is not set.',
-        });
-      }
-    } else if (!process.env.ANTHROPIC_API_KEY) {
-      return res.status(503).json({
-        success: false,
-        error: 'OCR not configured',
-        details: 'ANTHROPIC_API_KEY environment variable is not set.',
-      });
+    if (!process.env.GEMINI_API_KEY) {
+      return res.status(503).json({ success: false, error: 'GEMINI_API_KEY not configured' });
+    }
+    if (!process.env.DEEPSEEK_API_KEY) {
+      return res.status(503).json({ success: false, error: 'DEEPSEEK_API_KEY not configured' });
     }
 
     const batchResult = await db.query(
@@ -418,7 +390,7 @@ router.get('/debug/table', async (req, res) => {
       `SELECT
         batch_id, client_name, status, total_receipts, processed_receipts, failed_receipts,
         total_amount, deductible_amount, non_deductible_amount, period_start, period_end,
-        created_at, updated_at, completed_at
+        created_at, updated_at, completed_at, token_usage
        FROM receipt_batches
        ORDER BY created_at DESC
        LIMIT $1`,
@@ -610,7 +582,7 @@ router.get('/batches/:batchId/status', async (req, res) => {
     const result = await db.query(
       `SELECT
         batch_id, status, total_receipts, processed_receipts, failed_receipts,
-        total_amount, deductible_amount, created_at, updated_at
+        total_amount, deductible_amount, created_at, updated_at, token_usage
        FROM receipt_batches
        WHERE batch_id = $1`,
       [batchId]
@@ -918,6 +890,7 @@ router.put('/:receiptId', async (req, res) => {
       deductible,
       deductible_amount,
       non_deductible_amount,
+      remarks,
     } = req.body || {};
 
     const existingResult = await db.query(
@@ -1011,6 +984,12 @@ router.put('/:receiptId', async (req, res) => {
     if (non_deductible_amount !== undefined) {
       updateFields.push(`non_deductible_amount = $${paramIndex}`);
       values.push(parseNumberField(non_deductible_amount, 'non_deductible_amount'));
+      paramIndex += 1;
+    }
+
+    if (remarks !== undefined) {
+      updateFields.push(`remarks = $${paramIndex}`);
+      values.push(remarks);
       paramIndex += 1;
     }
 
@@ -1130,6 +1109,254 @@ router.get('/analytics/compliance', async (req, res) => {
       success: false,
       error: 'Failed to fetch compliance analytics',
     });
+  }
+});
+
+// =============================================================================
+// NEW ENDPOINTS (v2)
+// =============================================================================
+
+/**
+ * POST /receipts/upload-multipart
+ *
+ * Accept multipart/form-data file uploads, create a batch, and kick off
+ * Google Vision + DeepSeek processing.
+ *
+ * Form fields:
+ *   period_start (optional)  YYYY-MM-DD
+ *   period_end   (optional)  YYYY-MM-DD
+ * Form files:
+ *   files[]  — JPG / PNG / WebP / PDF (multiple allowed)
+ */
+router.post('/upload-multipart', receiptUpload.array('files', 50), async (req, res) => {
+  try {
+    const { period_start, period_end } = req.body || {};
+
+    if (!req.files || req.files.length === 0) {
+      return res.status(400).json({ success: false, error: 'No files uploaded' });
+    }
+
+    if (!process.env.DATABASE_URL) {
+      return res.status(503).json({ success: false, error: 'Database not configured' });
+    }
+    if (!process.env.GEMINI_API_KEY) {
+      return res.status(503).json({ success: false, error: 'GEMINI_API_KEY not configured' });
+    }
+    if (!process.env.DEEPSEEK_API_KEY) {
+      return res.status(503).json({ success: false, error: 'DEEPSEEK_API_KEY not configured' });
+    }
+
+    const batchResult = await db.query(
+      `INSERT INTO receipt_batches (client_name, status, period_start, period_end)
+       VALUES ($1, 'pending', $2, $3) RETURNING batch_id, created_at`,
+      ['Receipt OCR', period_start || null, period_end || null]
+    );
+    const batchId = batchResult.rows[0].batch_id;
+
+    const uploadedFiles = req.files.map(f => ({
+      success: true,
+      filename: f.originalname,
+      path: f.path,
+      hash: '',
+      size: f.size,
+    }));
+
+    processReceiptBatch(batchId, null, 'Receipt OCR', uploadedFiles, 'google-vision').catch(err => {
+      console.error(`Batch ${batchId} error:`, err);
+    });
+
+    res.json({
+      success: true,
+      batch_id: batchId,
+      file_count: req.files.length,
+      status: 'pending',
+      created_at: batchResult.rows[0].created_at,
+    });
+  } catch (error) {
+    console.error('upload-multipart error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * GET /receipts/batches/:batchId/receipts
+ *
+ * Return all receipts for a batch including image_data and ocr_boxes.
+ */
+router.get('/batches/:batchId/receipts', async (req, res) => {
+  try {
+    const { batchId } = req.params;
+    const result = await db.query(
+      `SELECT receipt_id, image_path, receipt_date, vendor, description,
+              amount, currency, tax_amount, receipt_number, payment_method,
+              category_id, category_name, ocr_confidence, ocr_raw_text,
+              ocr_boxes, image_data, deductible, deductible_amount,
+              non_deductible_amount, remarks, requires_review, reviewed,
+              created_at
+       FROM receipts WHERE batch_id=$1 ORDER BY created_at ASC`,
+      [batchId]
+    );
+    res.json({ success: true, receipts: result.rows });
+  } catch (error) {
+    console.error('batches/:id/receipts error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * PUT /receipts/:receiptId/remarks
+ *
+ * Save a user remark on a receipt (for learning / audit trail).
+ */
+router.put('/:receiptId/remarks', async (req, res) => {
+  try {
+    const { receiptId } = req.params;
+    const { remarks } = req.body || {};
+
+    const result = await db.query(
+      `UPDATE receipts SET remarks=$1, updated_at=NOW()
+       WHERE receipt_id=$2 RETURNING receipt_id, remarks`,
+      [remarks || '', receiptId]
+    );
+    if (result.rows.length === 0) {
+      return res.status(404).json({ success: false, error: 'Receipt not found' });
+    }
+    res.json({ success: true, receipt_id: receiptId, remarks: result.rows[0].remarks });
+  } catch (error) {
+    console.error('remarks error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// =============================================================================
+// LEARNING ENDPOINTS
+// =============================================================================
+
+/**
+ * GET /receipts/learning
+ *
+ * Returns all non-empty remarks grouped by batch, plus a DeepSeek-generated
+ * summary of patterns learned across all batches.
+ *
+ * Query params:
+ *   summarize=true  — run DeepSeek synthesis (default false, costs API call)
+ *   limit=200       — max remarks to fetch
+ */
+router.get('/learning', async (req, res) => {
+  try {
+    const limit = Math.min(parseInt(req.query.limit, 10) || 200, 500);
+    const summarize = req.query.summarize === 'true';
+
+    // Fetch all non-empty remarks with context
+    const result = await db.query(
+      `SELECT
+        r.receipt_id, r.batch_id, r.vendor, r.amount, r.currency,
+        r.category_name, r.receipt_date, r.remarks,
+        rb.created_at AS batch_created_at
+       FROM receipts r
+       JOIN receipt_batches rb ON rb.batch_id = r.batch_id
+       WHERE r.remarks IS NOT NULL AND trim(r.remarks) <> ''
+       ORDER BY rb.created_at DESC, r.created_at DESC
+       LIMIT $1`,
+      [limit]
+    );
+
+    const remarks = result.rows;
+
+    // Group by batch
+    const byBatch = {};
+    for (const row of remarks) {
+      const key = row.batch_id;
+      if (!byBatch[key]) {
+        byBatch[key] = {
+          batch_id: key,
+          batch_created_at: row.batch_created_at,
+          remarks: [],
+        };
+      }
+      byBatch[key].remarks.push({
+        receipt_id: row.receipt_id,
+        vendor: row.vendor,
+        amount: row.amount,
+        currency: row.currency,
+        category_name: row.category_name,
+        receipt_date: row.receipt_date,
+        remarks: row.remarks,
+      });
+    }
+
+    const batches = Object.values(byBatch);
+
+    let summary = null;
+
+    if (summarize && remarks.length > 0 && process.env.DEEPSEEK_API_KEY) {
+      const fetch = require('node-fetch');
+
+      const remarkLines = remarks
+        .map(r => `- [${r.receipt_date}] ${r.vendor} (${r.currency} ${r.amount}, ${r.category_name || 'uncategorised'}): "${r.remarks}"`)
+        .join('\n');
+
+      const prompt = `You are an accounting assistant reviewing user notes on receipts.
+Below are remarks left by the user during receipt review sessions.
+Synthesise these into actionable learning insights: patterns in categorisation corrections, vendor-specific rules, deductibility notes, and any recurring issues.
+Format as concise bullet points grouped by theme. Be specific and practical.
+
+Remarks:
+${remarkLines}`;
+
+      try {
+        const r = await fetch('https://api.deepseek.com/v1/chat/completions', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${process.env.DEEPSEEK_API_KEY}`,
+          },
+          body: JSON.stringify({
+            model: process.env.DEEPSEEK_MODEL || 'deepseek-chat',
+            messages: [{ role: 'user', content: prompt }],
+            temperature: 0.3,
+            max_tokens: 1000,
+          }),
+        });
+        const d = await r.json();
+        summary = d.choices?.[0]?.message?.content || null;
+      } catch (err) {
+        console.error('Learning summary DeepSeek error:', err.message);
+      }
+    }
+
+    res.json({
+      success: true,
+      total_remarks: remarks.length,
+      batches,
+      summary,
+    });
+  } catch (error) {
+    console.error('learning endpoint error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * GET /receipts/learning/context
+ *
+ * Returns the last N remarks formatted as a compact string for injecting
+ * into an LLM prompt. Used internally by batch-processor.
+ */
+router.get('/learning/context', async (req, res) => {
+  try {
+    const limit = Math.min(parseInt(req.query.limit, 10) || 50, 100);
+    const result = await db.query(
+      `SELECT vendor, category_name, remarks
+       FROM receipts
+       WHERE remarks IS NOT NULL AND trim(remarks) <> ''
+       ORDER BY created_at DESC
+       LIMIT $1`,
+      [limit]
+    );
+    res.json({ success: true, remarks: result.rows });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
   }
 });
 

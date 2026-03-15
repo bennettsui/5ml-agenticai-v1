@@ -1,0 +1,53 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 256 256">
+  <defs>
+        <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%" stop-color="#f97316"/>
+          <stop offset="100%" stop-color="#dc2626"/>
+        </linearGradient>
+      </defs>
+      <rect width="256" height="256" rx="56.32" ry="56.32" fill="url(#bg)"/>
+
+  <!-- Ticket body shadow -->
+  <rect x="80.232" y="73.05600000000001" width="101.67999999999999" height="118.08" rx="12.2016" ry="12.2016"
+        fill="rgba(0,0,0,0.18)"/>
+
+  <!-- Ticket body -->
+  <rect x="77.16" y="68.96000000000001" width="101.67999999999999" height="118.08" rx="12.2016" ry="12.2016" fill="white"/>
+
+  <!-- Header band -->
+  <clipPath id="clip256">
+    <rect x="77.16" y="68.96000000000001" width="101.67999999999999" height="118.08" rx="12.2016" ry="12.2016"/>
+  </clipPath>
+  <rect x="77.16" y="68.96000000000001" width="101.67999999999999" height="33.062400000000004" fill="#f97316" clip-path="url(#clip256)"/>
+
+  <!-- Divider dashes -->
+  <line x1="95.4624" y1="102.0224" x2="160.5376" y2="102.0224"
+        stroke="#e2e8f0" stroke-width="5.8449599999999995" stroke-dasharray="11.689919999999999 7.793279999999999"
+        stroke-linecap="round"/>
+
+  <!-- Left notch -->
+  <circle cx="77.16" cy="118.5536" r="8.856" fill="#f97316"/>
+
+  <!-- Right notch -->
+  <circle cx="178.83999999999997" cy="118.5536" r="8.856" fill="#f97316"/>
+
+  <!-- Calendar dots in header (3 dots) -->
+  <circle cx="101.5632" cy="87.14432000000001" r="2.975616" fill="rgba(255,255,255,0.85)"/>
+  <circle cx="114.7816" cy="87.14432000000001" r="2.975616" fill="rgba(255,255,255,0.85)"/>
+  <circle cx="128" cy="87.14432000000001" r="2.975616" fill="rgba(255,255,255,0.85)"/>
+
+  <!-- "EF" text initials in header -->
+  <text x="128" y="92.76492800000001"
+        font-family="system-ui,Arial,sans-serif" font-weight="800" font-size="17.192448000000002"
+        fill="white" text-anchor="middle" dominant-baseline="auto"
+        letter-spacing="-0.5">EF</text>
+
+  <!-- Content lines -->
+  <rect x="91.3952" y="112.6496" width="52.873599999999996" height="6.4944" rx="3.2472" fill="#334155"/>
+  <rect x="91.3952" y="128.23616" width="38.068991999999994" height="6.4944" rx="3.2472" fill="#94a3b8"/>
+  <rect x="91.3952" y="143.82272" width="29.08048" height="6.4944" rx="3.2472" fill="#cbd5e1"/>
+
+  <!-- Flow arrow chevron (orange) -->
+  <polyline points="154.4368,153.7808 161.75776,159.8816 154.4368,165.98239999999998"
+            stroke="#f97316" stroke-width="3.904512" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+</svg>
