@@ -11,6 +11,7 @@ const config: IndustryConfig = {
   urgency: '香港律師行、會計師行及管理顧問公司已開始採用 · 平均增加 30% 計費小時',
   heroGrad: 'from-violet-600 via-purple-600 to-indigo-700',
   heroAccent: 'violet',
+  whatsappCta: '85237000000',
   stats: [
     { value: '+30%', label: '計費小時增加' },
     { value: '-70%', label: '帳單追收時間' },

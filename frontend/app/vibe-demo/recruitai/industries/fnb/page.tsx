@@ -11,6 +11,8 @@ const config: IndustryConfig = {
   urgency: '香港 30+ 間餐廳已採用 · 平均首月找到 HK$5–12 萬隱藏成本',
   heroGrad: 'from-orange-600 via-red-600 to-rose-700',
   heroAccent: 'orange',
+  heroImage: '/recruitai/industry-fnb.jpg',
+  whatsappCta: '85237000000',
   stats: [
     { value: '90%', label: '發票對數時間節省' },
     { value: '零遺漏', label: '訂位紀錄' },

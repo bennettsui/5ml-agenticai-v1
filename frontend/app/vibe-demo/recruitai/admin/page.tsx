@@ -8,6 +8,7 @@ import {
   CheckCircle, Search, Pencil, Trash2, X, Save,
   Sparkles, Star, Tag, FileText, TrendingUp,
   ImageIcon, Zap, AlertCircle, FolderOpen,
+  Mail, Upload, CloudUpload, Columns,
 } from 'lucide-react';
 
 const API_BASE = (() => {
@@ -183,6 +184,8 @@ function LeadRow({
   const [analysis, setAnalysis] = useState<AiAnalysis | null>(null);
   const [analyzing, setAnalyzing] = useState(false);
   const [analyzeError, setAnalyzeError] = useState('');
+  const [sendingFollowup, setSendingFollowup] = useState(false);
+  const [followupResult, setFollowupResult] = useState<string | null>(null);
   const [draft, setDraft] = useState({
     name: lead.name ?? '',
     email: lead.email ?? '',
@@ -217,6 +220,24 @@ function LeadRow({
       );
       if (res.ok) onDelete(lead.id);
     } finally { setDeleting(false); }
+  }
+
+  async function handleFollowup() {
+    if (!confirm(`發送跟進郵件至 ${lead.email}？`)) return;
+    setSendingFollowup(true);
+    setFollowupResult(null);
+    try {
+      const res = await fetch(`${API_BASE}/api/recruitai/admin/leads/${lead.id}/followup`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password: ADMIN_PASSWORD }),
+      });
+      const data = await res.json();
+      if (data.success) setFollowupResult(`✅ 已發送至 ${data.sentTo}`);
+      else setFollowupResult(`❌ ${data.error || '發送失敗'}`);
+    } catch {
+      setFollowupResult('❌ 請求失敗');
+    } finally { setSendingFollowup(false); }
   }
 
   async function handleAnalyze() {
@@ -417,6 +438,34 @@ function LeadRow({
                   {!analysis && !analyzing && !analyzeError && (
                     <p className="text-slate-600 text-xs">點擊「分析此詢問」以獲得 AI 分類、摘要及潛力評估。</p>
                   )}
+                </div>
+
+                {/* Divider */}
+                <div className="border-t border-slate-700/50" />
+
+                {/* Follow-up email */}
+                <div>
+                  <div className="flex items-center justify-between mb-3">
+                    <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
+                      <Mail className="w-3.5 h-3.5 text-blue-400" /> 跟進郵件
+                    </p>
+                    {lead.email && (
+                      <button
+                        onClick={handleFollowup}
+                        disabled={sendingFollowup}
+                        className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600/20 hover:bg-blue-600/30 border border-blue-600/40 text-blue-300 text-xs font-medium rounded-lg transition-colors disabled:opacity-50"
+                      >
+                        <Mail className="w-3 h-3" />
+                        {sendingFollowup ? '發送中...' : '發送 AI 跟進郵件'}
+                      </button>
+                    )}
+                  </div>
+                  {followupResult && (
+                    <p className={`text-sm ${followupResult.startsWith('✅') ? 'text-emerald-400' : 'text-red-400'}`}>
+                      {followupResult}
+                    </p>
+                  )}
+                  {!lead.email && <p className="text-slate-600 text-xs">此詢問沒有電郵地址。</p>}
                 </div>
 
               </div>
@@ -638,6 +687,282 @@ function MediaCard({
   );
 }
 
+// ─── Dedicated RecruitAI Media Library ───────────────────────────────────────
+
+interface RecruitMediaImage {
+  key: string;
+  filename: string;
+  description: string;
+  prompt?: string;
+  path: string;
+  source: string;
+  publicUrl: string | null;
+  localExists: boolean;
+  alt: string;
+  missing: boolean;
+  canGenerate: boolean;
+  visualId?: string;
+  size: number | null;
+  modified: string | null;
+}
+
+function fmtBytes2(b: number | null) {
+  if (!b) return '';
+  if (b < 1024) return `${b}B`;
+  if (b < 1024 * 1024) return `${(b / 1024).toFixed(0)}KB`;
+  return `${(b / 1024 / 1024).toFixed(1)}MB`;
+}
+
+function RecruitMediaCard({
+  img,
+  onGenerate,
+  onPushCdn,
+  generating,
+  pushing,
+}: {
+  img: RecruitMediaImage;
+  onGenerate: (id: string) => void;
+  onPushCdn: (key: string) => void;
+  generating: boolean;
+  pushing: boolean;
+}) {
+  const [imgErr, setImgErr] = useState(false);
+  const [showPrompt, setShowPrompt] = useState(false);
+  const displayUrl = img.publicUrl || (img.localExists ? img.path : null);
+
+  return (
+    <div className="bg-white/[0.03] border border-slate-700/50 rounded-xl overflow-hidden flex flex-col">
+      {/* Thumbnail */}
+      <div className="relative bg-slate-800 aspect-video flex items-center justify-center">
+        {displayUrl && !imgErr ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={displayUrl} alt={img.alt} className="w-full h-full object-cover" onError={() => setImgErr(true)} />
+        ) : (
+          <div className="flex flex-col items-center gap-1 text-slate-600">
+            <ImageIcon className="w-7 h-7" />
+            <span className="text-xs">{img.missing ? '未生成' : '預覽不可用'}</span>
+          </div>
+        )}
+        {/* Status badges */}
+        <div className="absolute top-2 right-2 flex flex-col gap-1 items-end">
+          {img.publicUrl ? (
+            <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-emerald-900/80 text-emerald-300 border border-emerald-700/50 backdrop-blur-sm">CDN ✓</span>
+          ) : img.localExists ? (
+            <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-amber-900/80 text-amber-300 border border-amber-700/50 backdrop-blur-sm">本地</span>
+          ) : (
+            <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-slate-700/80 text-slate-400 border border-slate-600/50 backdrop-blur-sm">未生成</span>
+          )}
+        </div>
+      </div>
+
+      {/* Info */}
+      <div className="p-3 flex-1 flex flex-col gap-2">
+        <div>
+          <p className="text-slate-200 text-xs font-medium leading-tight">{img.description || img.filename}</p>
+          <p className="text-slate-600 text-[10px] mt-0.5 font-mono">{img.filename}</p>
+          {img.size && <p className="text-slate-600 text-[10px]">{fmtBytes2(img.size)}</p>}
+        </div>
+
+        {img.prompt && (
+          <div>
+            <button onClick={() => setShowPrompt(!showPrompt)} className="text-[10px] text-slate-500 hover:text-slate-400 underline underline-offset-2">
+              {showPrompt ? '收起' : 'Prompt'}
+            </button>
+            {showPrompt && <p className="mt-1 text-slate-500 text-[10px] leading-relaxed bg-white/[0.02] rounded p-1.5 border border-slate-700/30 line-clamp-5">{img.prompt}</p>}
+          </div>
+        )}
+
+        {img.publicUrl && (
+          <p className="text-[10px] text-slate-600 truncate">
+            <a href={img.publicUrl} target="_blank" rel="noreferrer" className="hover:text-blue-400 transition-colors">{img.publicUrl.replace('http://5ml.mmdbfiles.com', 'mmdb:/')}</a>
+          </p>
+        )}
+
+        <div className="mt-auto flex gap-1.5">
+          {img.canGenerate && img.visualId && (
+            <button
+              onClick={() => onGenerate(img.visualId!)}
+              disabled={generating}
+              className="flex-1 flex items-center justify-center gap-1 py-1.5 rounded-lg text-[11px] font-medium transition-colors bg-violet-600/20 hover:bg-violet-600/30 border border-violet-600/40 text-violet-300 disabled:opacity-40"
+            >
+              {generating ? <><div className="w-2.5 h-2.5 border border-violet-400 border-t-transparent rounded-full animate-spin" />生成中</> : <><Zap className="w-3 h-3" />{img.localExists ? '重新' : '生成'}</>}
+            </button>
+          )}
+          {img.localExists && !img.publicUrl && (
+            <button
+              onClick={() => onPushCdn(img.key)}
+              disabled={pushing}
+              className="flex-1 flex items-center justify-center gap-1 py-1.5 rounded-lg text-[11px] font-medium transition-colors bg-blue-600/20 hover:bg-blue-600/30 border border-blue-600/40 text-blue-300 disabled:opacity-40"
+            >
+              {pushing ? <><div className="w-2.5 h-2.5 border border-blue-400 border-t-transparent rounded-full animate-spin" />上傳中</> : <><CloudUpload className="w-3 h-3" />推 CDN</>}
+            </button>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function RecruitMediaLibraryTab() {
+  const [images, setImages] = useState<RecruitMediaImage[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [status, setStatus] = useState<{ geminiAvailable: boolean; generated: number; total: number; hasCdn: number } | null>(null);
+  const [generating, setGenerating] = useState<Record<string, boolean>>({});
+  const [pushing, setPushing] = useState<Record<string, boolean>>({});
+  const [batchRunning, setBatchRunning] = useState(false);
+  const [batchProgress, setBatchProgress] = useState<{ progress: number; total: number } | null>(null);
+
+  async function loadStatus() {
+    try {
+      const res = await fetch(`${API_BASE}/api/recruitai-media/status`);
+      const data = await res.json();
+      if (data) setStatus({ geminiAvailable: data.geminiAvailable, generated: data.generated, total: data.total, hasCdn: data.hasCdn });
+    } catch { /* ignore */ }
+  }
+
+  async function loadMedia() {
+    setLoading(true);
+    try {
+      const res = await fetch(`${API_BASE}/api/recruitai-media/media`);
+      const data = await res.json();
+      if (data.success) setImages(data.images);
+    } catch { /* ignore */ }
+    finally { setLoading(false); }
+  }
+
+  useEffect(() => { loadStatus(); }, []);
+
+  async function handleGenerate(visualId: string) {
+    setGenerating(p => ({ ...p, [visualId]: true }));
+    try {
+      await fetch(`${API_BASE}/api/recruitai-media/generate`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: visualId }),
+      });
+      await Promise.all([loadStatus(), loadMedia()]);
+    } catch { /* ignore */ }
+    finally { setGenerating(p => ({ ...p, [visualId]: false })); }
+  }
+
+  async function handlePushCdn(key: string) {
+    setPushing(p => ({ ...p, [key]: true }));
+    try {
+      await fetch(`${API_BASE}/api/recruitai-media/media/push-to-cdn`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ key }),
+      });
+      await loadMedia();
+    } catch { /* ignore */ }
+    finally { setPushing(p => ({ ...p, [key]: false })); }
+  }
+
+  async function handleSyncAll() {
+    if (!confirm('同步所有本地圖片至 CDN？這可能需要幾分鐘。')) return;
+    try {
+      await fetch(`${API_BASE}/api/recruitai-media/sync-cdn`, { method: 'POST' });
+      await loadMedia();
+    } catch { /* ignore */ }
+  }
+
+  async function handleGenerateAll() {
+    if (!status?.geminiAvailable) return alert('GEMINI_API_KEY 未設置');
+    setBatchRunning(true);
+    setBatchProgress({ progress: 0, total: status.total });
+    try {
+      await fetch(`${API_BASE}/api/recruitai-media/generate-all`, { method: 'POST' });
+      // Poll progress
+      const poll = setInterval(async () => {
+        const res = await fetch(`${API_BASE}/api/recruitai-media/generate-all/status`);
+        const data = await res.json();
+        setBatchProgress({ progress: data.state.progress, total: data.state.total });
+        if (!data.state.running) {
+          clearInterval(poll);
+          setBatchRunning(false);
+          await Promise.all([loadStatus(), loadMedia()]);
+        }
+      }, 3000);
+    } catch { setBatchRunning(false); }
+  }
+
+  const hasMissing = images.filter(i => i.canGenerate && i.missing).length;
+  const hasNoCdn   = images.filter(i => i.localExists && !i.publicUrl).length;
+
+  return (
+    <div className="space-y-6">
+      {/* Status bar */}
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex items-center gap-4 flex-wrap">
+          <div className="flex items-center gap-2">
+            <div className={`w-2 h-2 rounded-full ${status?.geminiAvailable ? 'bg-emerald-400 animate-pulse' : 'bg-slate-600'}`} />
+            <span className="text-xs text-slate-400">Gemini {status?.geminiAvailable ? '可用' : '未設置'}</span>
+          </div>
+          {status && (
+            <>
+              <span className="text-xs text-slate-500">{status.generated}/{status.total} 已生成</span>
+              <span className="text-xs text-slate-500">{status.hasCdn}/{status.total} 已推 CDN</span>
+            </>
+          )}
+          {hasMissing > 0 && <span className="text-xs text-amber-400">{hasMissing} 待生成</span>}
+          {hasNoCdn > 0 && <span className="text-xs text-blue-400">{hasNoCdn} 待推 CDN</span>}
+        </div>
+        <div className="flex items-center gap-2 flex-wrap">
+          {hasMissing > 0 && status?.geminiAvailable && (
+            <button
+              onClick={handleGenerateAll}
+              disabled={batchRunning}
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-violet-600/20 hover:bg-violet-600/30 border border-violet-600/40 text-violet-300 text-xs font-medium rounded-lg transition-colors disabled:opacity-50"
+            >
+              <Zap className="w-3 h-3" />
+              {batchRunning
+                ? `生成中 ${batchProgress?.progress ?? 0}/${batchProgress?.total ?? 0}...`
+                : `批量生成 (${hasMissing})`
+              }
+            </button>
+          )}
+          {hasNoCdn > 0 && (
+            <button
+              onClick={handleSyncAll}
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600/20 hover:bg-blue-600/30 border border-blue-600/40 text-blue-300 text-xs font-medium rounded-lg transition-colors"
+            >
+              <CloudUpload className="w-3 h-3" /> 同步所有至 CDN
+            </button>
+          )}
+          <button
+            onClick={() => { loadStatus(); loadMedia(); }}
+            disabled={loading}
+            className="flex items-center gap-1.5 px-3 py-1.5 border border-slate-700 text-slate-400 hover:text-slate-300 text-xs rounded-lg transition-colors"
+          >
+            <RefreshCw className={`w-3 h-3 ${loading ? 'animate-spin' : ''}`} /> 載入媒體庫
+          </button>
+        </div>
+      </div>
+
+      {/* Grid */}
+      {loading ? (
+        <div className="text-center py-16 text-slate-500 text-sm">載入中...</div>
+      ) : images.length === 0 ? (
+        <div className="text-center py-16 text-slate-600 text-sm">點擊「載入媒體庫」查看所有圖片</div>
+      ) : (
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3">
+          {images.map(img => (
+            <RecruitMediaCard
+              key={img.key}
+              img={img}
+              onGenerate={handleGenerate}
+              onPushCdn={handlePushCdn}
+              generating={!!(img.visualId && generating[img.visualId])}
+              pushing={!!pushing[img.key]}
+            />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Legacy cross-site media tab (kept for other sites) ───────────────────────
 function MediaLibraryTab({ password }: { password: string }) {
   const [groups, setGroups] = useState<MediaGroup[]>([]);
   const [loading, setLoading] = useState(false);
@@ -655,8 +980,6 @@ function MediaLibraryTab({ password }: { password: string }) {
     finally { setLoading(false); }
   }
 
-  useEffect(() => { loadLibrary(); }, []); // eslint-disable-line
-
   async function handleGenerate(site: string, id: string) {
     const key = `${site}:${id}`;
     setGenerating(p => ({ ...p, [key]: true }));
@@ -669,7 +992,7 @@ function MediaLibraryTab({ password }: { password: string }) {
       });
       const data = await res.json();
       if (!res.ok) setGenError(p => ({ ...p, [key]: data.error || '生成失敗' }));
-      else await loadLibrary(); // refresh to show new thumbnail
+      else await loadLibrary();
     } catch (e: unknown) {
       setGenError(p => ({ ...p, [key]: e instanceof Error ? e.message : '請求失敗' }));
     } finally {
@@ -679,7 +1002,6 @@ function MediaLibraryTab({ password }: { password: string }) {
 
   async function generateAllMissing() {
     for (const group of groups) {
-      if (!group.images.some(i => i.canGenerate && !i.exists)) continue;
       for (const img of group.images) {
         if (img.canGenerate && !img.exists) await handleGenerate(img.site, img.id);
       }
@@ -692,76 +1014,48 @@ function MediaLibraryTab({ password }: { password: string }) {
 
   return (
     <div className="space-y-6">
-      {/* Status bar */}
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-4">
           <div className="flex items-center gap-2">
             <div className={`w-2 h-2 rounded-full ${geminiAvailable ? 'bg-emerald-400' : 'bg-red-400'}`} />
-            <span className="text-xs text-slate-400">
-              Gemini {geminiAvailable ? '可用' : '不可用 (需設置 GEMINI_API_KEY)'}
-            </span>
+            <span className="text-xs text-slate-400">Gemini {geminiAvailable ? '可用' : '不可用'}</span>
           </div>
           <span className="text-xs text-slate-500">{generatedCount} / {totalImages} 已生成</span>
-          {missingGeneratable > 0 && (
-            <span className="text-xs text-amber-400">{missingGeneratable} 待生成</span>
-          )}
         </div>
         <div className="flex items-center gap-2">
           {missingGeneratable > 0 && geminiAvailable && (
-            <button
-              onClick={generateAllMissing}
-              className="flex items-center gap-1.5 px-3 py-1.5 bg-violet-600/20 hover:bg-violet-600/30 border border-violet-600/40 text-violet-300 text-xs font-medium rounded-lg transition-colors"
-            >
-              <Zap className="w-3 h-3" /> 生成所有未生成 ({missingGeneratable})
+            <button onClick={generateAllMissing}
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-violet-600/20 hover:bg-violet-600/30 border border-violet-600/40 text-violet-300 text-xs font-medium rounded-lg transition-colors">
+              <Zap className="w-3 h-3" /> 生成所有 ({missingGeneratable})
             </button>
           )}
-          <button
-            onClick={loadLibrary}
-            disabled={loading}
-            className="flex items-center gap-1.5 px-3 py-1.5 border border-slate-700 text-slate-400 hover:text-slate-300 text-xs rounded-lg transition-colors"
-          >
-            <RefreshCw className={`w-3 h-3 ${loading ? 'animate-spin' : ''}`} />
-            刷新
+          <button onClick={loadLibrary} disabled={loading}
+            className="flex items-center gap-1.5 px-3 py-1.5 border border-slate-700 text-slate-400 hover:text-slate-300 text-xs rounded-lg transition-colors">
+            <RefreshCw className={`w-3 h-3 ${loading ? 'animate-spin' : ''}`} /> 載入
           </button>
         </div>
       </div>
-
-      {/* Groups */}
       {loading && groups.length === 0 ? (
-        <div className="text-center py-16 text-slate-500 text-sm">載入媒體庫...</div>
+        <div className="text-center py-16 text-slate-500 text-sm">載入中...</div>
       ) : (
         groups.map(group => (
           <div key={group.id}>
             <div className="flex items-center gap-2 mb-3">
               <FolderOpen className="w-4 h-4 text-slate-400" />
               <h3 className="font-semibold text-slate-300 text-sm">{group.label}</h3>
-              <span className="text-xs text-slate-500">
-                {group.images.filter(i => i.exists).length}/{group.images.length}
-              </span>
+              <span className="text-xs text-slate-500">{group.images.filter(i => i.exists).length}/{group.images.length}</span>
             </div>
-            {group.images.length === 0 ? (
-              <p className="text-slate-600 text-xs pl-6">暫無圖片</p>
-            ) : (
-              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3">
-                {group.images.map(img => {
-                  const key = `${img.site}:${img.id}`;
-                  return (
-                    <div key={img.id}>
-                      <MediaCard
-                        image={img}
-                        onGenerate={handleGenerate}
-                        generating={!!generating[key]}
-                      />
-                      {genError[key] && (
-                        <p className="text-red-400 text-xs mt-1 flex items-center gap-1">
-                          <AlertCircle className="w-3 h-3" />{genError[key]}
-                        </p>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            )}
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3">
+              {group.images.map(img => {
+                const key = `${img.site}:${img.id}`;
+                return (
+                  <div key={img.id}>
+                    <MediaCard image={img} onGenerate={handleGenerate} generating={!!generating[key]} />
+                    {genError[key] && <p className="text-red-400 text-xs mt-1 flex items-center gap-1"><AlertCircle className="w-3 h-3" />{genError[key]}</p>}
+                  </div>
+                );
+              })}
+            </div>
           </div>
         ))
       )}
@@ -774,7 +1068,7 @@ function MediaLibraryTab({ password }: { password: string }) {
 export default function AdminPage() {
   const [authed, setAuthed] = useState(false);
   const [password] = useState(ADMIN_PASSWORD);
-  const [activeTab, setActiveTab] = useState<'leads' | 'sessions' | 'media'>('leads');
+  const [activeTab, setActiveTab] = useState<'leads' | 'sessions' | 'media' | 'pipeline'>('leads');
   const [leads, setLeads] = useState<Lead[]>([]);
   const [sessions, setSessions] = useState<Session[]>([]);
   const [loading, setLoading] = useState(false);
@@ -880,11 +1174,12 @@ export default function AdminPage() {
         </div>
 
         {/* Tabs */}
-        <div className="flex gap-1 mb-4 bg-slate-800/40 p-1 rounded-xl w-fit border border-slate-700/50">
+        <div className="flex gap-1 mb-4 bg-slate-800/40 p-1 rounded-xl w-fit border border-slate-700/50 flex-wrap">
           {([
             { id: 'leads',    label: `詢問列表 (${leads.length})` },
+            { id: 'pipeline', label: '銷售漏斗' },
             { id: 'sessions', label: `對話記錄 (${sessions.length})` },
-            { id: 'media',    label: '媒體庫' },
+            { id: 'media',    label: 'AI 圖片庫' },
           ] as const).map(tab => (
             <button
               key={tab.id}
@@ -928,10 +1223,48 @@ export default function AdminPage() {
           </div>
         )}
 
-        {/* Media Library */}
+        {/* Pipeline (Kanban) */}
+        {activeTab === 'pipeline' && (
+          <div>
+            <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
+              {[
+                { stage: '新詢問', color: 'border-blue-700/40 bg-blue-950/20',    badge: 'bg-blue-900/50 text-blue-300',   filter: (l: Lead) => !l.industry && !l.company },
+                { stage: '已了解業務', color: 'border-violet-700/40 bg-violet-950/20', badge: 'bg-violet-900/50 text-violet-300', filter: (l: Lead) => !!(l.industry || l.company) && !l.phone },
+                { stage: '已約諮詢', color: 'border-amber-700/40 bg-amber-950/20',  badge: 'bg-amber-900/50 text-amber-300',   filter: (l: Lead) => !!(l.phone) && !l.headcount },
+                { stage: '高潛力', color: 'border-emerald-700/40 bg-emerald-950/20', badge: 'bg-emerald-900/50 text-emerald-300', filter: (l: Lead) => !!(l.headcount) },
+              ].map(col => {
+                const colLeads = leads.filter(col.filter);
+                return (
+                  <div key={col.stage} className={`rounded-2xl border p-4 ${col.color}`}>
+                    <div className="flex items-center justify-between mb-3">
+                      <h3 className="text-sm font-semibold text-white">{col.stage}</h3>
+                      <span className={`text-xs px-2 py-0.5 rounded-full font-bold ${col.badge}`}>{colLeads.length}</span>
+                    </div>
+                    <div className="space-y-2">
+                      {colLeads.length === 0 ? (
+                        <p className="text-slate-600 text-xs text-center py-4">暫無</p>
+                      ) : (
+                        colLeads.slice(0, 8).map(l => (
+                          <div key={l.id} className="bg-slate-800/60 rounded-xl p-3 border border-slate-700/40">
+                            <p className="text-slate-200 text-sm font-medium">{l.name || l.email}</p>
+                            {l.company && <p className="text-slate-500 text-xs">{l.company}</p>}
+                            {l.industry && <p className="text-slate-500 text-xs">{l.industry}</p>}
+                            <p className="text-slate-600 text-xs mt-1">{new Date(l.created_at).toLocaleDateString('zh-HK', { month: 'short', day: 'numeric' })}</p>
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* RecruitAI Media Library */}
         {activeTab === 'media' && (
           <div className="bg-slate-800/60 border border-slate-700/50 rounded-2xl p-5">
-            <MediaLibraryTab password={password} />
+            <RecruitMediaLibraryTab />
           </div>
         )}
 

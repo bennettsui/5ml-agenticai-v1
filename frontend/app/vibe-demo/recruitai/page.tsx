@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import Link from 'next/link';
 import {
   CheckCircle,
@@ -419,6 +419,300 @@ const INTEGRATIONS = [
   { category: '香港本地', icon: '🇭🇰', items: ['政府 eDDI', 'MPF 系統', 'FPS 轉帳', 'eTax', 'HRMS'] },
 ];
 
+// ─── Bilingual text ───────────────────────────────────────────────────────────
+
+const LANG: Record<'zh' | 'en', Record<string, string>> = {
+  zh: {
+    heroTag:      '香港中小企 AI 自動化平台',
+    heroH1:       '讓 AI 代理為您工作',
+    heroSub:      '無需技術團隊 · 節省 30–50% 人力 · 發票、客服、商業智能全自動',
+    heroBadge1:   '✅ 一週內完成部署',
+    heroBadge2:   '✅ 一個月內見成效',
+    heroCta:      '免費 30 分鐘諮詢',
+    heroModules:  '了解各功能模組',
+    urgency:      '🔥 本週限時優惠 · 首月 AI 代理免費試用 · 名額有限',
+    roiTitle:     'AI 自動化 ROI 試算器',
+    roiSub:       '輸入您的業務情況，即時估算每月可節省的人力成本',
+    beforeAfter:  '部署前 vs 部署後',
+  },
+  en: {
+    heroTag:      'AI Automation Platform for HK SMEs',
+    heroH1:       'Let AI Agents Work For You',
+    heroSub:      'No tech team needed · Save 30–50% manpower · Invoice, CS & BI on autopilot',
+    heroBadge1:   '✅ Live in 1 week',
+    heroBadge2:   '✅ ROI in 1 month',
+    heroCta:      'Free 30-min Consultation',
+    heroModules:  'Explore Modules',
+    urgency:      '🔥 This week only · First month free trial · Limited spots',
+    roiTitle:     'AI Automation ROI Calculator',
+    roiSub:       'Enter your business details to estimate monthly savings',
+    beforeAfter:  'Before vs After Deployment',
+  },
+};
+
+// ─── AnimatedCounter ─────────────────────────────────────────────────────────
+
+function AnimatedCounter({ target, suffix = '', duration = 1800 }: { target: number; suffix?: string; duration?: number }) {
+  const [count, setCount] = useState(0);
+  const ref = useRef<HTMLSpanElement>(null);
+  const started = useRef(false);
+
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting && !started.current) {
+          started.current = true;
+          const startTime = performance.now();
+          const step = (now: number) => {
+            const elapsed = now - startTime;
+            const progress = Math.min(elapsed / duration, 1);
+            const ease = 1 - Math.pow(1 - progress, 3);
+            setCount(Math.round(ease * target));
+            if (progress < 1) requestAnimationFrame(step);
+          };
+          requestAnimationFrame(step);
+        }
+      },
+      { threshold: 0.3 }
+    );
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [target, duration]);
+
+  return <span ref={ref}>{count}{suffix}</span>;
+}
+
+// ─── ROI Calculator ──────────────────────────────────────────────────────────
+
+function RoiCalculator({ lang }: { lang: 'zh' | 'en' }) {
+  const [staff, setStaff] = useState(10);
+  const [avgSalary, setAvgSalary] = useState(18000);
+  const [adminPct, setAdminPct] = useState(30);
+
+  const monthlyAdmin   = (staff * avgSalary * adminPct) / 100;
+  const aiSavingPct    = 0.65;
+  const monthlySaving  = Math.round(monthlyAdmin * aiSavingPct);
+  const platformCost   = staff <= 10 ? 8000 : staff <= 30 ? 18000 : 28000;
+  const netGain        = monthlySaving - platformCost;
+  const roi            = platformCost > 0 ? Math.round((netGain / platformCost) * 100) : 0;
+
+  const isZh = lang === 'zh';
+  const slider = 'w-full h-2 rounded-full appearance-none bg-slate-700 accent-blue-500 cursor-pointer';
+  const labelCls = 'text-xs text-slate-400 mb-1 block';
+  const valCls = 'text-sm font-bold text-white';
+
+  return (
+    <div className="bg-slate-900 border border-slate-700/50 rounded-3xl p-6 sm:p-8 max-w-4xl mx-auto">
+      <div className="grid sm:grid-cols-3 gap-6 mb-8">
+        {/* Sliders */}
+        <div className="space-y-2">
+          <label className={labelCls}>{isZh ? '員工人數' : 'Headcount'}</label>
+          <input type="range" min={3} max={100} step={1} value={staff}
+            onChange={e => setStaff(+e.target.value)} className={slider} />
+          <span className={valCls}>{staff} {isZh ? '人' : 'staff'}</span>
+        </div>
+        <div className="space-y-2">
+          <label className={labelCls}>{isZh ? '平均月薪 (HK$)' : 'Avg Monthly Salary (HK$)'}</label>
+          <input type="range" min={12000} max={50000} step={1000} value={avgSalary}
+            onChange={e => setAvgSalary(+e.target.value)} className={slider} />
+          <span className={valCls}>HK${avgSalary.toLocaleString()}</span>
+        </div>
+        <div className="space-y-2">
+          <label className={labelCls}>{isZh ? '行政重複工作佔比' : 'Admin/Repetitive Work %'}</label>
+          <input type="range" min={10} max={70} step={5} value={adminPct}
+            onChange={e => setAdminPct(+e.target.value)} className={slider} />
+          <span className={valCls}>{adminPct}%</span>
+        </div>
+      </div>
+
+      {/* Results */}
+      <div className="grid sm:grid-cols-4 gap-4">
+        {[
+          { label: isZh ? '月行政人力成本' : 'Monthly Admin Cost', value: `HK$${monthlyAdmin.toLocaleString()}`, color: 'text-slate-300' },
+          { label: isZh ? 'AI 可節省 (65%)' : 'AI Saving (65%)', value: `HK$${monthlySaving.toLocaleString()}`, color: 'text-emerald-400' },
+          { label: isZh ? '平台月費' : 'Platform Cost', value: `HK$${platformCost.toLocaleString()}`, color: 'text-amber-400' },
+          { label: isZh ? '每月淨收益' : 'Net Monthly Gain', value: `HK$${netGain.toLocaleString()}`, color: netGain > 0 ? 'text-blue-400' : 'text-red-400' },
+        ].map(item => (
+          <div key={item.label} className="bg-white/[0.04] rounded-2xl p-4 border border-slate-700/40 text-center">
+            <div className={`text-xl font-black mb-1 ${item.color}`}>{item.value}</div>
+            <div className="text-xs text-slate-500">{item.label}</div>
+          </div>
+        ))}
+      </div>
+
+      {netGain > 0 && (
+        <div className="mt-6 flex flex-col sm:flex-row items-center justify-between gap-4 bg-emerald-950/40 border border-emerald-800/40 rounded-2xl px-6 py-4">
+          <div>
+            <p className="text-emerald-300 font-bold text-lg">
+              {isZh ? `每月節省 HK$${netGain.toLocaleString()}，ROI ${roi}%` : `Monthly net saving HK$${netGain.toLocaleString()}, ROI ${roi}%`}
+            </p>
+            <p className="text-emerald-500 text-sm mt-0.5">
+              {isZh ? '以上為保守估算，實際節省因業務而異' : 'Conservative estimate; actual savings vary by business'}
+            </p>
+          </div>
+          <Link href="/vibe-demo/recruitai/consultation"
+            className="flex-none px-6 py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold rounded-xl text-sm transition-colors whitespace-nowrap">
+            {isZh ? '免費驗證試算 →' : 'Verify with a Free Audit →'}
+          </Link>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Before/After Timeline ───────────────────────────────────────────────────
+
+function BeforeAfterTimeline({ lang }: { lang: 'zh' | 'en' }) {
+  const isZh = lang === 'zh';
+  const rows = [
+    {
+      area:    isZh ? '發票處理' : 'Invoice Processing',
+      before:  isZh ? '每週 12 小時人手錄入，錯誤率 8%' : '12 hrs/week manual entry, 8% error rate',
+      after:   isZh ? '全自動 OCR，每週僅 0.5 小時例外確認' : 'Full OCR auto-entry, 0.5 hr/week exception review',
+      gain:    '-96%',
+      gainColor: 'text-emerald-400',
+    },
+    {
+      area:    isZh ? '客戶服務回覆' : 'Customer Service',
+      before:  isZh ? '辦公時間才能回覆，平均等待 4–8 小時' : 'Office-hours only, 4–8 hr avg wait',
+      after:   isZh ? '24/7 即時回覆，< 30 秒，客滿度 +40%' : '24/7 instant reply <30s, CSAT +40%',
+      gain:    '-98%',
+      gainColor: 'text-blue-400',
+    },
+    {
+      area:    isZh ? '業務報告生成' : 'Business Reports',
+      before:  isZh ? '月底人手整合數據，需 2–3 天完成' : 'Month-end manual data gathering, 2–3 days',
+      after:   isZh ? '每週 AI 自動報告，週一早晨送到收件箱' : 'Weekly AI report auto-delivered Monday morning',
+      gain:    '-95%',
+      gainColor: 'text-violet-400',
+    },
+    {
+      area:    isZh ? '銷售線索跟進' : 'Sales Follow-up',
+      before:  isZh ? '線索跟進率不足 30%，大量潛在客戶流失' : 'Under 30% lead follow-up rate, large leak',
+      after:   isZh ? '5 分鐘內自動跟進，跟進率提升至 95%+' : 'Auto follow-up in 5 min, 95%+ follow-up rate',
+      gain:    '+300%',
+      gainColor: 'text-amber-400',
+    },
+  ];
+
+  return (
+    <div className="overflow-x-auto">
+      <table className="w-full min-w-[640px]">
+        <thead>
+          <tr className="border-b border-slate-700/50">
+            <th className="text-left py-3 px-4 text-xs font-semibold text-slate-400 uppercase tracking-wider w-32">{isZh ? '業務流程' : 'Process'}</th>
+            <th className="text-left py-3 px-4 text-xs font-semibold text-red-400 uppercase tracking-wider">
+              ❌ {isZh ? '未使用 AI 前' : 'Before AI'}
+            </th>
+            <th className="text-left py-3 px-4 text-xs font-semibold text-emerald-400 uppercase tracking-wider">
+              ✅ {isZh ? '部署 AI 後' : 'After AI'}
+            </th>
+            <th className="text-center py-3 px-4 text-xs font-semibold text-slate-400 uppercase tracking-wider w-20">{isZh ? '改善' : 'Gain'}</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((row, i) => (
+            <tr key={i} className="border-b border-slate-800/60 hover:bg-white/[0.02] transition-colors">
+              <td className="py-4 px-4 text-sm font-semibold text-white">{row.area}</td>
+              <td className="py-4 px-4 text-sm text-slate-400 leading-snug">{row.before}</td>
+              <td className="py-4 px-4 text-sm text-emerald-300 leading-snug">{row.after}</td>
+              <td className="py-4 px-4 text-center">
+                <span className={`text-base font-black ${row.gainColor}`}>{row.gain}</span>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+// ─── Exit Intent Popup ───────────────────────────────────────────────────────
+
+function ExitIntentPopup({ lang, onClose }: { lang: 'zh' | 'en'; onClose: () => void }) {
+  const isZh = lang === 'zh';
+  return (
+    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm" onClick={onClose}>
+      <div
+        className="bg-gradient-to-br from-slate-900 to-blue-950 border border-blue-700/50 rounded-3xl p-8 max-w-md w-full shadow-2xl relative"
+        onClick={e => e.stopPropagation()}
+      >
+        <button onClick={onClose} className="absolute top-4 right-4 text-slate-500 hover:text-white transition-colors">
+          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+        </button>
+        <div className="text-4xl mb-4">🎁</div>
+        <h3 className="text-2xl font-black text-white mb-2">
+          {isZh ? '限時優惠：首月免費' : 'Limited Offer: First Month Free'}
+        </h3>
+        <p className="text-slate-300 mb-6 leading-relaxed text-sm">
+          {isZh
+            ? '現在預約 30 分鐘免費諮詢，即可獲得首月 AI 代理免費試用資格。名額有限，今日截止。'
+            : 'Book a free 30-min consultation now and get your first month of AI agents free. Limited slots, ends today.'}
+        </p>
+        <div className="space-y-3">
+          <Link
+            href="/vibe-demo/recruitai/consultation"
+            onClick={onClose}
+            className="block w-full text-center py-3.5 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl transition-colors"
+          >
+            {isZh ? '立即領取優惠 →' : 'Claim Offer Now →'}
+          </Link>
+          <button onClick={onClose} className="block w-full text-center py-2 text-slate-500 hover:text-slate-400 text-sm transition-colors">
+            {isZh ? '不，我不需要優惠' : 'No thanks'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Urgency Ticker ──────────────────────────────────────────────────────────
+
+function UrgencyTicker({ lang }: { lang: 'zh' | 'en' }) {
+  const isZh = lang === 'zh';
+  const msgs = isZh
+    ? ['🔥 本週限時：首月免費試用', '✅ 今日已有 3 家企業預約諮詢', '⚡ 平均 1 週內完成部署上線', '🏆 50+ 香港中小企正在使用']
+    : ['🔥 This week: First month free', '✅ 3 companies booked today', '⚡ Average 1-week deployment', '🏆 50+ HK SMEs already using'];
+  const [idx, setIdx] = useState(0);
+  useEffect(() => {
+    const t = setInterval(() => setIdx(i => (i + 1) % msgs.length), 3500);
+    return () => clearInterval(t);
+  }, [msgs.length]);
+  return (
+    <div className="bg-blue-600/20 border border-blue-500/30 rounded-full px-5 py-1.5 inline-block text-sm text-blue-200 font-medium backdrop-blur-sm transition-all duration-500">
+      {msgs[idx]}
+    </div>
+  );
+}
+
+// ─── Workflow Visualizer ─────────────────────────────────────────────────────
+
+function WorkflowViz({ agentId, lang }: { agentId: 'invoice' | 'customer' | 'bi'; lang: 'zh' | 'en' }) {
+  const steps = AGENT_WORKFLOWS[agentId];
+  return (
+    <div className="space-y-2">
+      {steps.map((s, i) => (
+        <div key={i} className="flex items-start gap-3 group">
+          {/* Step line */}
+          <div className="flex flex-col items-center flex-none">
+            <div className="w-9 h-9 rounded-xl bg-blue-900/40 border border-blue-700/40 flex items-center justify-center text-base group-hover:scale-110 transition-transform">
+              {s.icon}
+            </div>
+            {i < steps.length - 1 && (
+              <div className="w-px flex-1 bg-gradient-to-b from-blue-700/40 to-transparent my-1 min-h-[16px]" />
+            )}
+          </div>
+          <div className="pt-2 pb-2 flex-1">
+            <p className="text-sm text-slate-300 leading-snug">{s.step}</p>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 // ─── Main Component ──────────────────────────────────────────────────────────
 
 export default function RecruitAIPage() {
@@ -426,6 +720,9 @@ export default function RecruitAIPage() {
   const [activeAgent, setActiveAgent] = useState(0);
   const [activeCaseStudy, setActiveCaseStudy] = useState(0);
   const [expandedWorkflow, setExpandedWorkflow] = useState<number | null>(null);
+  const [lang, setLang] = useState<'zh' | 'en'>('zh');
+  const [showExitIntent, setShowExitIntent] = useState(false);
+  const exitShown = useRef(false);
 
   // Cycle through agents automatically
   useEffect(() => {
@@ -433,12 +730,34 @@ export default function RecruitAIPage() {
     return () => clearInterval(timer);
   }, []);
 
+  // Exit intent: trigger when mouse leaves the top of the viewport
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (exitShown.current) return;
+      if (e.clientY < 5) {
+        exitShown.current = true;
+        setShowExitIntent(true);
+      }
+    };
+    // Delay by 15s to avoid immediate trigger
+    const timer = setTimeout(() => {
+      document.addEventListener('mouseleave', handler);
+    }, 15000);
+    return () => {
+      clearTimeout(timer);
+      document.removeEventListener('mouseleave', handler);
+    };
+  }, []);
+
+  const t = useCallback((key: string) => LANG[lang][key] ?? key, [lang]);
+
   const scrollTo = (id: string) => {
     document.getElementById(id.replace('#', ''))?.scrollIntoView({ behavior: 'smooth' });
   };
 
   return (
     <div className="min-h-screen bg-white dark:bg-slate-950 text-slate-900 dark:text-slate-100 font-sans">
+      {showExitIntent && <ExitIntentPopup lang={lang} onClose={() => setShowExitIntent(false)} />}
       <RecruitNav />
 
 
@@ -448,17 +767,39 @@ export default function RecruitAIPage() {
           {/* subtle radial glow */}
           <div className="absolute inset-0 pointer-events-none" style={{background:'radial-gradient(ellipse 80% 60% at 50% 40%, rgba(99,179,237,0.18) 0%, transparent 70%)'}} />
           <div className="max-w-4xl mx-auto text-center relative z-10">
+            {/* Language toggle */}
+            <div className="flex justify-center mb-6">
+              <div className="flex items-center gap-1 bg-white/10 rounded-full p-1 border border-white/20 backdrop-blur-sm">
+                {(['zh', 'en'] as const).map(l => (
+                  <button
+                    key={l}
+                    onClick={() => setLang(l)}
+                    className={`px-4 py-1.5 rounded-full text-xs font-bold transition-all ${
+                      lang === l ? 'bg-white text-blue-700 shadow-sm' : 'text-white/70 hover:text-white'
+                    }`}
+                  >
+                    {l === 'zh' ? '中文' : 'EN'}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Urgency ticker */}
+            <div className="flex justify-center mb-5">
+              <UrgencyTicker lang={lang} />
+            </div>
+
             <p className="text-xs font-semibold text-blue-200 uppercase tracking-widest mb-4">
-              香港中小企 AI 自動化平台
+              {t('heroTag')}
             </p>
             <h1 className="text-4xl sm:text-5xl lg:text-6xl font-black mb-5 leading-tight">
-              讓 AI 代理為您工作
+              {t('heroH1')}
             </h1>
             <p className="text-blue-100 text-lg sm:text-xl max-w-2xl mx-auto mb-3 leading-relaxed">
-              無需技術團隊 · 節省 30–50% 人力 · 發票、客服、商業智能全自動
+              {t('heroSub')}
             </p>
             <p className="text-blue-200/80 text-sm mb-8">
-              ✅ 一週內完成部署 &nbsp;·&nbsp; ✅ 一個月內見成效
+              {t('heroBadge1')} &nbsp;·&nbsp; {t('heroBadge2')}
             </p>
             <div className="flex flex-col sm:flex-row gap-3 justify-center">
               <Link
@@ -466,14 +807,14 @@ export default function RecruitAIPage() {
                 className="inline-flex items-center justify-center gap-2 px-7 py-3.5 bg-white hover:bg-blue-50 text-blue-700 font-bold rounded-xl text-base transition-all duration-200 shadow-lg"
               >
                 <Phone className="w-4 h-4" />
-                免費 30 分鐘諮詢
+                {t('heroCta')}
               </Link>
               <button
                 type="button"
                 onClick={() => scrollTo('#modules')}
                 className="inline-flex items-center justify-center gap-2 px-7 py-3.5 bg-white/15 hover:bg-white/25 text-white border border-white/30 font-medium rounded-xl text-base transition-all duration-200 backdrop-blur-sm"
               >
-                了解各功能模組
+                {t('heroModules')}
                 <ArrowRight className="w-4 h-4" />
               </button>
             </div>
@@ -500,14 +841,19 @@ export default function RecruitAIPage() {
         </div>
       </section>
 
-      {/* ── Stats ── */}
+      {/* ── Stats (animated on scroll) ── */}
       <section className="py-20 bg-gradient-to-br from-blue-700 via-blue-800 to-blue-900 dark:from-blue-900 dark:via-blue-950 dark:to-slate-950">
         <div className="max-w-6xl mx-auto px-4">
           <div className="grid grid-cols-2 md:grid-cols-4 gap-8">
-            {STATS.map(stat => (
+            {[
+              { target: 50, suffix: '+',  label: lang === 'zh' ? '香港中小企信任我們' : 'HK SMEs Trust Us',        sub: 'Hong Kong SMEs' },
+              { target: 65, suffix: '%',  label: lang === 'zh' ? '平均人力節省'        : 'Avg Manpower Saved',      sub: 'Manpower Saving' },
+              { target: 3,  suffix: 'x+', label: lang === 'zh' ? 'ROAS 提升目標'       : 'ROAS Improvement Target', sub: 'ROAS Improvement' },
+              { target: 1,  suffix: lang === 'zh' ? '週' : 'wk', label: lang === 'zh' ? '完成部署·1個月見效' : 'Deploy Time', sub: 'Deploy in 1 week' },
+            ].map(stat => (
               <div key={stat.label} className="text-center">
                 <div className="text-4xl sm:text-5xl font-extrabold text-white mb-1">
-                  {stat.value}
+                  <AnimatedCounter target={stat.target} suffix={stat.suffix} />
                 </div>
                 <div className="text-blue-200 text-sm font-medium">{stat.label}</div>
                 <div className="text-blue-300/60 text-xs mt-0.5">{stat.sub}</div>
@@ -787,6 +1133,40 @@ export default function RecruitAIPage() {
         </div>
       </section>
 
+      {/* ── Before / After Timeline ── */}
+      <section className="py-24 px-4 bg-slate-950">
+        <div className="max-w-5xl mx-auto">
+          <div className="text-center mb-12">
+            <p className="text-xs font-semibold text-blue-400 uppercase tracking-widest mb-3">部署成果對比</p>
+            <h2 className="text-3xl sm:text-4xl font-bold text-white mb-4">
+              {t('beforeAfter')}
+            </h2>
+            <p className="text-slate-400 text-lg max-w-2xl mx-auto">
+              {lang === 'zh' ? '數字不說謊，看看部署 RecruitAI Studio 前後的真實差異' : 'Numbers don\'t lie — see the real difference before and after RecruitAI Studio'}
+            </p>
+          </div>
+          <div className="bg-slate-900 border border-slate-700/50 rounded-3xl overflow-hidden">
+            <BeforeAfterTimeline lang={lang} />
+          </div>
+        </div>
+      </section>
+
+      {/* ── ROI Calculator ── */}
+      <section id="roi" className="py-24 px-4 bg-slate-950">
+        <div className="max-w-5xl mx-auto">
+          <div className="text-center mb-12">
+            <p className="text-xs font-semibold text-emerald-400 uppercase tracking-widest mb-3">ROI 試算</p>
+            <h2 className="text-3xl sm:text-4xl font-bold text-white mb-4">
+              {t('roiTitle')}
+            </h2>
+            <p className="text-slate-400 text-lg max-w-2xl mx-auto">
+              {t('roiSub')}
+            </p>
+          </div>
+          <RoiCalculator lang={lang} />
+        </div>
+      </section>
+
       {/* ── Case Studies ── */}
       <section id="cases" className="py-24 px-4 bg-slate-50/50 dark:bg-white/[0.02]">
         <div className="max-w-6xl mx-auto">
@@ -990,7 +1370,7 @@ export default function RecruitAIPage() {
                     📈 {agent.stat}
                   </div>
 
-                  {/* Workflow expandable */}
+                  {/* Workflow visualizer */}
                   <button
                     onClick={e => { e.stopPropagation(); setExpandedWorkflow(expandedWorkflow === idx ? null : idx); }}
                     className={`mt-5 w-full flex items-center justify-between text-xs font-semibold px-3 py-2 rounded-lg transition-colors ${
@@ -999,20 +1379,13 @@ export default function RecruitAIPage() {
                         : 'bg-slate-100 dark:bg-slate-700/40 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700/60'
                     }`}
                   >
-                    <span>查看工作流程（如何運作？）</span>
+                    <span>{lang === 'zh' ? '查看 AI 工作流程' : 'View AI Workflow'}</span>
                     <ChevronDown className={`w-3.5 h-3.5 transition-transform ${expandedWorkflow === idx ? 'rotate-180' : ''}`} />
                   </button>
 
-                  {expandedWorkflow === idx && (
-                    <div className="mt-3 space-y-2">
-                      {(AGENT_WORKFLOWS[agent.id] ?? []).map((wf, wi) => (
-                        <div key={wi} className={`flex items-start gap-2.5 text-xs rounded-lg px-3 py-2 ${
-                          isActive ? 'bg-white/15 text-slate-700 dark:text-slate-200' : 'bg-slate-50 dark:bg-slate-700/30 text-slate-600 dark:text-slate-300'
-                        }`}>
-                          <span className="text-sm mt-0.5 shrink-0">{wf.icon}</span>
-                          <span className="leading-relaxed">{wf.step}</span>
-                        </div>
-                      ))}
+                  {expandedWorkflow === idx && AGENT_WORKFLOWS[agent.id] && (
+                    <div className="mt-4 pl-1">
+                      <WorkflowViz agentId={agent.id as 'invoice' | 'customer' | 'bi'} lang={lang} />
                     </div>
                   )}
                 </div>
