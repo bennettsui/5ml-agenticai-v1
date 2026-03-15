@@ -38,9 +38,17 @@ export default function OrganizerLayout({ children }: { children: React.ReactNod
   if (PUBLIC_PATHS.includes(path)) return <>{children}</>;
 
   const NAV = [
-    { href: '/eventflow/organizer/dashboard', label: 'Dashboard', icon: '⬛' },
-    { href: '/eventflow/organizer/events',    label: 'Events',    icon: '🎟' },
-    { href: '/eventflow/organizer/contacts',  label: 'Contacts',  icon: '👥' },
+    { href: '/eventflow/organizer/dashboard',     label: 'Dashboard',       icon: '⬛' },
+    { href: '/eventflow/organizer/events',         label: 'Events',          icon: '🎟' },
+    { href: '/eventflow/organizer/contacts',       label: 'Contacts',        icon: '👥' },
+  ];
+
+  const PLATFORMS = [
+    { href: '/eventflow/organizer/attendee-portal', label: 'Attendee Portal', icon: '🎫' },
+    { href: '/eventflow/organizer/reception',        label: 'Reception',       icon: '🏢' },
+    { href: '/eventflow/organizer/admin-guide',      label: 'Admin Guide',     icon: '🛡' },
+    { href: '/eventflow/organizer/flows',            label: 'Flows',           icon: '🔄' },
+    { href: '/eventflow/organizer/wishlist',         label: 'Wishlist',        icon: '💡' },
   ];
 
   return (
@@ -53,8 +61,21 @@ export default function OrganizerLayout({ children }: { children: React.ReactNod
             <span className="font-black text-base tracking-tight">EventFlow</span>
           </Link>
         </div>
-        <nav className="flex-1 p-3 space-y-1">
+        <nav className="flex-1 p-3 space-y-1 overflow-y-auto">
           {NAV.map(({ href, label, icon }) => (
+            <Link key={href} href={href}
+              className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all ${
+                path.startsWith(href)
+                  ? 'bg-amber-500/15 text-amber-400'
+                  : 'text-slate-400 hover:text-white hover:bg-white/[0.04]'
+              }`}>
+              <span>{icon}</span>{label}
+            </Link>
+          ))}
+          <div className="pt-3 pb-1">
+            <div className="px-3 text-[10px] font-semibold text-slate-600 uppercase tracking-wider mb-1">Platforms</div>
+          </div>
+          {PLATFORMS.map(({ href, label, icon }) => (
             <Link key={href} href={href}
               className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all ${
                 path.startsWith(href)
