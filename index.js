@@ -4079,6 +4079,15 @@ try {
   console.warn('⚠️ TEDxXinyi routes not loaded:', error.message);
 }
 
+// RecruitAI Media Library Routes
+try {
+  const recruitaiMediaRoutes = require('./use-cases/recruitai/api/routes');
+  app.use('/api/recruitai-media', recruitaiMediaRoutes);
+  console.log('✅ RecruitAI media routes loaded: /api/recruitai-media');
+} catch (error) {
+  console.warn('⚠️ RecruitAI media routes not loaded:', error.message);
+}
+
 // Arrisonapps Cigar System Routes
 try {
   const arrisonappsRoutes = require('./use-cases/arrisonapps/api/routes');
@@ -5752,6 +5761,29 @@ app.get('/api/admin/media-library', (req, res) => {
     radianceImages = scanDir(radianceDir, '/images/radiance');
   } catch (e) { console.warn('Media library: radiance scan failed:', e.message); }
 
+  // ── RecruitAI ───────────────────────────────────────────────────────────────
+  let recruitaiImages = [];
+  try {
+    const { VISUALS } = require('./use-cases/recruitai/api/routes');
+    const dir = path.join(PUBLIC_DIR, 'recruitai');
+    recruitaiImages = (VISUALS || []).map(v => {
+      const filePath = path.join(dir, v.filename);
+      const exists = fs.existsSync(filePath);
+      return {
+        id: v.id,
+        filename: v.filename,
+        description: v.description || v.id,
+        prompt: v.prompt,
+        url: `/recruitai/${v.filename}`,
+        exists,
+        size: exists ? fs.statSync(filePath).size : null,
+        modified: exists ? fs.statSync(filePath).mtime.toISOString() : null,
+        canGenerate: true,
+        site: 'recruitai',
+      };
+    });
+  } catch (e) { console.warn('Media library: recruitai load failed:', e.message); }
+
   const geminiAvailable = !!process.env.GEMINI_API_KEY;
   res.json({
     success: true,
@@ -5760,6 +5792,7 @@ app.get('/api/admin/media-library', (req, res) => {
       { id: 'tedx-boundary', label: 'TEDx Boundary Street', images: tedxBoundary },
       { id: 'tedx-xinyi',    label: 'TEDxXinyi',            images: tedxXinyi },
       { id: 'radiance',      label: 'Radiance',              images: radianceImages },
+      { id: 'recruitai',     label: 'RecruitAI Studio',      images: recruitaiImages },
     ],
   });
 });
@@ -5773,6 +5806,7 @@ app.post('/api/admin/media-library/generate', async (req, res) => {
   const endpointMap = {
     'tedx-boundary': '/api/tedx/generate',
     'tedx-xinyi':    '/api/tedx-xinyi/generate',
+    'recruitai':     '/api/recruitai-media/generate',
   };
   const endpoint = endpointMap[site];
   if (!endpoint) return res.status(400).json({ error: `Unknown site: ${site}` });
@@ -5847,6 +5881,66 @@ app.get('/api/recruitai/admin/sessions/:sessionId/messages', async (req, res) =>
   } catch (error) {
     console.error('❌ Admin messages error:', error);
     res.status(500).json({ error: 'Failed to fetch messages' });
+  }
+});
+
+// POST /api/recruitai/admin/leads/:id/followup — Send follow-up email to a lead
+app.post('/api/recruitai/admin/leads/:id/followup', async (req, res) => {
+  const { password } = req.body;
+  if (password !== '5mileslab') return res.status(401).json({ error: 'Unauthorized' });
+  try {
+    const result = await pool.query('SELECT * FROM recruitai_leads WHERE id = $1', [Number(req.params.id)]);
+    if (!result.rows[0]) return res.status(404).json({ error: 'Lead not found' });
+    const lead = decryptRow(result.rows[0], PII_FIELDS.recruitai_leads);
+    if (!lead.email) return res.status(400).json({ error: 'Lead has no email address' });
+
+    // Build personalised follow-up email
+    const { Resend } = require('resend');
+    const resend = new Resend(process.env.RESEND_API_KEY);
+    const name = lead.name ? lead.name.split(' ')[0] : '您好';
+    const industry = lead.industry || '業務';
+    const htmlBody = `
+<div style="font-family:sans-serif;max-width:520px;margin:0 auto;color:#1e293b">
+  <div style="background:linear-gradient(135deg,#1d4ed8,#0ea5e9);border-radius:12px;padding:32px 28px;color:white;margin-bottom:24px">
+    <h1 style="margin:0 0 8px;font-size:22px;font-weight:800">感謝您對 RecruitAI Studio 的興趣 🚀</h1>
+    <p style="margin:0;opacity:.85;font-size:15px">讓 AI 幫您省時省力、業績倍增</p>
+  </div>
+  <p style="font-size:16px">您好 ${name}，</p>
+  <p>感謝您透過 RecruitAI Studio 提交查詢。我們已收到您的資料，我們的 AI 顧問將於 <strong>4 小時內</strong>與您聯絡，為您的${industry}業務量身設計自動化方案。</p>
+  <div style="background:#f0f9ff;border:1px solid #bae6fd;border-radius:10px;padding:20px 24px;margin:24px 0">
+    <p style="font-weight:700;margin:0 0 12px;color:#0369a1">在等待期間，您可以先了解：</p>
+    <ul style="margin:0;padding-left:20px;line-height:2;color:#0c4a6e">
+      <li>我們的 <strong>3 大 AI 代理</strong>如何運作</li>
+      <li>同行 <strong>真實案例</strong>（零售 / 餐飲 / IT 服務）</li>
+      <li><strong>ROI 試算器</strong>——估算您每月可節省多少人力成本</li>
+    </ul>
+  </div>
+  <a href="https://5ml-agenticai-v1.fly.dev/vibe-demo/recruitai/consultation"
+     style="display:inline-block;background:#1d4ed8;color:white;text-decoration:none;padding:14px 28px;border-radius:10px;font-weight:700;font-size:15px;margin-bottom:24px">
+    預約免費 30 分鐘諮詢 →
+  </a>
+  <p style="font-size:14px;color:#64748b">或直接 WhatsApp 我們：<a href="https://wa.me/85237000000" style="color:#1d4ed8">+852 3700-0000</a></p>
+  <hr style="border:none;border-top:1px solid #e2e8f0;margin:24px 0">
+  <p style="font-size:12px;color:#94a3b8;text-align:center">RecruitAI Studio by 5 Miles Lab · Hong Kong<br>如不希望收到後續郵件，請回覆此郵件告知。</p>
+</div>`;
+
+    await resend.emails.send({
+      from: 'RecruitAI Studio <noreply@recruitaistudio.hk>',
+      to: [lead.email],
+      subject: `${name}，您的 AI 自動化諮詢已收到 ✅`,
+      html: htmlBody,
+    });
+
+    // Record follow-up sent
+    await pool.query(
+      `UPDATE recruitai_leads SET message = COALESCE(message, '') || E'\n[Follow-up email sent: ' || NOW()::text || ']' WHERE id = $1`,
+      [Number(req.params.id)]
+    ).catch(() => {});
+
+    res.json({ success: true, sentTo: lead.email });
+  } catch (err) {
+    console.error('RecruitAI follow-up error:', err.message);
+    res.status(500).json({ error: err.message });
   }
 });
 

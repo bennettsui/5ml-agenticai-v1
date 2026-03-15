@@ -11,6 +11,8 @@ const config: IndustryConfig = {
   urgency: '香港 20+ 間物流及速遞公司已採用 · 平均節省 60% 客服人力',
   heroGrad: 'from-blue-700 via-indigo-600 to-blue-800',
   heroAccent: 'blue',
+  heroImage: '/recruitai/industry-logistics.jpg',
+  whatsappCta: '85237000000',
   stats: [
     { value: '60%', label: '客服人力節省' },
     { value: '<5秒', label: '貨物狀態查詢回覆' },

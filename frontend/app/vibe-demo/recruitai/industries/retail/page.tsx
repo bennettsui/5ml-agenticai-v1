@@ -11,6 +11,8 @@ const config: IndustryConfig = {
   urgency: '現有 50+ 間香港零售商已採用 · 平均 6 週內收回成本',
   heroGrad: 'from-rose-600 via-pink-600 to-fuchsia-700',
   heroAccent: 'rose',
+  heroImage: '/recruitai/industry-retail.jpg',
+  whatsappCta: '85237000000',
   stats: [
     { value: '80%', label: '發票處理時間節省' },
     { value: '<3秒', label: 'WhatsApp 自動回覆' },

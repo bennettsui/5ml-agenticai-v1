@@ -11,6 +11,8 @@ const config: IndustryConfig = {
   urgency: '已有香港保險、地產及財務策劃公司採用 · 平均提升 3 倍客戶跟進效率',
   heroGrad: 'from-emerald-600 via-teal-600 to-cyan-700',
   heroAccent: 'emerald',
+  heroImage: '/recruitai/industry-finance.jpg',
+  whatsappCta: '85237000000',
   stats: [
     { value: '3×', label: '客戶跟進效率' },
     { value: '-70%', label: '文件處理時間' },
