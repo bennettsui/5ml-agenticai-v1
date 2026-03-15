@@ -1,0 +1,62 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="192" height="48" viewBox="0 0 192 48">
+  <!-- Icon mark -->
+  <g>
+    
+  <defs>
+        <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%" stop-color="#f97316"/>
+          <stop offset="100%" stop-color="#dc2626"/>
+        </linearGradient>
+      </defs>
+      <rect width="48" height="48" rx="10.56" ry="10.56" fill="url(#bg)"/>
+
+  <!-- Ticket body shadow -->
+  <rect x="15.276" y="13.968000000000002" width="18.6" height="21.599999999999998" rx="2.232" ry="2.232"
+        fill="rgba(0,0,0,0.18)"/>
+
+  <!-- Ticket body -->
+  <rect x="14.7" y="13.200000000000001" width="18.6" height="21.599999999999998" rx="2.232" ry="2.232" fill="white"/>
+
+  <!-- Header band -->
+  <clipPath id="clip48">
+    <rect x="14.7" y="13.200000000000001" width="18.6" height="21.599999999999998" rx="2.232" ry="2.232"/>
+  </clipPath>
+  <rect x="14.7" y="13.200000000000001" width="18.6" height="6.048" fill="#f97316" clip-path="url(#clip48)"/>
+
+  <!-- Divider dashes -->
+  <line x1="18.048" y1="19.248" x2="29.951999999999998" y2="19.248"
+        stroke="#e2e8f0" stroke-width="1.0692" stroke-dasharray="2.1384 1.4256"
+        stroke-linecap="round"/>
+
+  <!-- Left notch -->
+  <circle cx="14.7" cy="22.272" r="1.6199999999999999" fill="#f97316"/>
+
+  <!-- Right notch -->
+  <circle cx="33.3" cy="22.272" r="1.6199999999999999" fill="#f97316"/>
+
+  <!-- Calendar dots in header (3 dots) -->
+  <circle cx="19.164" cy="16.526400000000002" r="0.54432" fill="rgba(255,255,255,0.85)"/>
+  <circle cx="21.582" cy="16.526400000000002" r="0.54432" fill="rgba(255,255,255,0.85)"/>
+  <circle cx="24" cy="16.526400000000002" r="0.54432" fill="rgba(255,255,255,0.85)"/>
+
+  <!-- "EF" text initials in header -->
+  <text x="24" y="17.554560000000002"
+        font-family="system-ui,Arial,sans-serif" font-weight="800" font-size="3.14496"
+        fill="white" text-anchor="middle" dominant-baseline="auto"
+        letter-spacing="-0.5">EF</text>
+
+  <!-- Content lines -->
+  <rect x="17.304" y="21.192" width="9.672" height="1.188" rx="0.594" fill="#334155"/>
+  <rect x="17.304" y="24.0432" width="6.96384" height="1.188" rx="0.594" fill="#94a3b8"/>
+  <rect x="17.304" y="26.894399999999997" width="5.3196" height="1.188" rx="0.594" fill="#cbd5e1"/>
+
+  <!-- Flow arrow chevron (orange) -->
+  <polyline points="28.836,28.716 30.175199999999997,29.832 28.836,30.948"
+            stroke="#f97316" stroke-width="0.7142400000000001" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+
+  </g>
+  <!-- Wordmark -->
+  <text x="65" y="32"
+        font-family="system-ui,-apple-system,Arial,sans-serif" font-weight="700" font-size="23"
+        fill="#f1f5f9" dominant-baseline="auto">Event<tspan fill="#f97316">Flow</tspan></text>
+</svg>
