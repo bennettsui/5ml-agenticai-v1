@@ -143,6 +143,10 @@ const LEVEL_SCENE_CATS = {
   10: ['cat-main', 'cat-helper', 'cat-sleepy', 'cat-hedgehog', 'cat-bunny'],
 };
 
+// Soup stage labels and thresholds
+const SOUP_STAGE_LABELS = ['清水 🫙', '暖湯初現 🌡️', '香氣升起 💨', '滾滾熱湯 🍵', '神奇暖湯 ✨', '金光暖湯 🌟'];
+const SOUP_STAGE_TAPS   = 20; // taps per stage upgrade
+
 // ─────────────────────────────────────────────────────────────────────────────
 // IN-MEMORY STATE
 // ─────────────────────────────────────────────────────────────────────────────
@@ -162,6 +166,8 @@ const state = {
   muted: false, reduceFx: false, darkOverlay: false,
   loaded: false,
   tickerIndex: 0,
+  soupStage:      0,   // 0=plain water, 1-5 = progressive glow
+  bgLevel:        0,   // which bg image is loaded
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -193,6 +199,10 @@ const els = {
   storyText:      $('story-text'),
   cauldronWrap:   $('cauldron-wrap'),
   cauldronRing:   $('cauldron-ring'),
+  cauldronImg:    $('cauldron-img'),
+  cauldronEmoji:  $('cauldron-emoji'),
+  soupLabel:      $('soup-label'),
+  gameBg:         $('game-bg'),
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -318,6 +328,12 @@ function handleTap(event) {
   // Occasional bonus particles
   if (!state.reduceFx && tapCount % 5 === 0) spawnSparkles(x, y);
 
+  // Soup stage upgrade every N taps
+  if (tapCount > 0 && tapCount % SOUP_STAGE_TAPS === 0) {
+    const nextStage = Math.min(5, state.soupStage + 1);
+    if (nextStage > state.soupStage) upgradeSoupStage(nextStage);
+  }
+
   updateHUDPoints();
   updateProgressBar();
   updateUpgradeButton();
@@ -376,6 +392,67 @@ function wiggleRandomCat() {
   void body.offsetWidth;
   body.classList.add('tapped');
   setTimeout(() => body.classList.remove('tapped'), 450);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// SOUP STAGE PROGRESSION
+// ─────────────────────────────────────────────────────────────────────────────
+function upgradeSoupStage(stage) {
+  state.soupStage = stage;
+
+  // Apply CSS glow class (removes old, adds new)
+  const tz = els.tapZone;
+  for (let i = 0; i <= 5; i++) tz.classList.remove(`soup-s${i}`);
+  if (stage > 0) tz.classList.add(`soup-s${stage}`);
+
+  // Update label
+  if (els.soupLabel) els.soupLabel.textContent = SOUP_STAGE_LABELS[stage] || '';
+
+  // Try to load Nano Banana soup image
+  loadSoupImage(stage);
+
+  // Toast
+  const toasts = ['', '湯開始暖起來 🌡️', '香氣四溢 💨✨', '滾滾熱湯！🍵🔥', '神奇暖湯出現！✨🌟', '金光暖湯！終極魔法！🌟💫'];
+  showMiniToast(toasts[stage] || `湯升級喇！`);
+}
+
+function loadSoupImage(stage) {
+  if (stage < 1) return;
+  const key = `soup_stage_${stage}`;
+  const url = `${BASE_API}/assets/${key}`;
+  const img = new Image();
+  img.onload = () => {
+    els.cauldronImg.src = url;
+    els.cauldronImg.style.display = 'block';
+    els.cauldronEmoji.style.display = 'none';
+  };
+  img.onerror = () => {
+    // Asset not generated yet — keep emoji
+    els.cauldronImg.style.display = 'none';
+    els.cauldronEmoji.style.display = 'block';
+  };
+  img.src = url;
+}
+
+function loadBgImage(level) {
+  if (state.bgLevel === level) return;
+  const key = `bg_level_${level}`;
+  const url = `${BASE_API}/assets/${key}`;
+  const img = new Image();
+  img.onload = () => {
+    state.bgLevel = level;
+    // Set as background of game-bg; CSS scene layers will render on top
+    if (els.gameBg) {
+      els.gameBg.style.backgroundImage = `url('${url}')`;
+      els.gameBg.style.backgroundSize  = 'cover';
+      els.gameBg.style.backgroundPosition = 'center bottom';
+      els.gameBg.classList.add('has-nano-bg');
+    }
+  };
+  img.onerror = () => {
+    // Not generated yet — CSS gradient handles background
+  };
+  img.src = url;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -475,6 +552,9 @@ function onLevelChange(oldLevel, newLevel) {
 
   // Rotate story ticker to new level content
   state.tickerIndex = 0;
+
+  // Try to load Nano Banana background for the new level
+  loadBgImage(newLevel);
 }
 
 let levelupTimer;
@@ -642,6 +722,7 @@ async function init() {
   // Apply initial scene
   document.body.className = `level-${state.currentLevel}`;
   updateCatVisibility(state.currentLevel);
+  loadBgImage(state.currentLevel);
 
   $('loading-screen').classList.add('fade-out');
   setTimeout(() => { $('loading-screen').style.display = 'none'; }, 900);
