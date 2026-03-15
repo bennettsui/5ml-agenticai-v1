@@ -72,26 +72,26 @@ async function initDb(dbPool) {
 
 // Points needed to REACH each level (index = level number, value = cumulative points)
 const LEVEL_THRESHOLDS = [
-  0,       // Level 1  — start
-  500,     // Level 2
-  2000,    // Level 3
-  5000,    // Level 4
-  10000,   // Level 5
-  20000,   // Level 6
-  40000,   // Level 7
-  75000,   // Level 8
-  125000,  // Level 9
-  200000,  // Level 10
+  0,      // Level 1  — start
+  100,    // Level 2
+  300,    // Level 3
+  700,    // Level 4
+  1500,   // Level 5
+  3000,   // Level 6
+  6000,   // Level 7
+  12000,  // Level 8
+  25000,  // Level 9
+  50000,  // Level 10
 ];
 
 // Tap power per tap_power_level: points added per tap
-const TAP_POWER = [1, 2, 4, 7, 12, 20, 35, 60, 100, 175, 300];
+const TAP_POWER = [1, 3, 6, 10, 18, 30, 50, 85, 140, 230, 380];
 
 // Upgrade cost for tap power (cost to go from level N to N+1)
-const TAP_UPGRADE_COSTS = [0, 200, 800, 2000, 5000, 12000, 30000, 70000, 150000, 300000];
+const TAP_UPGRADE_COSTS = [0, 50, 150, 400, 900, 2000, 4500, 10000, 22000, 45000];
 
 // Idle points per second per idle_rate_level
-const IDLE_RATE = [0, 0.2, 0.5, 1.0, 2.0, 4.0, 8.0, 15.0, 28.0, 50.0, 90.0];
+const IDLE_RATE = [0, 0.5, 1.2, 2.5, 5.0, 10.0, 18.0, 32.0, 58.0, 100.0, 180.0];
 
 // Max level
 const MAX_LEVEL = 10;

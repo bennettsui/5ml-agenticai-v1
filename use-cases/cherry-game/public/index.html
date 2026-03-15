@@ -8,7 +8,7 @@
   <title>貓貓暖湯 TAP TAP 🍲</title>
   <link rel="stylesheet" href="/cherry-game/static/css/game.css">
 </head>
-<body>
+<body class="level-1">
 
 <!-- ═══════════════════════════════════════════
      FOR CHERRY BANNER
@@ -20,25 +20,126 @@
 </div>
 
 <!-- ═══════════════════════════════════════════
-     BACKGROUND LAYER (changes per level)
+     BACKGROUND LAYERS  (CSS scene, no images needed)
 ════════════════════════════════════════════ -->
 <div id="game-bg" class="game-bg">
-  <div class="bg-placeholder">
-    <div class="bg-loading-text">載入暖湯小廚房…</div>
+
+  <!-- Sky / room bg — changes colour per level via JS class on body -->
+  <div class="scene-sky"></div>
+
+  <!-- Floor -->
+  <div class="scene-floor"></div>
+
+  <!-- Back wall wood -->
+  <div class="scene-wall"></div>
+
+  <!-- Window (appears Lv4+) -->
+  <div class="scene-window">
+    <div class="scene-window-glass"></div>
+    <!-- Snow (Lv4+) -->
+    <div class="snowflakes" id="snowflakes">
+      <span>❄</span><span>❄</span><span>❄</span><span>❄</span>
+      <span>❄</span><span>❄</span><span>❄</span><span>❄</span>
+    </div>
+    <!-- Stars (Lv8+) -->
+    <div class="stars" id="stars">
+      <span>★</span><span>✦</span><span>★</span><span>✦</span><span>★</span>
+    </div>
+    <!-- Moon (Lv8+) -->
+    <div class="moon" id="moon">🌕</div>
   </div>
+
+  <!-- Lanterns (Lv3+) -->
+  <div class="lantern-row" id="lanterns">
+    <div class="lantern l1">🏮</div>
+    <div class="lantern l2">🏮</div>
+    <div class="lantern l3">🏮</div>
+  </div>
+
+  <!-- Wind chime (Lv5+) -->
+  <div class="windchime" id="windchime">
+    <div class="chime-top">一</div>
+    <div class="chime-bells">
+      <span>🔔</span><span>🔔</span><span>🔔</span>
+    </div>
+  </div>
+
+  <!-- Dried fish (Lv5+) -->
+  <div class="dried-fish" id="driedfish">🐟🐟</div>
+
+  <!-- Wooden sign (Lv7+) -->
+  <div class="wood-sign" id="woodsign">
+    <div class="sign-text">BB<br>快樂出世<br>🌟</div>
+  </div>
+
+  <!-- Golden fireflies / particles (Lv9+) -->
+  <div class="fireflies" id="fireflies">
+    <span class="ff">✨</span><span class="ff">✨</span><span class="ff">✨</span>
+    <span class="ff">✨</span><span class="ff">✨</span><span class="ff">✨</span>
+  </div>
+
+  <!-- Stove platform -->
+  <div class="scene-stove">
+    <div class="stove-body"></div>
+    <div class="stove-fire" id="stove-fire">🔥</div>
+  </div>
+
 </div>
 
 <!-- ═══════════════════════════════════════════
-     OVERLAY (semi-transparent dark for readability)
+     CAT CHARACTERS  (always CSS/emoji based)
 ════════════════════════════════════════════ -->
-<div class="game-overlay"></div>
+<div class="cats-layer" id="cats-layer">
+
+  <!-- Cat 1: Main cat by the pot (always visible) -->
+  <div class="cat cat-main" id="cat-main">
+    <div class="cat-body">🐱</div>
+    <div class="cat-label">喵喵</div>
+  </div>
+
+  <!-- Cat 2: Helper cat chopping veg (Lv2+) -->
+  <div class="cat cat-helper hidden" id="cat-helper">
+    <div class="cat-body">🐈</div>
+    <div class="cat-action">🥕</div>
+    <div class="cat-label">小橙</div>
+  </div>
+
+  <!-- Cat 3: Cozy sleeping cat (Lv4+) -->
+  <div class="cat cat-sleepy hidden" id="cat-sleepy">
+    <div class="cat-body">😺</div>
+    <div class="cat-label">懶懶</div>
+  </div>
+
+  <!-- Hedgehog (Lv6+) -->
+  <div class="cat cat-hedgehog hidden" id="cat-hedgehog">
+    <div class="cat-body">🦔</div>
+    <div class="cat-action">🌿</div>
+    <div class="cat-label">刺刺</div>
+  </div>
+
+  <!-- Bunny (Lv6+) -->
+  <div class="cat cat-bunny hidden" id="cat-bunny">
+    <div class="cat-body">🐰</div>
+    <div class="cat-action">🥣</div>
+    <div class="cat-label">白雪</div>
+  </div>
+
+</div>
+
+<!-- Steam above pot -->
+<div class="steam-layer" id="steam-layer">
+  <div class="steam s1">〰</div>
+  <div class="steam s2">〰</div>
+  <div class="steam s3">〰</div>
+</div>
 
 <!-- ═══════════════════════════════════════════
      LEVEL-UP NOTIFICATION
 ════════════════════════════════════════════ -->
 <div id="levelup-toast" class="levelup-toast hidden">
-  <div class="levelup-icon">⬆️</div>
+  <div class="levelup-icon" id="levelup-icon">⬆️</div>
   <div id="levelup-msg" class="levelup-msg"></div>
+  <div id="levelup-story" class="levelup-story"></div>
 </div>
 
 <!-- ═══════════════════════════════════════════
@@ -55,7 +156,7 @@
     <div class="hud-label">暖暖點數</div>
     <div id="hud-points" class="hud-value points-value">0</div>
     <div class="hud-idle">
-      <span id="hud-idle-rate">+0.2</span> 點/秒 (自動)
+      <span id="hud-idle-rate">+0.5</span> 點/秒 (自動)
     </div>
   </div>
 
@@ -75,7 +176,7 @@
   </div>
   <div class="progress-labels">
     <span id="prog-current">0</span>
-    <span id="prog-next">500 → 第 2 關</span>
+    <span id="prog-next">100 → 第 2 關</span>
   </div>
 </div>
 
@@ -88,21 +189,25 @@
 
   <!-- The main tappable cauldron -->
   <div id="tap-zone" class="tap-zone" role="button" aria-label="撳湯煲賺暖暖點數">
-    <div class="cauldron-wrap">
-      <div id="cauldron-img" class="cauldron-img">
-        <!-- Cauldron image loaded via JS, fallback is emoji -->
-        <div class="cauldron-emoji-fallback">🍲</div>
+    <div class="cauldron-wrap" id="cauldron-wrap">
+      <!-- Cauldron image (from Nano Banana if generated, else emoji) -->
+      <div id="cauldron-img-wrap" class="cauldron-img-wrap">
+        <img id="cauldron-img" src="" alt="" style="display:none; width:100%; height:100%; object-fit:contain;">
+        <div id="cauldron-emoji" class="cauldron-emoji">🍲</div>
       </div>
-      <!-- Bubbles that float above the cauldron -->
-      <div class="bubble-container" id="bubble-container">
-        <div class="bubble b1"></div>
-        <div class="bubble b2"></div>
-        <div class="bubble b3"></div>
-        <div class="bubble b4"></div>
-      </div>
+
+      <!-- Tap ripple ring -->
+      <div class="cauldron-ring" id="cauldron-ring"></div>
     </div>
     <div class="tap-hint" id="tap-hint">撳我！</div>
   </div>
+</div>
+
+<!-- ═══════════════════════════════════════════
+     STORY PANEL (shows between levels)
+════════════════════════════════════════════ -->
+<div id="story-ticker" class="story-ticker">
+  <span id="story-text">🍲 暖湯小廚房⋯ 輕輕一撳，暖暖加一點。</span>
 </div>
 
 <!-- ═══════════════════════════════════════════
@@ -113,7 +218,7 @@
     <span class="upgrade-icon">🔥</span>
     <div class="upgrade-text">
       <div class="upgrade-title">升級暖暖火力</div>
-      <div id="upgrade-info" class="upgrade-info">消耗 200 點 → 每撳 +2</div>
+      <div id="upgrade-info" class="upgrade-info">消耗 50 點 → 每撳 +3</div>
     </div>
     <span class="upgrade-level-badge" id="upgrade-badge">Lv.1</span>
   </button>
@@ -146,8 +251,8 @@
     <div class="settings-divider"></div>
 
     <div class="settings-info">
-      <div>遊戲進度儲存於雲端</div>
-      <div style="opacity:0.6; font-size:12px; margin-top:4px;">唔用本地記憶體 ✓</div>
+      <div>遊戲進度儲存於雲端 ☁️</div>
+      <div style="opacity:0.6; font-size:12px; margin-top:4px;">唔用本地記憶體 ✓ 重新載入唔會失去進度</div>
     </div>
 
     <button class="settings-close-btn" onclick="game.toggleSettings()">關閉</button>
@@ -170,7 +275,7 @@
 </div>
 
 <!-- ═══════════════════════════════════════════
-     ADMIN PANEL (hidden, accessible via ?admin=1)
+     ADMIN PANEL (?admin=1)
 ════════════════════════════════════════════ -->
 <div id="admin-panel" class="admin-panel hidden">
   <div class="admin-content">
@@ -178,7 +283,7 @@
     <div class="admin-info" id="admin-asset-status">載入中…</div>
     <button class="admin-btn" onclick="game.adminGenerateAll()">生成所有 Nano Banana 圖片 (Pixar 風格)</button>
     <button class="admin-btn" onclick="game.adminGenerateAsset()">生成單張圖片</button>
-    <div id="admin-gen-key" style="display:flex; gap:8px; margin-top:8px;">
+    <div style="display:flex; gap:8px; margin-top:8px;">
       <input id="admin-key-input" class="admin-input" placeholder="資產 key (e.g. bg_level_1)" />
     </div>
     <div id="admin-log" class="admin-log"></div>

@@ -101,7 +101,7 @@ export default function VibeDemoPage() {
     },
   ];
 
-  const demoSites = [
+  const demoSites: Array<{ id: string; title: string; titleZh: string; description: string; href: string; color: string; tags: string[]; external?: boolean }> = [
     {
       id: 'tedx-boundary-street',
       title: 'TEDxBoundaryStreet',
@@ -173,6 +173,16 @@ export default function VibeDemoPage() {
       href: '/vibe-demo/arrisonapps',
       color: 'from-amber-900 to-stone-900',
       tags: ['Luxury / HNW', 'Multi-Region', 'CRM + Inventory', '5ML Agentic'],
+    },
+    {
+      id: 'cherry-game',
+      title: '貓貓暖湯 TAP TAP 🍲',
+      titleZh: '專為 Cherry 製作 💕',
+      description: 'A cozy 10-level tapping idle game inspired by Cats & Soup — made for Cherry. Pixar-style Nano Banana backgrounds, HK Chinese UI, all progress stored in Fly Postgres (no localStorage). Designed to distract and comfort.',
+      href: '/cherry-game',
+      color: 'from-orange-500 to-amber-700',
+      tags: ['Cozy Game', 'Nano Banana', 'HK Chinese', 'Idle Tapping'],
+      external: true,
     },
   ];
 
@@ -449,47 +459,55 @@ export default function VibeDemoPage() {
           </p>
 
           <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {demoSites.map((site) => (
-              <Link
-                key={site.id}
-                href={site.href}
-                className="group relative block"
-              >
-                {/* Card Glow */}
-                <div className={`absolute inset-0 bg-gradient-to-br ${site.color} rounded-2xl blur-xl opacity-0 group-hover:opacity-40 transition-opacity duration-500`} />
+            {demoSites.map((site) => {
+              const cardInner = (
+                <>
+                  {/* Card Glow */}
+                  <div className={`absolute inset-0 bg-gradient-to-br ${site.color} rounded-2xl blur-xl opacity-0 group-hover:opacity-40 transition-opacity duration-500`} />
 
-                {/* Card */}
-                <div className="relative bg-slate-900/80 backdrop-blur-xl border border-white/10 rounded-2xl overflow-hidden group-hover:border-white/30 transition-all duration-500">
-                  {/* Header */}
-                  <div className={`bg-gradient-to-br ${site.color} p-6`}>
-                    <div className="flex items-start justify-between">
-                      <div>
-                        <h3 className="text-xl font-bold text-white mb-1">{site.title}</h3>
-                        <p className="text-white/80 text-sm">{site.titleZh}</p>
+                  {/* Card */}
+                  <div className="relative bg-slate-900/80 backdrop-blur-xl border border-white/10 rounded-2xl overflow-hidden group-hover:border-white/30 transition-all duration-500">
+                    {/* Header */}
+                    <div className={`bg-gradient-to-br ${site.color} p-6`}>
+                      <div className="flex items-start justify-between">
+                        <div>
+                          <h3 className="text-xl font-bold text-white mb-1">{site.title}</h3>
+                          <p className="text-white/80 text-sm">{site.titleZh}</p>
+                        </div>
+                        <div className="w-10 h-10 rounded-full bg-white/20 flex items-center justify-center group-hover:bg-white/30 transition-colors">
+                          <ArrowUpRight className="w-5 h-5 text-white group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform" />
+                        </div>
                       </div>
-                      <div className="w-10 h-10 rounded-full bg-white/20 flex items-center justify-center group-hover:bg-white/30 transition-colors">
-                        <ArrowUpRight className="w-5 h-5 text-white group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform" />
+                    </div>
+
+                    {/* Body */}
+                    <div className="p-6">
+                      <p className="text-slate-300 text-sm mb-4">{site.description}</p>
+                      <div className="flex flex-wrap gap-2">
+                        {site.tags.map((tag) => (
+                          <span
+                            key={tag}
+                            className="text-xs px-2 py-1 bg-white/10 text-slate-300 rounded-full"
+                          >
+                            {tag}
+                          </span>
+                        ))}
                       </div>
                     </div>
                   </div>
+                </>
+              );
 
-                  {/* Body */}
-                  <div className="p-6">
-                    <p className="text-slate-300 text-sm mb-4">{site.description}</p>
-                    <div className="flex flex-wrap gap-2">
-                      {site.tags.map((tag) => (
-                        <span
-                          key={tag}
-                          className="text-xs px-2 py-1 bg-white/10 text-slate-300 rounded-full"
-                        >
-                          {tag}
-                        </span>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-              </Link>
-            ))}
+              return site.external ? (
+                <a key={site.id} href={site.href} className="group relative block">
+                  {cardInner}
+                </a>
+              ) : (
+                <Link key={site.id} href={site.href} className="group relative block">
+                  {cardInner}
+                </Link>
+              );
+            })}
 
             {/* Coming Soon Card */}
             <div className="relative bg-slate-900/40 backdrop-blur-xl border border-dashed border-white/20 rounded-2xl p-6 flex flex-col items-center justify-center min-h-[280px]">
