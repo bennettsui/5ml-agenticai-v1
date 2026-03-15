@@ -64,6 +64,9 @@ async function initDb(dbPool) {
   `);
 
   console.log('✅ Cherry Game: DB tables ready');
+
+  // Start background asset generation (non-blocking)
+  setTimeout(() => autoGenerateMissingAssets(dbPool), 3000);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -128,35 +131,68 @@ const LEVEL_MESSAGES = [
 ];
 
 // ─────────────────────────────────────────────────────────────────────────────
-// NANO BANANA (Gemini 2.5 Flash Image) — Pixar-Style Asset Prompts
+// NANO BANANA (Gemini 2.5 Flash Image) — Pixar-Style Prompts
+// Story-correlated, portrait (9:16) mobile format, ultra cute
 // ─────────────────────────────────────────────────────────────────────────────
 
+// Generation priority — soup stages first (most visible), then backgrounds
+const GENERATION_PRIORITY = [
+  'soup_stage_1','soup_stage_2','soup_stage_3','soup_stage_4','soup_stage_5',
+  'bg_level_1','bg_level_2','bg_level_3','bg_level_4','bg_level_5',
+  'bg_level_6','bg_level_7','bg_level_8','bg_level_9','bg_level_10',
+];
+
+const STYLE_BASE = 'Pixar 3D CGI animation style, ultra detailed render quality like Ratatouille, cinematic lighting, extremely cute characters, portrait vertical format 9:16, no text, no watermark';
+
 const ASSET_PROMPTS = {
-  bg_level_1: 'A cozy tiny magical forest kitchen interior at night, one large round glowing cauldron soup pot bubbling gently on a stone stove, one adorable chubby orange tabby cat sitting happily beside the pot, soft warm golden firelight, rich wood textures and stone walls, steam rising gently from soup, Pixar 3D CGI animation style, ultra detailed cinematic lighting, warm amber and cream palette, no text, render quality like Ratatouille or Up',
+  // ── SOUP STAGE IMAGES (progressive visual upgrade every ~20 taps) ──────────
 
-  bg_level_2: 'A cozy tiny magical forest kitchen interior at night, large glowing soup cauldron bubbling on stone stove, one orange tabby cat sitting lovingly by the pot, one fluffy gray cat cheerfully chopping vegetables on a wooden cutting board, colorful vegetables scattered on counter, steam rising from pot, warm golden firelight, Pixar 3D CGI animation style, cinematic lighting, warm amber palette, no text, Pixar render quality',
+  soup_stage_1:
+    `A single simple round clay soup pot sitting on a wooden surface, plain water just starting to warm, tiny wisps of steam just beginning, the pot is humble and empty-looking, soft warm cream and clay colors, very cute chunky round proportions, gentle amber light from below, Pixar 3D CGI animation style, centered portrait composition, isolated with soft warm blurred background, extremely cute, no text`,
 
-  bg_level_3: 'A cozy magical forest kitchen interior at night, large glowing soup cauldron, two adorable cats cooking together, several round red paper lanterns with golden glow hanging from ceiling wooden beams, lanterns casting warm pink-orange light adding to the firelight, steam curling upward, Pixar 3D CGI animation style, cinematic lighting, warm festive amber-red palette, no text, Pixar render quality',
+  soup_stage_2:
+    `A cute round clay soup pot filled with light golden broth just starting to simmer, a few small vegetable slices (carrot, mushroom) just dropped in, small delicate steam wisps rising upward, the broth beginning to glow warm amber, cute chunky proportions, warm golden light from within the pot, Pixar 3D CGI animation style, centered portrait composition, soft warm background, no text`,
 
-  bg_level_4: 'A cozy magical forest kitchen interior at night, large glowing soup cauldron with two cats cooking, red paper lanterns on ceiling, small round window showing gentle snowfall outside in a dark forest, white snowflakes drifting peacefully, warm cozy firelight inside contrasting with cool blue-purple snow outside, frosted window edges, Pixar 3D CGI animation style, cinematic lighting, warm-cool color contrast, no text, Pixar render quality',
+  soup_stage_3:
+    `A beautiful round soup pot bubbling with rich golden broth, colorful vegetables clearly visible inside — orange carrots, soft white tofu, dark mushrooms, bright green leaves — generous steam rising in beautiful curls, the pot glowing warm amber-gold from within, appetizing and abundant, Pixar 3D CGI animation style, centered portrait composition, warm golden-amber colors, ultra cute, no text`,
 
-  bg_level_5: 'A cozy magical forest kitchen interior at night, large glowing soup cauldron, two adorable cats cooking, red lanterns on ceiling, snow outside the window, bundles of dried fish hanging decoratively from ceiling beams, a small wind chime with tiny star-shaped bells hanging near the window, charming rustic homey details, warm golden firelight, Pixar 3D CGI animation style, cinematic lighting, warm amber palette, no text, Pixar render quality',
+  soup_stage_4:
+    `A magnificent round magical soup cauldron overflowing with gorgeous rich golden broth, abundant delicious ingredients clearly visible, thick rising steam forming beautiful cloud shapes, the cauldron radiating warm golden light outward, truly beautiful and comforting, surrounded by soft golden glow, Pixar 3D CGI animation style, centered portrait composition, radiant warm amber-gold palette, ultra cute chunky proportions, no text`,
 
-  bg_level_6: 'A cozy magical forest kitchen interior at night, large glowing soup cauldron, two cats cooking, red lanterns, snow outside, dried fish and wind chime decorations, a small chubby hedgehog wearing a tiny apron carrying fresh herbs, a fluffy white bunny helper rolling dough on a tiny table, adorable animal helpers bustling about, warm golden firelight, Pixar 3D CGI animation style, cinematic lighting, warm amber palette, full of life and charm, no text, Pixar render quality',
+  soup_stage_5:
+    `A magical glowing soup cauldron that has transcended ordinary cooking — the soup inside shimmers and sparkles with magical golden light, tiny glowing particles rise from the surface like fireflies, the entire cauldron is surrounded by a brilliant warm golden aura radiating outward, the steam itself is made of golden light, the ultimate magical healing soup, Pixar 3D CGI animation style, centered portrait composition, radiant magical golden palette, maximum magical glow, ultra cute, no text`,
 
-  bg_level_7: 'A cozy magical forest kitchen interior at night, large glowing golden soup cauldron, cats and small animals all cooking together joyfully, red lanterns, snow outside window, a beautifully carved wooden sign hanging on the wall with baby and star motifs, celebration and warmth atmosphere, warm golden firelight, Pixar 3D CGI animation style, cinematic lighting, warm festive amber palette, no text, Pixar render quality',
+  // ── BACKGROUNDS (story-correlated full kitchen scenes) ────────────────────
 
-  bg_level_8: 'A cozy magical forest kitchen interior at night, large radiant golden soup cauldron, adorable cats and animal helpers cooking happily together, red lanterns inside, the window now reveals a breathtaking magical starry night sky with a large glowing full moon, moonlight streaming into the kitchen, tiny stars twinkling, warm amber interior glow contrasting with magical blue moonlight outside, Pixar 3D CGI animation style, cinematic lighting, blue-gold magical contrast, no text, Pixar render quality',
+  bg_level_1:
+    `A charming cozy wooden forest kitchen interior at night in portrait vertical format, warm amber firelight from a small stone stove at the bottom center, ONE adorably chubby orange tabby kitten with huge round sparkling eyes sitting beside a plain round clay soup pot, the kitchen is simple and humble, rustic wooden walls with wood grain texture, small curtained window in background, wooden shelf with cute jars, everything very quiet and peaceful — this is just the beginning of a warm story, ${STYLE_BASE}`,
 
-  bg_level_9: 'A cozy magical forest kitchen interior at night, large radiant golden soup cauldron glowing warmly, adorable cats and animals cooking joyfully, red lanterns, magical starry sky with full moon visible through window, hundreds of tiny golden glowing light particles floating upward like fireflies throughout the entire kitchen, magical sparkles everywhere, dreamlike ethereal atmosphere, Pixar 3D CGI animation style, cinematic magical lighting, warm golden magical palette, no text, Pixar render quality',
+  bg_level_2:
+    `A charming cozy wooden forest kitchen interior at night in portrait vertical format, warm golden firelight, a glowing round soup cauldron on the stone stove center stage, an orange tabby cat sits watching it lovingly, a second fluffy gray kitten has just ARRIVED carrying a big bunch of colorful vegetables (orange carrots, green onions) in tiny paws, the gray cat looks overjoyed to help, colorful vegetables scattered joyfully on the wooden counter, two cats now making the kitchen feel more alive, ${STYLE_BASE}`,
 
-  bg_level_10: 'A cozy magical forest kitchen interior in ultimate celebration mode, one enormous brilliant warm-gold luminous magical soup cauldron radiating golden light outward in rays, all adorable cats and small animals gathered joyfully around it with peaceful happy expressions, red lanterns glowing, magical starry sky with full moon outside, golden firefly light particles floating upward filling the entire room, soft warm golden halo glow enveloping everything, the most beautiful cozy scene imaginable, cats eyes closed peacefully in bliss, ultimate warmth and happiness, Pixar 3D CGI animation style, ultra detailed cinematic lighting, radiant golden magical palette, no text, pinnacle Pixar render quality like the ending of Coco',
+  bg_level_3:
+    `A charming cozy wooden forest kitchen interior at night in portrait vertical format, warm festive atmosphere, beautiful GLOWING RED PAPER LANTERNS hanging from ceiling wooden beams (3-4 lanterns prominent in frame), the lanterns cast warm pink-orange light that mixes with firelight, soup cauldron glowing on stove, two cats cooking happily, the kitchen feels like a festival now, rich warm amber-red-orange palette, very festive and cozy, ${STYLE_BASE}`,
 
-  cauldron: 'A large round magical soup cauldron pot, bubbling with warm golden-orange broth, steam rising gently, glowing from within with warm amber light, carved with subtle star and moon patterns, cute and chunky proportions, isolated on transparent background, Pixar 3D CGI animation style, centered, no shadows on background, no text',
+  bg_level_4:
+    `A charming cozy wooden forest kitchen interior at night in portrait vertical format, red lanterns inside, two cats by glowing cauldron, the ROUND WINDOW in the background now shows BEAUTIFUL SNOWFALL outside in a dark blue-purple forest, snowflakes drifting gently in the dark outside, warm golden firelight inside creates a magical contrast with the cool snowy blue outside, the kitchen feels extra cozy against the cold, frosted window edges, ${STYLE_BASE}`,
 
-  cat_main: 'An adorable chubby orange tabby cat with big round shiny eyes and a warm smile, sitting upright with paws on knees, wearing a tiny apron with a small heart on it, Pixar 3D CGI animation character style, soft fur texture, warm lighting, isolated on transparent background, no text',
+  bg_level_5:
+    `A charming cozy wooden forest kitchen interior at night in portrait vertical format, red lanterns, snow outside, two cats cooking, now with RUSTIC DECORATIONS added: bundles of dried golden-brown fish hanging from ceiling beam, a small beautiful wind chime with tiny bells near the window swaying gently, the kitchen feels deeply homey and lived-in, every corner has a little charm, warm amber light, ${STYLE_BASE}`,
 
-  bubble_tap: 'A cute round golden soup bubble with a tiny sparkle, glowing softly, semi-transparent, Pixar 3D CGI style, isolated on transparent background, no text',
+  bg_level_6:
+    `A charming cozy wooden forest kitchen interior at night in portrait vertical format, red lanterns, snow outside, dried fish, two cats plus NEW ANIMAL FRIENDS: a small round chubby HEDGEHOG wearing a tiny apron carrying herbs, a fluffy white BUNNY enthusiastically rolling dough at a tiny table, the kitchen is now full of adorable helpers bustling about, warm golden firelight, full of joy and life, ${STYLE_BASE}`,
+
+  bg_level_7:
+    `A charming cozy wooden forest kitchen interior at night in portrait vertical format, all cats and animal friends cooking together joyfully, red lanterns, a PROMINENTLY DISPLAYED WOODEN SIGN hanging on the back wall carved and painted with stars and flowers, the kitchen decorated for a special occasion, warm festive golden light, anticipation and celebration in the air, baby-themed little star decorations, ${STYLE_BASE}`,
+
+  bg_level_8:
+    `A charming cozy wooden forest kitchen interior at night in portrait vertical format, all animals cooking, red lanterns, the large WINDOW now reveals a breathtaking NIGHT SKY filled with glittering stars, a LARGE GLOWING FULL MOON dominates the window, silver-blue moonlight streams dramatically into the warm kitchen creating beautiful blue-gold contrast, magical celestial night, ${STYLE_BASE}`,
+
+  bg_level_9:
+    `A charming cozy wooden forest kitchen interior at night in portrait vertical format, all animals, red lanterns, starry moon sky, the kitchen now FILLED WITH HUNDREDS OF TINY GOLDEN LIGHT PARTICLES floating upward like magical fireflies, the light particles rise from the golden soup cauldron and drift throughout the entire kitchen, dreamlike ethereal golden magical atmosphere, magical sparkles on every surface, ${STYLE_BASE}`,
+
+  bg_level_10:
+    `A cozy magical forest kitchen in the most beautiful moment of all — portrait vertical format, enormous brilliant GOLD-GLOWING MAGICAL SOUP CAULDRON radiating warm golden rays outward like a sun, ALL adorable animals gathered around with peaceful blissful happy expressions, eyes soft with joy, red lanterns at maximum glow, golden starry sky outside, golden light particles filling the entire room, soft golden halo envelopes everything, the most beautiful cozy scene imaginable, ultimate celebration and warmth, like the final scene of Coco, ${STYLE_BASE}`,
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -200,6 +236,51 @@ async function generateNanaBananaImage(prompt) {
     }
   }
   throw new Error('No image returned from Nano Banana (Gemini 2.5 Flash Image)');
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// AUTO-GENERATION  — generate missing assets in background on startup
+// ─────────────────────────────────────────────────────────────────────────────
+
+async function autoGenerateMissingAssets(dbPool) {
+  if (!process.env.GEMINI_API_KEY) return;
+  try {
+    const result = await dbPool.query(
+      'SELECT asset_key FROM cherry_game_assets WHERE image_data IS NOT NULL'
+    );
+    const already = new Set(result.rows.map(r => r.asset_key));
+    const missing  = GENERATION_PRIORITY.filter(k => !already.has(k));
+    if (missing.length === 0) {
+      console.log('[CherryGame] All assets already generated ✅');
+      return;
+    }
+    console.log(`[CherryGame] Auto-generating ${missing.length} missing assets in background…`);
+    (async () => {
+      for (const key of missing) {
+        try {
+          const prompt = ASSET_PROMPTS[key];
+          if (!prompt) continue;
+          console.log(`[CherryGame] Generating "${key}"…`);
+          const { data, mimeType } = await generateNanaBananaImage(prompt);
+          await dbPool.query(
+            `INSERT INTO cherry_game_assets (asset_key, image_data, mime_type, prompt)
+             VALUES ($1, $2, $3, $4)
+             ON CONFLICT (asset_key) DO UPDATE
+             SET image_data = $2, mime_type = $3, prompt = $4, created_at = NOW()`,
+            [key, data, mimeType, prompt]
+          );
+          console.log(`[CherryGame] ✅ Auto-generated: "${key}"`);
+          await new Promise(r => setTimeout(r, 3500)); // rate-limit
+        } catch (err) {
+          console.error(`[CherryGame] ❌ Auto-gen failed "${key}":`, err.message);
+          await new Promise(r => setTimeout(r, 5000));
+        }
+      }
+      console.log('[CherryGame] 🎉 Auto-generation complete!');
+    })();
+  } catch (err) {
+    console.error('[CherryGame] autoGenerateMissingAssets error:', err.message);
+  }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
