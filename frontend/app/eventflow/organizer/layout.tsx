@@ -6,7 +6,7 @@ import Link from 'next/link';
 
 const API = process.env.NEXT_PUBLIC_API_URL || '';
 
-const PUBLIC_PATHS = ['/eventflow/organizer/login', '/eventflow/organizer/signup'];
+const PUBLIC_PATHS = ['/eventflow/organizer', '/eventflow/organizer/login', '/eventflow/organizer/signup'];
 
 export default function OrganizerLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
