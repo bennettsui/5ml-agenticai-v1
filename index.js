@@ -2549,6 +2549,45 @@ app.get('/stats', async (req, res) => {
           tools: ['pdfsizeopt', 'Ghostscript (pdfc)', 'pdfEasyCompress', 'Paperweight'],
           profiles: ['lossless', 'balanced', 'web', 'small', 'auto'],
         },
+        {
+          id: 'csuite-relationship-intelligence',
+          name: 'C-Suite Relationship Intelligence',
+          description: 'Multi-tenant relationship OS for C-suite executives: contact graph, OSINT enrichment, scoring, weekly action plans, and conversational chief-of-staff',
+          agentCount: 4,
+          status: 'in_progress',
+          costEstimate: {
+            perRun: {
+              description: '1 conversational query + optional enrichment + scoring',
+              modelCalls: [
+                { model: 'DeepSeek Reasoner', calls: 1, avgTokensIn: 4000, avgTokensOut: 2000, costPerMillion: { input: 0.14, output: 0.28 } },
+                { model: 'Claude Haiku (enricher + scorer)', calls: 2, avgTokensIn: 1500, avgTokensOut: 700, costPerMillion: { input: 0.25, output: 1.25 } },
+              ],
+              totalTokens: { input: 7000, output: 3400 },
+              estimatedCost: 0.003,
+            },
+            daily: { runsPerDay: 5, estimatedCost: 0.015 },
+            monthly: { runsPerMonth: 150, estimatedCost: 0.45, notes: 'Scales with number of C-suite users and contact enrichment frequency.' },
+          },
+          agents: [
+            { id: 'orchestrator', name: 'Relationship Orchestrator', role: 'Conversational chief-of-staff; routes to sub-agents, synthesises strategic guidance', model: 'DeepSeek Reasoner' },
+            { id: 'contact-enricher', name: 'Contact Enricher', role: 'OSINT research on contacts using public web data', model: 'Claude Haiku' },
+            { id: 'relationship-scorer', name: 'Relationship Scorer', role: 'Scores warmth, leverage and business potential for each contact', model: 'Claude Haiku' },
+            { id: 'action-advisor', name: 'Action Advisor', role: 'Generates prioritised weekly relationship action plans with message drafts', model: 'DeepSeek Reasoner' },
+          ],
+          endpoints: [
+            'POST /api/csuite-rel/chat              — Conversational orchestrator',
+            'GET  /api/csuite-rel/contacts          — List contacts (with latest scores)',
+            'POST /api/csuite-rel/contacts          — Create / import contact',
+            'GET  /api/csuite-rel/contacts/:id      — Contact detail + score + interactions',
+            'PUT  /api/csuite-rel/contacts/:id      — Update contact',
+            'POST /api/csuite-rel/contacts/:id/enrich — Run OSINT enricher',
+            'POST /api/csuite-rel/contacts/:id/score  — Run relationship scorer',
+            'POST /api/csuite-rel/action-plan       — Generate weekly action plan',
+            'GET  /api/csuite-rel/action-plan       — Get latest action plan',
+          ],
+          databaseTables: ['csuite_tenants', 'csuite_contacts', 'csuite_interactions', 'csuite_scores', 'csuite_action_plans'],
+          securityNotes: 'Full tenant isolation via x-tenant-id header. All contact data private by default. OSINT uses public web only — no credential scraping.',
+        },
       ],
       // Token pricing reference (per million tokens)
       tokenPricing: {
@@ -4223,6 +4262,20 @@ try {
   console.log('✅ Cherry Game routes loaded: /cherry-game, /api/cherry-game');
 } catch (error) {
   console.warn('⚠️ Cherry Game routes not loaded:', error.message);
+}
+
+// C-Suite Relationship Intelligence
+try {
+  const csuiteRelRoutes = require('./use-cases/csuite-relationship-intelligence/api/routes');
+  app.use('/api/csuite-rel', csuiteRelRoutes);
+  if (process.env.DATABASE_URL) {
+    csuiteRelRoutes.initDb(pool).catch(err =>
+      console.warn('⚠️ C-Suite Relationship Intelligence DB init error:', err.message)
+    );
+  }
+  console.log('✅ C-Suite Relationship Intelligence routes loaded: /api/csuite-rel');
+} catch (error) {
+  console.warn('⚠️ C-Suite Relationship Intelligence routes not loaded:', error.message);
 }
 
 // Scheduler Service

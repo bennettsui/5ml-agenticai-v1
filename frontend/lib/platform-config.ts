@@ -795,6 +795,26 @@ export const USE_CASES: UseCaseConfig[] = [
   // C-SUITE MANAGEMENT — CSuite
   // ========================================================================
   {
+    id: 'csuite-relationship-intelligence',
+    name: 'C-Suite Relationship Intelligence',
+    description: '4-agent multi-tenant relationship OS: contact graph, OSINT enrichment, warmth/leverage scoring, weekly action plans, and conversational chief-of-staff powered by DeepSeek Reasoner',
+    solutionLine: 'CSuite',
+    status: 'in_progress',
+    progress: 0.35,
+    priority: 'high',
+    path: '#',
+    agentCount: 4,
+    features: [
+      'Relationship Orchestrator',
+      'Contact Enricher (OSINT)',
+      'Relationship Scorer',
+      'Action Advisor',
+      'Multi-tenant Isolation',
+      'Weekly Action Plans',
+      'Meeting Briefings',
+    ],
+  },
+  {
     id: 'agency-management',
     name: 'Agency Management',
     description: 'End-to-end agency operations: project tracking, client management, and resource planning',
