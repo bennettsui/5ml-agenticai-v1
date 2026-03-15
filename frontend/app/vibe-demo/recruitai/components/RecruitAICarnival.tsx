@@ -379,40 +379,91 @@ function buildCat(gmap: THREE.DataTexture): THREE.Group {
   const cream = toon(0xFFF0DC, gmap);
   const pink = toon(0xFFB6C1, gmap);
   const green = toon(0x44CC88, gmap);
+  const dark = toon(0x111122, gmap);
 
+  // Body (named so we can stretch/squash it)
   const body = new THREE.Mesh(new THREE.SphereGeometry(0.4, 10, 8), orange);
-  body.scale.y = 1.18; body.position.y = 0.47; g.add(body);
+  body.scale.y = 1.18; body.position.y = 0.47; body.name = 'catBody'; g.add(body);
   const belly = new THREE.Mesh(new THREE.SphereGeometry(0.28, 8, 6), cream);
   belly.scale.set(0.85, 1.0, 0.55); belly.position.set(0, 0.47, 0.24); g.add(belly);
-  const head = new THREE.Mesh(new THREE.SphereGeometry(0.33, 10, 8), orange);
-  head.position.y = 1.06; g.add(head);
-  ([-0.22, 0.22] as number[]).forEach(x => {
-    const ear = new THREE.Mesh(new THREE.ConeGeometry(0.14, 0.25, 6), orange);
-    ear.position.set(x, 1.33, 0); ear.rotation.z = x > 0 ? -0.3 : 0.3; g.add(ear);
-    const inner = new THREE.Mesh(new THREE.ConeGeometry(0.08, 0.18, 6), pink);
-    inner.position.set(x * 1.02, 1.33, 0.02); inner.rotation.z = x > 0 ? -0.3 : 0.3; g.add(inner);
-  });
+
+  // Head group — all head parts rotate together for head-tracking
+  const headGroup = new THREE.Group();
+  headGroup.position.set(0, 1.06, 0); headGroup.name = 'catHead';
+  g.add(headGroup);
+  headGroup.add(new THREE.Mesh(new THREE.SphereGeometry(0.33, 10, 8), orange));
+
+  // Ear groups — independent twitch animation
+  const earL = new THREE.Group();
+  earL.position.set(-0.22, 0.27, 0); earL.rotation.z = 0.3; earL.name = 'catEarL';
+  headGroup.add(earL);
+  earL.add(new THREE.Mesh(new THREE.ConeGeometry(0.14, 0.25, 6), orange));
+  const earLIn = new THREE.Mesh(new THREE.ConeGeometry(0.08, 0.18, 6), pink);
+  earLIn.position.z = 0.02; earL.add(earLIn);
+
+  const earR = new THREE.Group();
+  earR.position.set(0.22, 0.27, 0); earR.rotation.z = -0.3; earR.name = 'catEarR';
+  headGroup.add(earR);
+  earR.add(new THREE.Mesh(new THREE.ConeGeometry(0.14, 0.25, 6), orange));
+  const earRIn = new THREE.Mesh(new THREE.ConeGeometry(0.08, 0.18, 6), pink);
+  earRIn.position.z = 0.02; earR.add(earRIn);
+
+  // Muzzle
   const muzzle = new THREE.Mesh(new THREE.SphereGeometry(0.17, 8, 6), cream);
-  muzzle.scale.set(1.1, 0.7, 0.65); muzzle.position.set(0, 1.02, 0.26); g.add(muzzle);
-  ([-0.09, 0.09] as number[]).forEach(x => {
+  muzzle.scale.set(1.1, 0.7, 0.65); muzzle.position.set(0, -0.04, 0.26); headGroup.add(muzzle);
+
+  // Eyes + dark pupils (pupils can roll independently)
+  ([-0.09, 0.09] as number[]).forEach((x, i) => {
     const eye = new THREE.Mesh(new THREE.SphereGeometry(0.06, 6, 4), green);
-    eye.position.set(x, 1.1, 0.3); g.add(eye);
+    eye.position.set(x, 0.04, 0.3); eye.name = i === 0 ? 'catEyeL' : 'catEyeR';
+    headGroup.add(eye);
+    const pupil = new THREE.Mesh(new THREE.SphereGeometry(0.03, 5, 3), dark);
+    pupil.position.set(x, 0.04, 0.355); pupil.name = i === 0 ? 'catPupilL' : 'catPupilR';
+    headGroup.add(pupil);
   });
+
+  // Nose
   const nose = new THREE.Mesh(new THREE.SphereGeometry(0.045, 5, 4), pink);
-  nose.position.set(0, 1.04, 0.32); g.add(nose);
+  nose.position.set(0, -0.02, 0.32); headGroup.add(nose);
+
+  // Tail group — rotates around body attachment for wagging
+  const tailGroup = new THREE.Group();
+  tailGroup.position.set(0, 0.47, -0.1); tailGroup.name = 'catTail';
+  g.add(tailGroup);
   const tail = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.09, 0.7, 8), orange);
-  tail.rotation.z = 1.1; tail.position.set(-0.65, 0.5, -0.1); g.add(tail);
+  tail.rotation.z = 1.1; tail.position.set(-0.65, 0.03, 0); tailGroup.add(tail);
   const tailTip = new THREE.Mesh(new THREE.SphereGeometry(0.1, 6, 4), toon(0xFF6622, gmap));
-  tailTip.position.set(-1.0, 0.82, -0.1); g.add(tailTip);
+  tailTip.position.set(-1.0, 0.35, 0); tailGroup.add(tailTip);
+
+  // Arms
   ([-0.47, 0.47] as number[]).forEach(x => {
     const arm = new THREE.Mesh(new THREE.SphereGeometry(0.16, 8, 6), orange);
     arm.scale.y = 1.3; arm.position.set(x, 0.55, 0); g.add(arm);
   });
+  // Legs
   ([-0.18, 0.18] as number[]).forEach(x => {
     const leg = new THREE.Mesh(new THREE.SphereGeometry(0.17, 8, 6), orange);
     leg.scale.y = 1.1; leg.position.set(x, 0.14, 0.06); g.add(leg);
   });
   return g;
+}
+
+function extractCatParts(group: THREE.Group): CatParts {
+  return {
+    headGroup: group.getObjectByName('catHead') as THREE.Group,
+    tailGroup: group.getObjectByName('catTail') as THREE.Group,
+    pupils: [
+      group.getObjectByName('catPupilL') as THREE.Mesh,
+      group.getObjectByName('catPupilR') as THREE.Mesh,
+    ],
+    eyeMeshes: [
+      group.getObjectByName('catEyeL') as THREE.Mesh,
+      group.getObjectByName('catEyeR') as THREE.Mesh,
+    ],
+    earL: group.getObjectByName('catEarL') as THREE.Group,
+    earR: group.getObjectByName('catEarR') as THREE.Group,
+    body: group.getObjectByName('catBody') as THREE.Mesh,
+  };
 }
 
 // ─── HK: 叮叮電車 (Tram) ──────────────────────────────────────────────────────
@@ -562,6 +613,16 @@ function buildLionHead(gmap: THREE.DataTexture): THREE.Group {
 // ─── Particle type ────────────────────────────────────────────────────────────
 interface Particle { mesh: THREE.Mesh; vel: THREE.Vector3; life: number; }
 
+interface CatParts {
+  headGroup: THREE.Group;
+  tailGroup: THREE.Group;
+  pupils: THREE.Mesh[];
+  eyeMeshes: THREE.Mesh[];
+  earL: THREE.Group;
+  earR: THREE.Group;
+  body: THREE.Mesh;
+}
+
 // ─── Booth data ───────────────────────────────────────────────────────────────
 const BOOTH_DEFS = [
   {
@@ -634,7 +695,7 @@ export default function RecruitAICarnival() {
     const el = mountRef.current;
     if (!el) return;
 
-    const gmap = makeToonGradient(4);
+    const gmap = makeToonGradient(8); // more gradient steps = smoother Pixar-style shading
 
     // Renderer
     const renderer = new THREE.WebGLRenderer({ antialias: true });
@@ -643,7 +704,7 @@ export default function RecruitAICarnival() {
     renderer.shadowMap.enabled = true;
     renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    renderer.toneMappingExposure = 1.1;
+    renderer.toneMappingExposure = 1.2;
     el.appendChild(renderer.domElement);
 
     // Scene & camera
@@ -687,7 +748,10 @@ export default function RecruitAICarnival() {
     scene.add(sun);
     const fill = new THREE.DirectionalLight(0xB0D4FF, 0.55);
     fill.position.set(-15, 10, -8); scene.add(fill);
-    scene.add(new THREE.AmbientLight(0xffffff, 0.28));
+    // Warm rim/back light for Pixar-style depth and character pop
+    const rim = new THREE.DirectionalLight(0xFFAA55, 0.5);
+    rim.position.set(0, 8, -22); scene.add(rim);
+    scene.add(new THREE.AmbientLight(0xFFF5E0, 0.32)); // warm white ambient
 
     // Clouds
     ([
@@ -797,11 +861,15 @@ export default function RecruitAICarnival() {
       { builder: buildCat,     radius: 6.5,  speed: 0.60, startA: 4.7 },
       { builder: buildBunny,   radius: 12.0, speed: 0.35, startA: 2.4 },
     ];
-    const walkers: { group: THREE.Group; radius: number; speed: number; angle: number; bobOff: number }[] = [];
-    walkerDefs.forEach(def => {
+    type WalkerEntry = { group: THREE.Group; radius: number; speed: number; baseSpeed: number; angle: number; bobOff: number; catParts?: CatParts };
+    const walkers: WalkerEntry[] = [];
+    const CAT_WALKER_IDX = 3;
+    walkerDefs.forEach((def, idx) => {
       const gr = def.builder(gmap);
       gr.scale.setScalar(0.72); scene.add(gr);
-      walkers.push({ group: gr, radius: def.radius, speed: def.speed, angle: def.startA, bobOff: Math.random() * Math.PI * 2 });
+      const entry: WalkerEntry = { group: gr, radius: def.radius, speed: def.speed, baseSpeed: def.speed, angle: def.startA, bobOff: Math.random() * Math.PI * 2 };
+      if (idx === CAT_WALKER_IDX) entry.catParts = extractCatParts(gr);
+      walkers.push(entry);
     });
 
     // Player RAIBOT
@@ -883,6 +951,44 @@ export default function RecruitAICarnival() {
         scene.add(mesh); particles.push({ mesh, vel, life: 1.0 });
       }
     }
+
+    // Heart particles (cat click-to-pet)
+    const hearts: Particle[] = [];
+    const heartMat = new THREE.MeshToonMaterial({ color: 0xFF69B4, gradientMap: gmap });
+
+    function spawnCatHearts(pos: THREE.Vector3) {
+      for (let i = 0; i < 7; i++) {
+        const mesh = new THREE.Mesh(new THREE.OctahedronGeometry(0.13 + Math.random() * 0.07, 0), heartMat);
+        mesh.position.set(
+          pos.x + (Math.random() - 0.5) * 0.5,
+          pos.y + 1.0 + Math.random() * 0.4,
+          pos.z + (Math.random() - 0.5) * 0.5,
+        );
+        scene.add(mesh);
+        hearts.push({
+          mesh,
+          vel: new THREE.Vector3((Math.random() - 0.5) * 0.5, 2.0 + Math.random() * 0.8, (Math.random() - 0.5) * 0.5),
+          life: 1.0,
+        });
+      }
+    }
+
+    // Click/tap the cat to get hearts
+    const catRaycaster = new THREE.Raycaster();
+    const catClickMouse = new THREE.Vector2();
+    const onCanvasClick = (e: MouseEvent) => {
+      const rect = el.getBoundingClientRect();
+      catClickMouse.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+      catClickMouse.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+      catRaycaster.setFromCamera(catClickMouse, camera);
+      const cw = walkers[CAT_WALKER_IDX];
+      if (cw?.catParts) {
+        const meshes: THREE.Mesh[] = [];
+        cw.group.traverse(o => { if ((o as THREE.Mesh).isMesh) meshes.push(o as THREE.Mesh); });
+        if (catRaycaster.intersectObjects(meshes, false).length > 0) spawnCatHearts(cw.group.position);
+      }
+    };
+    renderer.domElement.addEventListener('click', onCanvasClick);
 
     // Key controls
     const onKeyDown = (e: KeyboardEvent) => {
@@ -987,6 +1093,69 @@ export default function RecruitAICarnival() {
         w.group.rotation.z = Math.sin(t * 8 + w.bobOff) * 0.06;
       });
 
+      // ── Cat-specific animations ───────────────────────────────────────────
+      const cw = walkers[CAT_WALKER_IDX];
+      const cp = cw?.catParts;
+      if (cp) {
+        const dpx = cw.group.position.x - player.position.x;
+        const dpz = cw.group.position.z - player.position.z;
+        const playerDist = Math.sqrt(dpx * dpx + dpz * dpz);
+
+        // 1. Speed up when player is close (scared/excited)
+        const targetSpd = playerDist < 5 ? cw.baseSpeed * 2.3 : cw.baseSpeed;
+        cw.speed += (targetSpd - cw.speed) * Math.min(1, dt * 3);
+
+        // 2. Head tracks toward player when nearby
+        if (playerDist < 9) {
+          const localTarget = cw.group.worldToLocal(player.position.clone());
+          const headAngleY = Math.atan2(localTarget.x, localTarget.z);
+          cp.headGroup.rotation.y = THREE.MathUtils.lerp(
+            cp.headGroup.rotation.y,
+            Math.max(-0.55, Math.min(0.55, headAngleY)),
+            dt * 4,
+          );
+        } else {
+          cp.headGroup.rotation.y = THREE.MathUtils.lerp(cp.headGroup.rotation.y, 0, dt * 2);
+        }
+
+        // 3. Tail wags — faster when excited
+        const wagSpeed = playerDist < 5 ? 9 : 3.5;
+        cp.tailGroup.rotation.y = Math.sin(t * wagSpeed + cw.bobOff) * 0.65;
+
+        // 4. Ear twitches — independent L/R, random phase
+        const ep = (t * 0.35 + cw.bobOff * 0.9) % 5.0;
+        cp.earL.rotation.z = ep < 0.18 ? 0.3 + Math.sin((ep / 0.18) * Math.PI) * 0.5 : 0.3;
+        const ep2 = (t * 0.35 + cw.bobOff * 0.9 + 2.8) % 5.0;
+        cp.earR.rotation.z = ep2 < 0.15 ? -(0.3 + Math.sin((ep2 / 0.15) * Math.PI) * 0.45) : -0.3;
+
+        // 5. Blink — periodic ~every 4s
+        const blinkCycle = (t * 0.5 + cw.bobOff * 1.7) % 4;
+        const blinkAmt = blinkCycle < 0.1 ? Math.sin((blinkCycle / 0.1) * Math.PI) : 1;
+        cp.eyeMeshes.forEach(e => { e.scale.y = Math.max(0.05, blinkAmt); });
+
+        // 6. Pupils roll lazily
+        cp.pupils.forEach((p, i) => {
+          const sign = i === 0 ? -1 : 1;
+          p.position.x = sign * 0.09 + Math.sin(t * 1.4 + cw.bobOff * 2.1 + i) * 0.018;
+          p.position.y = 0.04 + Math.cos(t * 1.1 + cw.bobOff * 1.5) * 0.013;
+        });
+
+        // 7. Body stretch when running, squash when landing
+        const stretchY = playerDist < 5 ? 1.38 : 1.18;
+        cp.body.scale.y = THREE.MathUtils.lerp(cp.body.scale.y, stretchY, dt * 3);
+      }
+
+      // Hearts (cat click-to-pet)
+      for (let i = hearts.length - 1; i >= 0; i--) {
+        const h = hearts[i];
+        h.life -= dt * 0.7;
+        if (h.life <= 0) { scene.remove(h.mesh); hearts.splice(i, 1); continue; }
+        h.vel.y -= 2.0 * dt;
+        h.mesh.position.addScaledVector(h.vel, dt);
+        h.mesh.rotation.y += dt * 4;
+        h.mesh.scale.setScalar(Math.max(0, h.life) * 0.6);
+      }
+
       // Bounce balls
       balls.forEach(b => {
         b.mesh.position.y = b.baseY + Math.abs(Math.sin(t * 2.5 + b.phase)) * 0.9;
@@ -1027,6 +1196,7 @@ export default function RecruitAICarnival() {
       window.removeEventListener('keydown', onKeyDown);
       window.removeEventListener('keyup', onKeyUp);
       window.removeEventListener('resize', onResize);
+      renderer.domElement.removeEventListener('click', onCanvasClick);
       renderer.dispose();
       if (el.contains(renderer.domElement)) el.removeChild(renderer.domElement);
     };
