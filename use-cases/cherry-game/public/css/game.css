@@ -72,9 +72,18 @@ body.level-8  .scene-sky { background: linear-gradient(180deg, #04080f 0%, #0815
 body.level-9  .scene-sky { background: linear-gradient(180deg, #140a00 0%, #3a2200 40%, #140a00 100%); }
 body.level-10 .scene-sky { background: linear-gradient(180deg, #1c0e00 0%, #5a3800 40%, #1c0e00 100%); }
 
-/* When a Nano Banana background is loaded, overlay it */
+/* When a Nano Banana background is loaded, overlay it and hide CSS-only scene elements */
 .game-bg.has-nano-bg { background-size: cover; background-position: center; background-repeat: no-repeat; }
-.game-bg.has-nano-bg .scene-sky { opacity: 0; }
+.game-bg.has-nano-bg .scene-sky,
+.game-bg.has-nano-bg .scene-floor,
+.game-bg.has-nano-bg .scene-wall,
+.game-bg.has-nano-bg .scene-window,
+.game-bg.has-nano-bg .scene-stove,
+.game-bg.has-nano-bg .lantern-row,
+.game-bg.has-nano-bg .windchime,
+.game-bg.has-nano-bg .dried-fish,
+.game-bg.has-nano-bg .wood-sign,
+.game-bg.has-nano-bg .fireflies { display: none; }
 
 /* Floor planks */
 .scene-floor {
@@ -634,6 +643,13 @@ body.level-10 .progress-fill {
 .settings-row input[type="checkbox"] { width: 24px; height: 24px; accent-color: var(--c-warm); }
 .settings-divider { height: 1px; background: rgba(255,255,255,0.08); margin: 18px 0; }
 .settings-info { text-align: center; font-size: 14px; color: rgba(255,255,255,0.5); margin-bottom: 22px; }
+.settings-reset-btn {
+  width: 100%; padding: 14px; background: rgba(200,50,50,0.15);
+  border: 1px solid rgba(220,80,80,0.4); border-radius: 16px;
+  color: #f8a0a0; font-size: 16px; font-weight: 700;
+  font-family: var(--font); cursor: pointer; margin-bottom: 12px;
+}
+.settings-reset-btn:active { background: rgba(200,50,50,0.3); }
 .settings-close-btn {
   width: 100%; padding: 16px; background: rgba(255,180,80,0.2);
   border: 1px solid rgba(255,180,80,0.35); border-radius: 16px;

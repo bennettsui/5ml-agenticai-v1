@@ -527,6 +527,37 @@ router.post('/state/update', requireSession, async (req, res) => {
 });
 
 /**
+ * POST /api/cherry-game/state/reset
+ * Resets the player's progress back to zero.
+ */
+router.post('/state/reset', requireSession, async (req, res) => {
+  try {
+    if (!pool) return res.status(503).json({ error: 'DB not ready' });
+
+    const playerRes = await pool.query(
+      'SELECT id FROM cherry_game_players WHERE session_token = $1',
+      [req.sessionToken]
+    );
+    if (!playerRes.rows.length) return res.status(404).json({ error: 'Session not found' });
+
+    const playerId = playerRes.rows[0].id;
+    await pool.query(
+      `UPDATE cherry_game_progress
+         SET total_points = 0, current_level = 1,
+             tap_power_level = 1, idle_rate_level = 1,
+             last_tick_at = NOW(), updated_at = NOW()
+       WHERE player_id = $1`,
+      [playerId]
+    );
+
+    res.json({ ok: true, message: '進度已重置！' });
+  } catch (err) {
+    console.error('[CherryGame] /state/reset error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/**
  * GET /api/cherry-game/assets/:key
  * Serves generated image (from Postgres base64 storage).
  * Adds long cache headers since images rarely change.

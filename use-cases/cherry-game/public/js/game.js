@@ -631,6 +631,33 @@ function toggleMute(v)        { state.muted     = v; }
 function toggleReduceFx(v)    { state.reduceFx  = v; }
 function toggleDarkOverlay(v) { state.darkOverlay = v; document.body.classList.toggle('dark-overlay', v); }
 
+async function resetProgress() {
+  if (!confirm('確定重置所有分數同進度嗎？\n（此操作唔可以復原）')) return;
+  try {
+    await apiFetch('/state/reset', 'POST');
+    // Reset local state
+    state.displayPoints = 0;
+    state.pendingTaps   = 0;
+    state.soupStage     = 0;
+    state.bgLevel       = 0;
+    // Remove soup stage classes
+    for (let i = 0; i <= 5; i++) els.tapZone.classList.remove(`soup-s${i}`);
+    // Remove nano bg
+    if (els.gameBg) { els.gameBg.style.backgroundImage = ''; els.gameBg.classList.remove('has-nano-bg'); }
+    // Reset soup label
+    if (els.soupLabel) els.soupLabel.textContent = SOUP_STAGE_LABELS[0];
+    // Restore emoji
+    els.cauldronImg.style.display   = 'none';
+    els.cauldronEmoji.style.display = 'block';
+    // Fetch fresh state from server
+    await fetchState();
+    $('settings-panel').classList.add('hidden');
+    showMiniToast('進度已重置！新旅程開始 🌱');
+  } catch (err) {
+    showMiniToast('重置失敗：' + err.message);
+  }
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // ADMIN
 // ─────────────────────────────────────────────────────────────────────────────
@@ -752,5 +779,5 @@ async function init() {
   updateHUD();
 }
 
-window.game = { upgradeFirePower, toggleSettings, toggleMute, toggleReduceFx, toggleDarkOverlay, adminGenerateAll, adminGenerateAsset };
+window.game = { upgradeFirePower, toggleSettings, toggleMute, toggleReduceFx, toggleDarkOverlay, resetProgress, adminGenerateAll, adminGenerateAsset };
 document.addEventListener('DOMContentLoaded', init);
