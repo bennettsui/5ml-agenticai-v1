@@ -382,7 +382,7 @@ async function uploadToMmdb(imageBuffer) {
 // ─── Gemini image generation ────────────────────────────────────────────────
 async function generateVisual(prompt, dimensions) {
   const sharp = require('sharp');
-  const MODEL = 'gemini-2.0-flash-preview-image-generation';
+  const MODEL = 'gemini-2.5-flash-image';
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent?key=${GEMINI_API_KEY}`;
   const body = {
     contents: [{ parts: [{ text: prompt }] }],
