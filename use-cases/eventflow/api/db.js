@@ -202,6 +202,19 @@ async function init() {
     END $$;
   `).catch(() => {});
 
+  // Participant preference profiles (anonymous, keyed by browser session_id)
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS ef_participant_profiles (
+      session_id   TEXT PRIMARY KEY,
+      role         TEXT,
+      interests    TEXT[],
+      location     TEXT,
+      how_heard    TEXT,
+      dismissed    TEXT[] NOT NULL DEFAULT '{}',
+      updated_at   TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+  `);
+
   console.log('[eventflow] DB tables ready');
 }
 

@@ -24,10 +24,10 @@ interface WishlistItem {
 }
 
 const STATUS_STYLES: Record<Status, string> = {
-  open:     'bg-blue-500/15 text-blue-400',
-  planned:  'bg-amber-500/15 text-amber-400',
-  done:     'bg-green-500/15 text-green-400',
-  declined: 'bg-slate-700 text-slate-500',
+  open:     'bg-blue-100 text-blue-700',
+  planned:  'bg-amber-100 text-amber-700',
+  done:     'bg-green-100 text-green-700',
+  declined: 'bg-gray-100 text-gray-500',
 };
 
 const CATEGORY_ICONS: Record<Category, string> = {
@@ -98,17 +98,17 @@ export default function WishlistPage() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-950 text-white">
+    <div className="min-h-screen bg-white text-gray-900">
       {/* Nav */}
-      <nav className="sticky top-0 z-50 border-b border-white/[0.06] bg-slate-950/80 backdrop-blur-xl">
+      <nav className="sticky top-0 z-50 border-b border-gray-100 bg-white/95 backdrop-blur-xl shadow-sm">
         <div className="max-w-4xl mx-auto px-6 h-16 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <Link href="/eventflow" className="text-slate-500 hover:text-slate-300 transition-colors text-sm">🎟 EventFlow</Link>
-            <span className="text-slate-700">/</span>
-            <span className="font-bold text-sm">💡 Wishlist</span>
+            <Link href="/eventflow" className="text-gray-500 hover:text-gray-900 transition-colors text-sm font-medium">🎟️ EventFlow</Link>
+            <span className="text-gray-300">/</span>
+            <span className="font-bold text-sm text-gray-900">💡 Wishlist</span>
           </div>
           <button onClick={() => setShowForm(!showForm)}
-            className="text-sm font-semibold px-4 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 transition-colors">
+            className="text-sm font-semibold px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white transition-colors shadow-sm">
             + Submit Idea
           </button>
         </div>
@@ -117,41 +117,44 @@ export default function WishlistPage() {
       <div className="max-w-4xl mx-auto px-6 py-12">
         {/* Header */}
         <div className="text-center mb-10">
-          <h1 className="text-4xl font-black mb-3">Feature Wishlist</h1>
-          <p className="text-slate-400 max-w-lg mx-auto">
-            Tell us what you need. Vote for ideas you love. We build what matters most to you.
+          <div className="inline-flex items-center gap-2 bg-blue-50 text-blue-700 rounded-full px-3 py-1 text-xs font-bold mb-4">
+            💡 Community Wishlist
+          </div>
+          <h1 className="text-4xl font-black text-gray-900 mb-3">Shape EventFlow together</h1>
+          <p className="text-gray-500 max-w-lg mx-auto">
+            Tell us what you need. Vote for ideas you love. We build what matters most to the community.
           </p>
         </div>
 
         {/* Submit form */}
         {showForm && (
-          <div className="bg-slate-800/60 border border-amber-500/20 rounded-2xl p-6 mb-8 space-y-4">
-            <h2 className="font-bold text-sm text-amber-400 uppercase tracking-wider">Submit Your Idea</h2>
+          <div className="bg-blue-50 border border-blue-200 rounded-2xl p-6 mb-8 space-y-4">
+            <h2 className="font-bold text-blue-700 text-sm uppercase tracking-wider">Submit Your Idea</h2>
             <form onSubmit={submit} className="space-y-4">
               <div>
-                <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1.5">Idea Title *</label>
+                <label className="block text-xs font-bold text-gray-500 uppercase tracking-wide mb-1.5">Idea Title *</label>
                 <input type="text" required maxLength={200} placeholder="e.g. Export attendees to CSV"
                   value={form.title} onChange={(e) => setForm((f) => ({ ...f, title: e.target.value }))}
-                  className="w-full px-4 py-3 bg-slate-900/60 border border-white/[0.08] rounded-xl text-white text-sm focus:outline-none focus:border-amber-500/50 transition-colors" />
+                  className="w-full px-4 py-3 bg-white border border-gray-200 rounded-xl text-gray-900 text-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-300 transition-colors" />
               </div>
               <div>
-                <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1.5">Details (optional)</label>
+                <label className="block text-xs font-bold text-gray-500 uppercase tracking-wide mb-1.5">Details (optional)</label>
                 <textarea rows={3} maxLength={1000} placeholder="Describe the feature in more detail…"
                   value={form.description} onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
-                  className="w-full px-4 py-3 bg-slate-900/60 border border-white/[0.08] rounded-xl text-white text-sm focus:outline-none focus:border-amber-500/50 transition-colors resize-none" />
+                  className="w-full px-4 py-3 bg-white border border-gray-200 rounded-xl text-gray-900 text-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-300 transition-colors resize-none" />
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1.5">Category</label>
+                  <label className="block text-xs font-bold text-gray-500 uppercase tracking-wide mb-1.5">Category</label>
                   <select value={form.category} onChange={(e) => setForm((f) => ({ ...f, category: e.target.value }))}
-                    className="w-full px-4 py-3 bg-slate-900/60 border border-white/[0.08] rounded-xl text-white text-sm focus:outline-none focus:border-amber-500/50 transition-colors">
+                    className="w-full px-4 py-3 bg-white border border-gray-200 rounded-xl text-gray-900 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300 transition-colors">
                     {CATEGORIES.map((c) => <option key={c} value={c}>{CATEGORY_ICONS[c]} {c.charAt(0).toUpperCase() + c.slice(1)}</option>)}
                   </select>
                 </div>
                 <div>
-                  <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1.5">You are a…</label>
+                  <label className="block text-xs font-bold text-gray-500 uppercase tracking-wide mb-1.5">You are a…</label>
                   <select value={form.author_type} onChange={(e) => setForm((f) => ({ ...f, author_type: e.target.value }))}
-                    className="w-full px-4 py-3 bg-slate-900/60 border border-white/[0.08] rounded-xl text-white text-sm focus:outline-none focus:border-amber-500/50 transition-colors">
+                    className="w-full px-4 py-3 bg-white border border-gray-200 rounded-xl text-gray-900 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300 transition-colors">
                     <option value="participant">Event Participant</option>
                     <option value="organizer">Event Organizer</option>
                   </select>
@@ -159,101 +162,101 @@ export default function WishlistPage() {
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1.5">Your Name (optional)</label>
+                  <label className="block text-xs font-bold text-gray-500 uppercase tracking-wide mb-1.5">Your Name (optional)</label>
                   <input type="text" maxLength={100} placeholder="Anonymous" value={form.author_name}
                     onChange={(e) => setForm((f) => ({ ...f, author_name: e.target.value }))}
-                    className="w-full px-4 py-3 bg-slate-900/60 border border-white/[0.08] rounded-xl text-white text-sm focus:outline-none focus:border-amber-500/50 transition-colors" />
+                    className="w-full px-4 py-3 bg-white border border-gray-200 rounded-xl text-gray-900 text-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-300 transition-colors" />
                 </div>
                 <div>
-                  <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1.5">Email (optional)</label>
+                  <label className="block text-xs font-bold text-gray-500 uppercase tracking-wide mb-1.5">Email (optional)</label>
                   <input type="email" maxLength={254} placeholder="For follow-up" value={form.author_email}
                     onChange={(e) => setForm((f) => ({ ...f, author_email: e.target.value }))}
-                    className="w-full px-4 py-3 bg-slate-900/60 border border-white/[0.08] rounded-xl text-white text-sm focus:outline-none focus:border-amber-500/50 transition-colors" />
+                    className="w-full px-4 py-3 bg-white border border-gray-200 rounded-xl text-gray-900 text-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-300 transition-colors" />
                 </div>
               </div>
-              {submitMsg && <p className={`text-sm ${submitMsg.startsWith('✓') ? 'text-green-400' : 'text-red-400'}`}>{submitMsg}</p>}
+              {submitMsg && <p className={`text-sm ${submitMsg.startsWith('✓') ? 'text-green-600' : 'text-red-500'}`}>{submitMsg}</p>}
               <div className="flex gap-3">
                 <button type="submit" disabled={submitting || !form.title.trim()}
-                  className="bg-amber-500 hover:bg-amber-400 disabled:opacity-50 text-slate-950 font-bold px-6 py-2.5 rounded-xl text-sm transition-colors">
+                  className="bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white font-bold px-6 py-2.5 rounded-xl text-sm transition-colors">
                   {submitting ? 'Submitting…' : 'Submit Idea'}
                 </button>
                 <button type="button" onClick={() => setShowForm(false)}
-                  className="text-slate-500 hover:text-slate-300 text-sm transition-colors px-4">Cancel</button>
+                  className="text-gray-400 hover:text-gray-600 text-sm transition-colors px-4">Cancel</button>
               </div>
             </form>
           </div>
         )}
 
         {submitMsg && !showForm && submitMsg.startsWith('✓') && (
-          <div className="bg-green-500/10 border border-green-500/20 rounded-xl p-4 mb-6 text-green-400 text-sm text-center">{submitMsg}</div>
+          <div className="bg-green-50 border border-green-200 rounded-xl p-4 mb-6 text-green-700 text-sm text-center">{submitMsg}</div>
         )}
 
         {/* Filters */}
         <div className="flex flex-wrap gap-2 mb-6">
-          <div className="flex gap-1">
-            <button onClick={() => setFilterStatus('')}
-              className={`px-3 py-1.5 rounded-full text-xs font-semibold transition-all ${!filterStatus ? 'bg-amber-500 text-slate-950' : 'bg-slate-800/60 text-slate-400 border border-white/[0.08] hover:text-slate-200'}`}>
-              All Status
+          <button onClick={() => setFilterStatus('')}
+            className={`px-3 py-1.5 rounded-full text-xs font-semibold transition-all ${!filterStatus ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-600 hover:text-gray-900'}`}>
+            All Status
+          </button>
+          {STATUSES.map((s) => (
+            <button key={s} onClick={() => setFilterStatus(filterStatus === s ? '' : s)}
+              className={`px-3 py-1.5 rounded-full text-xs font-semibold transition-all ${filterStatus === s ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-600 hover:text-gray-900'}`}>
+              {s.charAt(0).toUpperCase() + s.slice(1)}
             </button>
-            {STATUSES.map((s) => (
-              <button key={s} onClick={() => setFilterStatus(filterStatus === s ? '' : s)}
-                className={`px-3 py-1.5 rounded-full text-xs font-semibold transition-all ${filterStatus === s ? 'bg-amber-500 text-slate-950' : 'bg-slate-800/60 text-slate-400 border border-white/[0.08] hover:text-slate-200'}`}>
-                {s.charAt(0).toUpperCase() + s.slice(1)}
-              </button>
-            ))}
-          </div>
-          <div className="flex gap-1">
-            {CATEGORIES.map((c) => (
-              <button key={c} onClick={() => setFilterCategory(filterCategory === c ? '' : c)}
-                className={`px-3 py-1.5 rounded-full text-xs font-semibold transition-all ${filterCategory === c ? 'bg-violet-500 text-white' : 'bg-slate-800/60 text-slate-400 border border-white/[0.08] hover:text-slate-200'}`}>
-                {CATEGORY_ICONS[c]} {c}
-              </button>
-            ))}
-          </div>
+          ))}
+          <span className="text-gray-200 self-center">|</span>
+          {CATEGORIES.map((c) => (
+            <button key={c} onClick={() => setFilterCategory(filterCategory === c ? '' : c)}
+              className={`px-3 py-1.5 rounded-full text-xs font-semibold transition-all ${filterCategory === c ? 'bg-violet-500 text-white' : 'bg-gray-100 text-gray-600 hover:text-gray-900'}`}>
+              {CATEGORY_ICONS[c]} {c}
+            </button>
+          ))}
         </div>
 
         {/* Items */}
         {loading ? (
           <div className="space-y-3">
             {[...Array(4)].map((_, i) => (
-              <div key={i} className="h-24 rounded-2xl bg-slate-800/40 animate-pulse border border-white/[0.04]" />
+              <div key={i} className="h-24 rounded-2xl bg-gray-100 animate-pulse" />
             ))}
           </div>
         ) : items.length === 0 ? (
-          <div className="text-center py-20 text-slate-500">
+          <div className="text-center py-20 bg-gray-50 rounded-2xl border border-gray-100">
             <div className="text-4xl mb-4">💡</div>
-            <p className="font-medium">No ideas yet — be the first!</p>
+            <p className="font-semibold text-gray-700">No ideas yet — be the first!</p>
+            <button onClick={() => setShowForm(true)} className="mt-3 text-sm text-blue-600 hover:underline font-medium">
+              Submit an idea →
+            </button>
           </div>
         ) : (
           <div className="space-y-3">
             {items.map((item) => (
-              <div key={item.id} className="bg-slate-800/60 border border-white/[0.08] rounded-2xl p-5 flex items-start gap-4 hover:border-white/[0.12] transition-colors">
+              <div key={item.id} className="bg-white border border-gray-100 rounded-2xl p-5 flex items-start gap-4 hover:border-blue-200 hover:shadow-md transition-all">
                 {/* Vote */}
                 <button
                   onClick={() => vote(item.id)}
                   disabled={voting === item.id}
-                  className="flex-shrink-0 flex flex-col items-center gap-1 px-3 py-2 rounded-xl border border-white/[0.08] hover:border-amber-500/40 hover:bg-amber-500/5 transition-all disabled:opacity-50">
-                  <span className="text-amber-400 text-lg leading-none">▲</span>
-                  <span className="text-white font-black text-lg leading-none">{item.votes}</span>
+                  className="flex-shrink-0 flex flex-col items-center gap-1 px-3 py-2 rounded-xl border border-gray-200 hover:border-blue-400 hover:bg-blue-50 transition-all disabled:opacity-50">
+                  <span className="text-blue-500 text-lg leading-none">▲</span>
+                  <span className="text-gray-900 font-black text-lg leading-none">{item.votes}</span>
                 </button>
 
                 {/* Content */}
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 flex-wrap mb-1">
-                    <span className="text-base font-bold">{item.title}</span>
+                    <span className="font-bold text-gray-900 text-base">{item.title}</span>
                     <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${STATUS_STYLES[item.status]}`}>
                       {item.status}
                     </span>
-                    <span className="text-xs text-slate-600 bg-slate-900/60 px-2 py-0.5 rounded-full">
+                    <span className="text-xs text-gray-500 bg-gray-100 px-2 py-0.5 rounded-full">
                       {CATEGORY_ICONS[item.category]} {item.category}
                     </span>
                   </div>
                   {item.description && (
-                    <p className="text-slate-400 text-sm mb-2 leading-relaxed">{item.description}</p>
+                    <p className="text-gray-500 text-sm mb-2 leading-relaxed">{item.description}</p>
                   )}
-                  <div className="flex items-center gap-3 text-xs text-slate-600">
+                  <div className="flex items-center gap-3 text-xs text-gray-400">
                     {item.author_name && <span>by {item.author_name}</span>}
-                    <span className="capitalize">{item.author_type}</span>
+                    <span className="capitalize bg-gray-100 px-1.5 py-0.5 rounded-full">{item.author_type}</span>
                     <span>{new Date(item.created_at).toLocaleDateString('en-HK', { month: 'short', day: 'numeric', year: 'numeric' })}</span>
                   </div>
                 </div>
