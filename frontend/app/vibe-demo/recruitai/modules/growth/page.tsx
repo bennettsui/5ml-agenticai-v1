@@ -7,7 +7,7 @@ const config: ModuleConfig = {
   moduleEmoji: '🚀',
   moduleName: '增長',
   moduleNameEn: 'Growth',
-  tagline: '自動化增長引擎：讓 AI 替你搵客、追客、留客',
+  tagline: '自動化增長引擎：讓 AI 替你搵客、\n追客、留客',
   subtagline: '整合 Google Ads、SEO 及 CRM，AI 代理 24 小時自動捕獲潛在客戶，並在最佳時機跟進，大幅提升成交率。',
   heroGrad: 'from-blue-700 via-blue-600 to-cyan-500',
   kpis: [

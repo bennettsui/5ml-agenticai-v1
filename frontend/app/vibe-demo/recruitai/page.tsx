@@ -1152,7 +1152,7 @@ export default function RecruitAIPage() {
       </section>
 
       {/* ── Case Studies ── */}
-      <section id="cases" className="py-24 px-4 bg-slate-50/50 dark:bg-white/[0.02]">
+      <section id="case-studies" className="py-24 px-4 bg-slate-50/50 dark:bg-white/[0.02]">
         <div className="max-w-6xl mx-auto">
           <div className="text-center mb-16">
             <p className="text-xs font-semibold text-blue-600 dark:text-blue-400 uppercase tracking-widest mb-3">真實案例</p>

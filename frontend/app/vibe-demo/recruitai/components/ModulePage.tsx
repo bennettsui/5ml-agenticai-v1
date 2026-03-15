@@ -235,7 +235,7 @@ export default function ModulePage({ config }: { config: ModuleConfig }) {
             <span>{config.moduleEmoji}</span>
             RecruitAI Studio · {config.moduleName}
           </div>
-          <h1 className="text-4xl sm:text-5xl font-black leading-tight mb-5 max-w-3xl">
+          <h1 className="text-4xl sm:text-5xl font-black leading-tight mb-5 max-w-3xl whitespace-pre-line">
             {config.tagline}
           </h1>
           <p className="text-lg text-white/85 max-w-2xl mb-3 leading-relaxed">{config.subtagline}</p>
