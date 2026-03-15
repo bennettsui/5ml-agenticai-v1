@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="zh-HK">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <title>貓貓暖湯 TAP TAP 🍲</title>
+  <link rel="stylesheet" href="/cherry-game/static/css/game.css">
+</head>
+<body>
+
+<!-- ═══════════════════════════════════════════
+     FOR CHERRY BANNER
+════════════════════════════════════════════ -->
+<div class="cherry-banner">
+  <span class="cherry-heart">🌸</span>
+  <span>專為 Cherry 製作 — 加油，你好叻！</span>
+  <span class="cherry-heart">🌸</span>
+</div>
+
+<!-- ═══════════════════════════════════════════
+     BACKGROUND LAYER (changes per level)
+════════════════════════════════════════════ -->
+<div id="game-bg" class="game-bg">
+  <div class="bg-placeholder">
+    <div class="bg-loading-text">載入暖湯小廚房…</div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════
+     OVERLAY (semi-transparent dark for readability)
+════════════════════════════════════════════ -->
+<div class="game-overlay"></div>
+
+<!-- ═══════════════════════════════════════════
+     LEVEL-UP NOTIFICATION
+════════════════════════════════════════════ -->
+<div id="levelup-toast" class="levelup-toast hidden">
+  <div class="levelup-icon">⬆️</div>
+  <div id="levelup-msg" class="levelup-msg"></div>
+</div>
+
+<!-- ═══════════════════════════════════════════
+     TOP HUD
+════════════════════════════════════════════ -->
+<div class="top-hud">
+  <div class="hud-level">
+    <div class="hud-label">關卡</div>
+    <div id="hud-level-num" class="hud-value level-value">1</div>
+    <div id="hud-level-name" class="hud-level-name">暖湯初現</div>
+  </div>
+
+  <div class="hud-center">
+    <div class="hud-label">暖暖點數</div>
+    <div id="hud-points" class="hud-value points-value">0</div>
+    <div class="hud-idle">
+      <span id="hud-idle-rate">+0.2</span> 點/秒 (自動)
+    </div>
+  </div>
+
+  <div class="hud-tap">
+    <div class="hud-label">每撳</div>
+    <div id="hud-tap-power" class="hud-value tap-value">+1</div>
+    <div class="hud-label">暖暖點</div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════
+     LEVEL PROGRESS BAR
+════════════════════════════════════════════ -->
+<div class="progress-wrap">
+  <div class="progress-bar-bg">
+    <div id="progress-fill" class="progress-fill" style="width: 0%"></div>
+  </div>
+  <div class="progress-labels">
+    <span id="prog-current">0</span>
+    <span id="prog-next">500 → 第 2 關</span>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════
+     MAIN TAP ZONE
+════════════════════════════════════════════ -->
+<div class="tap-zone-wrap">
+  <!-- Floating tap particles container -->
+  <div id="particles" class="particles"></div>
+
+  <!-- The main tappable cauldron -->
+  <div id="tap-zone" class="tap-zone" role="button" aria-label="撳湯煲賺暖暖點數">
+    <div class="cauldron-wrap">
+      <div id="cauldron-img" class="cauldron-img">
+        <!-- Cauldron image loaded via JS, fallback is emoji -->
+        <div class="cauldron-emoji-fallback">🍲</div>
+      </div>
+      <!-- Bubbles that float above the cauldron -->
+      <div class="bubble-container" id="bubble-container">
+        <div class="bubble b1"></div>
+        <div class="bubble b2"></div>
+        <div class="bubble b3"></div>
+        <div class="bubble b4"></div>
+      </div>
+    </div>
+    <div class="tap-hint" id="tap-hint">撳我！</div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════
+     BOTTOM UPGRADE BAR
+════════════════════════════════════════════ -->
+<div class="bottom-bar">
+  <button id="upgrade-btn" class="upgrade-btn" onclick="game.upgradeFirePower()">
+    <span class="upgrade-icon">🔥</span>
+    <div class="upgrade-text">
+      <div class="upgrade-title">升級暖暖火力</div>
+      <div id="upgrade-info" class="upgrade-info">消耗 200 點 → 每撳 +2</div>
+    </div>
+    <span class="upgrade-level-badge" id="upgrade-badge">Lv.1</span>
+  </button>
+
+  <button class="settings-btn" onclick="game.toggleSettings()" aria-label="設定">⚙️</button>
+</div>
+
+<!-- ═══════════════════════════════════════════
+     SETTINGS PANEL
+════════════════════════════════════════════ -->
+<div id="settings-panel" class="settings-panel hidden">
+  <div class="settings-content">
+    <div class="settings-title">設定</div>
+
+    <label class="settings-row">
+      <span>靜音模式</span>
+      <input type="checkbox" id="setting-mute" onchange="game.toggleMute(this.checked)">
+    </label>
+
+    <label class="settings-row">
+      <span>減少特效</span>
+      <input type="checkbox" id="setting-reduce-fx" onchange="game.toggleReduceFx(this.checked)">
+    </label>
+
+    <label class="settings-row">
+      <span>深色背景</span>
+      <input type="checkbox" id="setting-dark" onchange="game.toggleDarkOverlay(this.checked)">
+    </label>
+
+    <div class="settings-divider"></div>
+
+    <div class="settings-info">
+      <div>遊戲進度儲存於雲端</div>
+      <div style="opacity:0.6; font-size:12px; margin-top:4px;">唔用本地記憶體 ✓</div>
+    </div>
+
+    <button class="settings-close-btn" onclick="game.toggleSettings()">關閉</button>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════
+     LOADING SCREEN
+════════════════════════════════════════════ -->
+<div id="loading-screen" class="loading-screen">
+  <div class="loading-content">
+    <div class="loading-emoji">🍲</div>
+    <div class="loading-title">貓貓暖湯 TAP TAP</div>
+    <div class="loading-subtitle">專為 Cherry 製作 💕</div>
+    <div class="loading-bar-wrap">
+      <div id="loading-bar" class="loading-bar"></div>
+    </div>
+    <div id="loading-msg" class="loading-msg">連接雲端暖湯廚房…</div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════
+     ADMIN PANEL (hidden, accessible via ?admin=1)
+════════════════════════════════════════════ -->
+<div id="admin-panel" class="admin-panel hidden">
+  <div class="admin-content">
+    <div class="admin-title">🛠️ 管理員面板</div>
+    <div class="admin-info" id="admin-asset-status">載入中…</div>
+    <button class="admin-btn" onclick="game.adminGenerateAll()">生成所有 Nano Banana 圖片 (Pixar 風格)</button>
+    <button class="admin-btn" onclick="game.adminGenerateAsset()">生成單張圖片</button>
+    <div id="admin-gen-key" style="display:flex; gap:8px; margin-top:8px;">
+      <input id="admin-key-input" class="admin-input" placeholder="資產 key (e.g. bg_level_1)" />
+    </div>
+    <div id="admin-log" class="admin-log"></div>
+    <button class="admin-btn" style="background:#444;" onclick="document.getElementById('admin-panel').classList.add('hidden')">關閉</button>
+  </div>
+</div>
+
+<script src="/cherry-game/static/js/game.js"></script>
+</body>
+</html>
