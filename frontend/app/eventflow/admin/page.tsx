@@ -27,6 +27,40 @@ interface WishlistItem {
   category: string; status: string; votes: number;
   author_name: string | null; author_type: string; created_at: string;
 }
+interface SponsorProfile {
+  id: number; company: string; contact_name: string | null; contact_email: string; contact_phone: string | null;
+  industries: string[] | null; event_types: string[] | null; budget_range: string | null;
+  description: string | null; website: string | null; status: string; created_at: string;
+}
+interface SeekingEvent {
+  id: number; event_id: number; title: string; slug: string; start_at: string;
+  organizer_name: string; organizer_email: string; brief: string | null;
+  package_types: string[] | null; budget_range: string | null;
+}
+interface SponsorMatch {
+  id: number; event_id: number; sponsor_id: number; notes: string | null; status: string; created_at: string;
+  event_title: string; slug: string; company: string; contact_email: string;
+}
+interface KolProfile {
+  id: number; name: string; handle: string | null; platforms: string[] | null;
+  follower_counts: Record<string, number>; categories: string[] | null; bio: string | null;
+  contact_email: string; rate_range: string | null; status: string; created_at: string;
+}
+interface KolBrief {
+  id: number; event_id: number; organizer_id: number; budget_range: string | null;
+  deliverables: string[] | null; deadline: string | null; categories: string[] | null;
+  notes: string | null; status: string; created_at: string; event_title: string; organizer_name: string;
+}
+interface Ambassador {
+  id: number; name: string; email: string; social_handle: string | null;
+  platform: string | null; follower_count: number | null; bio: string | null;
+  categories: string[] | null; status: string; created_at: string;
+}
+interface AgencyInquiry {
+  id: number; service_slug: string; contact_name: string; email: string; phone: string | null;
+  company: string | null; event_date: string | null; budget_range: string | null;
+  notes: string | null; status: string; created_at: string;
+}
 
 const PLAN_LABELS: Record<string, { label: string; color: string }> = {
   free:         { label: 'Free',          color: 'text-slate-400 bg-slate-700' },
@@ -48,7 +82,7 @@ const WISHLIST_STATUS_COLORS: Record<string, string> = {
   declined: 'text-slate-500 bg-slate-700',
 };
 
-type Tab = 'overview' | 'organizers' | 'events' | 'notifications' | 'wishlist' | 'flows' | 'status';
+type Tab = 'overview' | 'organizers' | 'events' | 'notifications' | 'wishlist' | 'sponsors' | 'kol' | 'ambassadors' | 'inquiries' | 'flows' | 'status';
 
 // ─── Flows data (inline for admin panel) ──────────────────────────────────────
 
@@ -406,6 +440,17 @@ export default function AdminPage() {
   const [eventStatusUpdating, setEventStatusUpdating] = useState<number | null>(null);
   const [wishlistUpdating, setWishlistUpdating]     = useState<number | null>(null);
 
+  // P5 Sponsors
+  const [sponsors, setSponsors] = useState<{ profiles: SponsorProfile[]; seeking: SeekingEvent[]; matches: SponsorMatch[] } | null>(null);
+  const [matchForm, setMatchForm] = useState({ event_id: '', sponsor_id: '', notes: '' });
+  const [matchSubmitting, setMatchSubmitting] = useState(false);
+  // P6 KOL
+  const [kol, setKol] = useState<{ profiles: KolProfile[]; briefs: KolBrief[] } | null>(null);
+  // P3 Ambassadors
+  const [ambassadors, setAmbassadors] = useState<Ambassador[]>([]);
+  // P4 Inquiries
+  const [inquiries, setInquiries] = useState<AgencyInquiry[]>([]);
+
   function headers() { return { 'x-admin-secret': secret }; }
 
   async function login() {
@@ -483,12 +528,104 @@ export default function AdminPage() {
     setWishlistUpdating(null);
   }
 
+  async function loadSponsors() {
+    setLoading(true);
+    const r = await fetch(`${API}/api/eventflow/admin/sponsors`, { headers: headers() });
+    const data = await r.json();
+    setSponsors({ profiles: data.sponsors || [], seeking: data.seeking || [], matches: data.matches || [] });
+    setLoading(false);
+  }
+
+  async function updateSponsorProfileStatus(id: number, status: string) {
+    await fetch(`${API}/api/eventflow/admin/sponsors/${id}/status`, {
+      method: 'PATCH', headers: { ...headers(), 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status }),
+    });
+    await loadSponsors();
+  }
+
+  async function updateMatchStatus(id: number, status: string) {
+    await fetch(`${API}/api/eventflow/admin/sponsors/matches/${id}/status`, {
+      method: 'PATCH', headers: { ...headers(), 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status }),
+    });
+    await loadSponsors();
+  }
+
+  async function createMatch(e: React.FormEvent) {
+    e.preventDefault();
+    setMatchSubmitting(true);
+    await fetch(`${API}/api/eventflow/admin/sponsors/match`, {
+      method: 'POST', headers: { ...headers(), 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        event_id: parseInt(matchForm.event_id),
+        sponsor_id: parseInt(matchForm.sponsor_id),
+        notes: matchForm.notes || undefined,
+      }),
+    });
+    setMatchForm({ event_id: '', sponsor_id: '', notes: '' });
+    setMatchSubmitting(false);
+    await loadSponsors();
+  }
+
+  async function loadKol() {
+    setLoading(true);
+    const r = await fetch(`${API}/api/eventflow/admin/kol`, { headers: headers() });
+    const data = await r.json();
+    setKol({ profiles: data.profiles || [], briefs: data.briefs || [] });
+    setLoading(false);
+  }
+
+  async function updateKolProfileStatus(id: number, status: string) {
+    await fetch(`${API}/api/eventflow/admin/kol/${id}/status`, {
+      method: 'PATCH', headers: { ...headers(), 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status }),
+    });
+    await loadKol();
+  }
+
+  async function loadAmbassadors() {
+    setLoading(true);
+    const r = await fetch(`${API}/api/eventflow/admin/ambassadors`, { headers: headers() });
+    const data = await r.json();
+    setAmbassadors(data.ambassadors || []);
+    setLoading(false);
+  }
+
+  async function updateAmbassadorProfileStatus(id: number, status: string) {
+    await fetch(`${API}/api/eventflow/admin/ambassadors/${id}/status`, {
+      method: 'PATCH', headers: { ...headers(), 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status }),
+    });
+    await loadAmbassadors();
+  }
+
+  async function loadInquiries() {
+    setLoading(true);
+    const r = await fetch(`${API}/api/eventflow/admin/inquiries`, { headers: headers() });
+    const data = await r.json();
+    setInquiries(data.inquiries || []);
+    setLoading(false);
+  }
+
+  async function updateInquiryStatus(id: number, status: string) {
+    await fetch(`${API}/api/eventflow/admin/inquiries/${id}/status`, {
+      method: 'PATCH', headers: { ...headers(), 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status }),
+    });
+    await loadInquiries();
+  }
+
   useEffect(() => {
     if (!authed) return;
-    if (tab === 'organizers') loadOrganizers();
-    if (tab === 'events')     loadEvents();
+    if (tab === 'organizers')   loadOrganizers();
+    if (tab === 'events')       loadEvents();
     if (tab === 'notifications') loadNotifications();
-    if (tab === 'wishlist')   loadWishlist();
+    if (tab === 'wishlist')     loadWishlist();
+    if (tab === 'sponsors')     loadSponsors();
+    if (tab === 'kol')          loadKol();
+    if (tab === 'ambassadors')  loadAmbassadors();
+    if (tab === 'inquiries')    loadInquiries();
   }, [tab, authed]);
 
   // ─── Login gate ─────────────────────────────────────────────────────────────
@@ -529,6 +666,10 @@ export default function AdminPage() {
     { key: 'events',        label: `Events (${stats?.events ?? '…'})` },
     { key: 'notifications', label: 'Notifications' },
     { key: 'wishlist',      label: '💡 Wishlist' },
+    { key: 'sponsors',      label: '🤝 Sponsors' },
+    { key: 'kol',           label: '🌟 KOL' },
+    { key: 'ambassadors',   label: '🎯 Ambassadors' },
+    { key: 'inquiries',     label: '📨 Inquiries' },
     { key: 'flows',         label: '🗺️ Flows' },
     { key: 'status',        label: '🏗️ Platform Status' },
   ];
@@ -865,6 +1006,521 @@ export default function AdminPage() {
             )}
           </div>
         )}
+        {/* Sponsors */}
+        {tab === 'sponsors' && (
+          <div className="space-y-8">
+            {loading ? (
+              <div className="p-8 text-center text-slate-500">Loading…</div>
+            ) : sponsors ? (
+              <>
+                {/* Sponsor Profiles */}
+                <div>
+                  <div className="flex items-center justify-between mb-3">
+                    <h3 className="font-bold text-white">Sponsor Profiles</h3>
+                    <span className="text-xs text-slate-500">{sponsors.profiles.length} total</span>
+                  </div>
+                  <div className="bg-slate-800/60 border border-white/[0.08] rounded-2xl overflow-hidden">
+                    {sponsors.profiles.length === 0 ? (
+                      <div className="p-8 text-center text-slate-500">No sponsors registered yet.</div>
+                    ) : (
+                      <table className="w-full">
+                        <thead>
+                          <tr className="text-xs font-semibold text-slate-500 uppercase tracking-wider border-b border-white/[0.06]">
+                            <th className="text-left px-6 py-3">Company</th>
+                            <th className="text-left px-6 py-3">Contact</th>
+                            <th className="text-left px-6 py-3">Industries</th>
+                            <th className="text-left px-6 py-3">Budget</th>
+                            <th className="text-left px-6 py-3">Status</th>
+                            <th className="px-6 py-3" />
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {sponsors.profiles.map(sp => (
+                            <tr key={sp.id} className="border-b border-slate-700/50 hover:bg-white/[0.02] transition-colors">
+                              <td className="px-6 py-4">
+                                <div className="font-semibold text-sm">{sp.company}</div>
+                                {sp.website && <div className="text-xs text-blue-400 truncate max-w-[160px]">{sp.website}</div>}
+                              </td>
+                              <td className="px-6 py-4 text-sm">
+                                <div>{sp.contact_name || '—'}</div>
+                                <div className="text-xs text-slate-500">{sp.contact_email}</div>
+                              </td>
+                              <td className="px-6 py-4">
+                                <div className="flex flex-wrap gap-1">
+                                  {sp.industries?.slice(0, 2).map(ind => (
+                                    <span key={ind} className="text-xs bg-slate-700 text-slate-300 px-2 py-0.5 rounded-full">{ind}</span>
+                                  ))}
+                                  {(sp.industries?.length ?? 0) > 2 && (
+                                    <span className="text-xs text-slate-500">+{sp.industries!.length - 2}</span>
+                                  )}
+                                </div>
+                              </td>
+                              <td className="px-6 py-4 text-xs text-slate-400">{sp.budget_range || '—'}</td>
+                              <td className="px-6 py-4">
+                                <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${
+                                  sp.status === 'approved' ? 'bg-green-500/15 text-green-400' :
+                                  sp.status === 'rejected' ? 'bg-red-500/15 text-red-400' :
+                                  'bg-amber-500/15 text-amber-400'
+                                }`}>{sp.status}</span>
+                              </td>
+                              <td className="px-6 py-4">
+                                <div className="flex gap-2">
+                                  {sp.status !== 'approved' && (
+                                    <button onClick={() => updateSponsorProfileStatus(sp.id, 'approved')}
+                                      className="text-xs text-green-400 hover:text-green-300 border border-green-500/30 rounded-lg px-2 py-1 transition-colors">
+                                      Approve
+                                    </button>
+                                  )}
+                                  {sp.status !== 'rejected' && (
+                                    <button onClick={() => updateSponsorProfileStatus(sp.id, 'rejected')}
+                                      className="text-xs text-red-400 hover:text-red-300 border border-red-500/30 rounded-lg px-2 py-1 transition-colors">
+                                      Reject
+                                    </button>
+                                  )}
+                                </div>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    )}
+                  </div>
+                </div>
+
+                {/* Seeking Events */}
+                <div>
+                  <div className="flex items-center justify-between mb-3">
+                    <h3 className="font-bold text-white">Events Seeking Sponsors</h3>
+                    <span className="text-xs text-slate-500">{sponsors.seeking.length} open</span>
+                  </div>
+                  <div className="bg-slate-800/60 border border-white/[0.08] rounded-2xl overflow-hidden">
+                    {sponsors.seeking.length === 0 ? (
+                      <div className="p-8 text-center text-slate-500">No events currently seeking sponsors.</div>
+                    ) : (
+                      <table className="w-full">
+                        <thead>
+                          <tr className="text-xs font-semibold text-slate-500 uppercase tracking-wider border-b border-white/[0.06]">
+                            <th className="text-left px-6 py-3">Event</th>
+                            <th className="text-left px-6 py-3">Date</th>
+                            <th className="text-left px-6 py-3">Organizer</th>
+                            <th className="text-left px-6 py-3">Packages</th>
+                            <th className="text-left px-6 py-3">Budget</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {sponsors.seeking.map(ev => (
+                            <tr key={ev.id} className="border-b border-slate-700/50 hover:bg-white/[0.02] transition-colors">
+                              <td className="px-6 py-4">
+                                <div className="font-semibold text-sm">{ev.title}</div>
+                                {ev.brief && <div className="text-xs text-slate-500 mt-0.5 line-clamp-1">{ev.brief}</div>}
+                              </td>
+                              <td className="px-6 py-4 text-xs text-slate-400">
+                                {new Date(ev.start_at).toLocaleDateString('en-HK', { month: 'short', day: 'numeric', year: 'numeric' })}
+                              </td>
+                              <td className="px-6 py-4 text-sm">
+                                <div>{ev.organizer_name}</div>
+                                <div className="text-xs text-slate-500">{ev.organizer_email}</div>
+                              </td>
+                              <td className="px-6 py-4">
+                                <div className="flex flex-wrap gap-1">
+                                  {ev.package_types?.map(p => (
+                                    <span key={p} className="text-xs bg-blue-500/10 text-blue-400 px-2 py-0.5 rounded-full">{p}</span>
+                                  ))}
+                                </div>
+                              </td>
+                              <td className="px-6 py-4 text-xs text-green-400">{ev.budget_range || '—'}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    )}
+                  </div>
+                </div>
+
+                {/* Create Match + Matches list */}
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                  <div className="bg-slate-800/60 border border-white/[0.08] rounded-2xl p-5">
+                    <h3 className="font-bold text-white mb-4">Create Match</h3>
+                    <form onSubmit={createMatch} className="space-y-3">
+                      <div>
+                        <label className="block text-xs font-semibold text-slate-500 mb-1">Event</label>
+                        <select required value={matchForm.event_id}
+                          onChange={e => setMatchForm(f => ({ ...f, event_id: e.target.value }))}
+                          className="w-full bg-slate-900 border border-white/[0.08] text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-amber-500/50">
+                          <option value="">Select seeking event…</option>
+                          {sponsors.seeking.map(ev => (
+                            <option key={ev.event_id} value={ev.event_id}>{ev.title}</option>
+                          ))}
+                        </select>
+                      </div>
+                      <div>
+                        <label className="block text-xs font-semibold text-slate-500 mb-1">Sponsor</label>
+                        <select required value={matchForm.sponsor_id}
+                          onChange={e => setMatchForm(f => ({ ...f, sponsor_id: e.target.value }))}
+                          className="w-full bg-slate-900 border border-white/[0.08] text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-amber-500/50">
+                          <option value="">Select approved sponsor…</option>
+                          {sponsors.profiles.filter(s => s.status === 'approved').map(sp => (
+                            <option key={sp.id} value={sp.id}>{sp.company}</option>
+                          ))}
+                        </select>
+                      </div>
+                      <div>
+                        <label className="block text-xs font-semibold text-slate-500 mb-1">Notes</label>
+                        <textarea value={matchForm.notes}
+                          onChange={e => setMatchForm(f => ({ ...f, notes: e.target.value }))}
+                          rows={2} placeholder="Match rationale or next steps…"
+                          className="w-full bg-slate-900 border border-white/[0.08] text-white rounded-lg px-3 py-2 text-sm resize-none focus:outline-none focus:border-amber-500/50" />
+                      </div>
+                      <button type="submit" disabled={matchSubmitting}
+                        className="w-full bg-blue-600 hover:bg-blue-500 disabled:opacity-60 text-white font-bold py-2 rounded-lg text-sm transition-colors">
+                        {matchSubmitting ? 'Creating…' : 'Create Match →'}
+                      </button>
+                    </form>
+                  </div>
+
+                  <div className="lg:col-span-2 bg-slate-800/60 border border-white/[0.08] rounded-2xl overflow-hidden">
+                    <div className="px-5 py-4 border-b border-white/[0.06] flex items-center justify-between">
+                      <h3 className="font-bold text-white">Matches</h3>
+                      <span className="text-xs text-slate-500">{sponsors.matches.length} total</span>
+                    </div>
+                    {sponsors.matches.length === 0 ? (
+                      <div className="p-8 text-center text-slate-500">No matches created yet.</div>
+                    ) : (
+                      <table className="w-full">
+                        <thead>
+                          <tr className="text-xs font-semibold text-slate-500 uppercase tracking-wider border-b border-white/[0.06]">
+                            <th className="text-left px-5 py-3">Event</th>
+                            <th className="text-left px-5 py-3">Sponsor</th>
+                            <th className="text-left px-5 py-3">Notes</th>
+                            <th className="text-left px-5 py-3">Status</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {sponsors.matches.map(m => (
+                            <tr key={m.id} className="border-b border-slate-700/50 hover:bg-white/[0.02] transition-colors">
+                              <td className="px-5 py-3 text-sm font-semibold">{m.event_title}</td>
+                              <td className="px-5 py-3 text-sm">
+                                <div>{m.company}</div>
+                                <div className="text-xs text-slate-500">{m.contact_email}</div>
+                              </td>
+                              <td className="px-5 py-3 text-xs text-slate-400 max-w-[150px] truncate">{m.notes || '—'}</td>
+                              <td className="px-5 py-3">
+                                <select value={m.status}
+                                  onChange={e => updateMatchStatus(m.id, e.target.value)}
+                                  className="text-xs bg-slate-900 border border-white/[0.08] text-white rounded-lg px-2 py-1 focus:outline-none">
+                                  <option value="proposed">proposed</option>
+                                  <option value="accepted">accepted</option>
+                                  <option value="rejected">rejected</option>
+                                  <option value="completed">completed</option>
+                                </select>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    )}
+                  </div>
+                </div>
+              </>
+            ) : null}
+          </div>
+        )}
+
+        {/* KOL */}
+        {tab === 'kol' && (
+          <div className="space-y-8">
+            {loading ? (
+              <div className="p-8 text-center text-slate-500">Loading…</div>
+            ) : kol ? (
+              <>
+                {/* KOL Profiles */}
+                <div>
+                  <div className="flex items-center justify-between mb-3">
+                    <h3 className="font-bold text-white">KOL Profiles</h3>
+                    <span className="text-xs text-slate-500">{kol.profiles.length} total</span>
+                  </div>
+                  <div className="bg-slate-800/60 border border-white/[0.08] rounded-2xl overflow-hidden">
+                    {kol.profiles.length === 0 ? (
+                      <div className="p-8 text-center text-slate-500">No KOL profiles yet.</div>
+                    ) : (
+                      <table className="w-full">
+                        <thead>
+                          <tr className="text-xs font-semibold text-slate-500 uppercase tracking-wider border-b border-white/[0.06]">
+                            <th className="text-left px-6 py-3">KOL</th>
+                            <th className="text-left px-6 py-3">Platforms</th>
+                            <th className="text-left px-6 py-3">Followers</th>
+                            <th className="text-left px-6 py-3">Categories</th>
+                            <th className="text-left px-6 py-3">Rate</th>
+                            <th className="text-left px-6 py-3">Status</th>
+                            <th className="px-6 py-3" />
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {kol.profiles.map(k => {
+                            const total = Object.values(k.follower_counts || {}).reduce((a, b) => a + b, 0);
+                            const display = total >= 1000000 ? `${(total / 1000000).toFixed(1)}M`
+                              : total >= 1000 ? `${(total / 1000).toFixed(0)}K` : String(total);
+                            return (
+                              <tr key={k.id} className="border-b border-slate-700/50 hover:bg-white/[0.02] transition-colors">
+                                <td className="px-6 py-4">
+                                  <div className="font-semibold text-sm">{k.name}</div>
+                                  {k.handle && <div className="text-xs text-purple-400">{k.handle}</div>}
+                                  <div className="text-xs text-slate-500">{k.contact_email}</div>
+                                </td>
+                                <td className="px-6 py-4">
+                                  <div className="flex flex-wrap gap-1">
+                                    {k.platforms?.slice(0, 3).map(p => (
+                                      <span key={p} className="text-xs bg-slate-700 text-slate-300 px-1.5 py-0.5 rounded-full">{p}</span>
+                                    ))}
+                                  </div>
+                                </td>
+                                <td className="px-6 py-4 font-bold text-purple-400">{display}</td>
+                                <td className="px-6 py-4">
+                                  <div className="flex flex-wrap gap-1">
+                                    {k.categories?.slice(0, 2).map(c => (
+                                      <span key={c} className="text-xs bg-slate-700 text-slate-300 px-1.5 py-0.5 rounded-full">{c}</span>
+                                    ))}
+                                    {(k.categories?.length ?? 0) > 2 && (
+                                      <span className="text-xs text-slate-500">+{k.categories!.length - 2}</span>
+                                    )}
+                                  </div>
+                                </td>
+                                <td className="px-6 py-4 text-xs text-slate-400">{k.rate_range || '—'}</td>
+                                <td className="px-6 py-4">
+                                  <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${
+                                    k.status === 'active'   ? 'bg-green-500/15 text-green-400' :
+                                    k.status === 'rejected' ? 'bg-red-500/15 text-red-400' :
+                                    'bg-amber-500/15 text-amber-400'
+                                  }`}>{k.status}</span>
+                                </td>
+                                <td className="px-6 py-4">
+                                  <div className="flex gap-2">
+                                    {k.status !== 'active' && (
+                                      <button onClick={() => updateKolProfileStatus(k.id, 'active')}
+                                        className="text-xs text-green-400 hover:text-green-300 border border-green-500/30 rounded-lg px-2 py-1 transition-colors">
+                                        Approve
+                                      </button>
+                                    )}
+                                    {k.status !== 'rejected' && (
+                                      <button onClick={() => updateKolProfileStatus(k.id, 'rejected')}
+                                        className="text-xs text-red-400 hover:text-red-300 border border-red-500/30 rounded-lg px-2 py-1 transition-colors">
+                                        Reject
+                                      </button>
+                                    )}
+                                  </div>
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    )}
+                  </div>
+                </div>
+
+                {/* KOL Briefs */}
+                <div>
+                  <div className="flex items-center justify-between mb-3">
+                    <h3 className="font-bold text-white">KOL Briefs</h3>
+                    <span className="text-xs text-slate-500">{kol.briefs.length} total</span>
+                  </div>
+                  <div className="bg-slate-800/60 border border-white/[0.08] rounded-2xl overflow-hidden">
+                    {kol.briefs.length === 0 ? (
+                      <div className="p-8 text-center text-slate-500">No KOL briefs yet.</div>
+                    ) : (
+                      <table className="w-full">
+                        <thead>
+                          <tr className="text-xs font-semibold text-slate-500 uppercase tracking-wider border-b border-white/[0.06]">
+                            <th className="text-left px-6 py-3">Event</th>
+                            <th className="text-left px-6 py-3">Organizer</th>
+                            <th className="text-left px-6 py-3">Budget</th>
+                            <th className="text-left px-6 py-3">Deliverables</th>
+                            <th className="text-left px-6 py-3">Deadline</th>
+                            <th className="text-left px-6 py-3">Categories</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {kol.briefs.map(b => (
+                            <tr key={b.id} className="border-b border-slate-700/50 hover:bg-white/[0.02] transition-colors">
+                              <td className="px-6 py-4 font-semibold text-sm">{b.event_title}</td>
+                              <td className="px-6 py-4 text-sm text-slate-400">{b.organizer_name}</td>
+                              <td className="px-6 py-4 text-xs text-green-400">{b.budget_range || '—'}</td>
+                              <td className="px-6 py-4">
+                                <div className="flex flex-wrap gap-1">
+                                  {b.deliverables?.slice(0, 2).map(d => (
+                                    <span key={d} className="text-xs bg-slate-700 text-slate-300 px-1.5 py-0.5 rounded-full">{d}</span>
+                                  ))}
+                                  {(b.deliverables?.length ?? 0) > 2 && (
+                                    <span className="text-xs text-slate-500">+{b.deliverables!.length - 2}</span>
+                                  )}
+                                </div>
+                              </td>
+                              <td className="px-6 py-4 text-xs text-slate-400">
+                                {b.deadline ? new Date(b.deadline).toLocaleDateString('en-HK', { month: 'short', day: 'numeric', year: 'numeric' }) : '—'}
+                              </td>
+                              <td className="px-6 py-4">
+                                <div className="flex flex-wrap gap-1">
+                                  {b.categories?.slice(0, 2).map(c => (
+                                    <span key={c} className="text-xs bg-purple-500/10 text-purple-400 px-1.5 py-0.5 rounded-full">{c}</span>
+                                  ))}
+                                </div>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    )}
+                  </div>
+                </div>
+              </>
+            ) : null}
+          </div>
+        )}
+
+        {/* Ambassadors */}
+        {tab === 'ambassadors' && (
+          <div className="bg-slate-800/60 border border-white/[0.08] rounded-2xl overflow-hidden">
+            {loading ? (
+              <div className="p-8 text-center text-slate-500">Loading…</div>
+            ) : ambassadors.length === 0 ? (
+              <div className="p-12 text-center text-slate-500">
+                <div className="text-4xl mb-3">🎯</div>
+                <p>No ambassador applications yet.</p>
+              </div>
+            ) : (
+              <table className="w-full">
+                <thead>
+                  <tr className="text-xs font-semibold text-slate-500 uppercase tracking-wider border-b border-white/[0.06]">
+                    <th className="text-left px-6 py-3">Applicant</th>
+                    <th className="text-left px-6 py-3">Platform</th>
+                    <th className="text-left px-6 py-3">Handle</th>
+                    <th className="text-left px-6 py-3">Followers</th>
+                    <th className="text-left px-6 py-3">Categories</th>
+                    <th className="text-left px-6 py-3">Applied</th>
+                    <th className="text-left px-6 py-3">Status</th>
+                    <th className="px-6 py-3" />
+                  </tr>
+                </thead>
+                <tbody>
+                  {ambassadors.map(a => (
+                    <tr key={a.id} className="border-b border-slate-700/50 hover:bg-white/[0.02] transition-colors">
+                      <td className="px-6 py-4">
+                        <div className="font-semibold text-sm">{a.name}</div>
+                        <div className="text-xs text-slate-500">{a.email}</div>
+                      </td>
+                      <td className="px-6 py-4 text-sm text-slate-400">{a.platform || '—'}</td>
+                      <td className="px-6 py-4 text-sm text-green-400">{a.social_handle || '—'}</td>
+                      <td className="px-6 py-4 font-bold text-green-400">
+                        {a.follower_count
+                          ? a.follower_count >= 1000000 ? `${(a.follower_count / 1000000).toFixed(1)}M`
+                            : a.follower_count >= 1000 ? `${(a.follower_count / 1000).toFixed(0)}K`
+                            : String(a.follower_count)
+                          : '—'}
+                      </td>
+                      <td className="px-6 py-4">
+                        <div className="flex flex-wrap gap-1">
+                          {a.categories?.slice(0, 2).map(c => (
+                            <span key={c} className="text-xs bg-slate-700 text-slate-300 px-1.5 py-0.5 rounded-full">{c}</span>
+                          ))}
+                          {(a.categories?.length ?? 0) > 2 && (
+                            <span className="text-xs text-slate-500">+{a.categories!.length - 2}</span>
+                          )}
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 text-xs text-slate-500">
+                        {new Date(a.created_at).toLocaleDateString('en-HK', { month: 'short', day: 'numeric', year: 'numeric' })}
+                      </td>
+                      <td className="px-6 py-4">
+                        <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${
+                          a.status === 'approved' ? 'bg-green-500/15 text-green-400' :
+                          a.status === 'rejected' ? 'bg-red-500/15 text-red-400' :
+                          'bg-amber-500/15 text-amber-400'
+                        }`}>{a.status}</span>
+                      </td>
+                      <td className="px-6 py-4">
+                        <div className="flex gap-2">
+                          {a.status !== 'approved' && (
+                            <button onClick={() => updateAmbassadorProfileStatus(a.id, 'approved')}
+                              className="text-xs text-green-400 hover:text-green-300 border border-green-500/30 rounded-lg px-2 py-1 transition-colors">
+                              Approve
+                            </button>
+                          )}
+                          {a.status !== 'rejected' && (
+                            <button onClick={() => updateAmbassadorProfileStatus(a.id, 'rejected')}
+                              className="text-xs text-red-400 hover:text-red-300 border border-red-500/30 rounded-lg px-2 py-1 transition-colors">
+                              Reject
+                            </button>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </div>
+        )}
+
+        {/* Inquiries */}
+        {tab === 'inquiries' && (
+          <div className="bg-slate-800/60 border border-white/[0.08] rounded-2xl overflow-hidden">
+            {loading ? (
+              <div className="p-8 text-center text-slate-500">Loading…</div>
+            ) : inquiries.length === 0 ? (
+              <div className="p-12 text-center text-slate-500">
+                <div className="text-4xl mb-3">📨</div>
+                <p>No agency inquiries yet.</p>
+              </div>
+            ) : (
+              <table className="w-full">
+                <thead>
+                  <tr className="text-xs font-semibold text-slate-500 uppercase tracking-wider border-b border-white/[0.06]">
+                    <th className="text-left px-6 py-3">Service</th>
+                    <th className="text-left px-6 py-3">Company</th>
+                    <th className="text-left px-6 py-3">Contact</th>
+                    <th className="text-left px-6 py-3">Event Date</th>
+                    <th className="text-left px-6 py-3">Budget</th>
+                    <th className="text-left px-6 py-3">Submitted</th>
+                    <th className="text-left px-6 py-3">Status</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {inquiries.map(inq => (
+                    <tr key={inq.id} className="border-b border-slate-700/50 hover:bg-white/[0.02] transition-colors">
+                      <td className="px-6 py-4">
+                        <span className="text-xs font-mono text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded-full">{inq.service_slug}</span>
+                      </td>
+                      <td className="px-6 py-4 text-sm">{inq.company || '—'}</td>
+                      <td className="px-6 py-4 text-sm">
+                        <div>{inq.contact_name}</div>
+                        <div className="text-xs text-slate-500">{inq.email}</div>
+                      </td>
+                      <td className="px-6 py-4 text-xs text-slate-400">
+                        {inq.event_date ? new Date(inq.event_date).toLocaleDateString('en-HK', { month: 'short', day: 'numeric', year: 'numeric' }) : '—'}
+                      </td>
+                      <td className="px-6 py-4 text-xs text-slate-400">{inq.budget_range || '—'}</td>
+                      <td className="px-6 py-4 text-xs text-slate-500">
+                        {new Date(inq.created_at).toLocaleDateString('en-HK', { month: 'short', day: 'numeric' })}
+                      </td>
+                      <td className="px-6 py-4">
+                        <select value={inq.status}
+                          onChange={e => updateInquiryStatus(inq.id, e.target.value)}
+                          className="text-xs bg-slate-900 border border-white/[0.08] text-white rounded-lg px-2 py-1 focus:outline-none focus:border-amber-500/50">
+                          <option value="new">new</option>
+                          <option value="contacted">contacted</option>
+                          <option value="quoted">quoted</option>
+                          <option value="won">won</option>
+                          <option value="lost">lost</option>
+                        </select>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </div>
+        )}
+
         {/* Flows */}
         {tab === 'flows' && (
           <div className="space-y-6">
