@@ -387,7 +387,7 @@ export default function IndustryLandingPage({ config }: { config: IndustryConfig
       </section>
 
       {/* ── Case Studies ── */}
-      <section id="cases" className="py-20 px-4 bg-white dark:bg-slate-950">
+      <section id="case-studies" className="py-20 px-4 bg-white dark:bg-slate-950">
         <div className="max-w-4xl mx-auto">
           <div className="text-center mb-12">
             <p className="text-xs font-semibold text-blue-600 dark:text-blue-400 uppercase tracking-widest mb-3">真實案例</p>
