@@ -1,0 +1,49 @@
+{
+  "name": "EventFlow",
+  "short_name": "EventFlow",
+  "description": "Discover events, manage your tickets, and check in guests — all in one app.",
+  "start_url": "/eventflow",
+  "scope": "/eventflow",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#ffffff",
+  "theme_color": "#f97316",
+  "icons": [
+    {
+      "src": "/eventflow-icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/eventflow-icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Discover Events",
+      "short_name": "Discover",
+      "description": "Browse and RSVP to events",
+      "url": "/eventflow",
+      "icons": [{ "src": "/eventflow-icon-192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "Organizer Portal",
+      "short_name": "Organize",
+      "description": "Create and manage your events",
+      "url": "/eventflow/organizer/dashboard",
+      "icons": [{ "src": "/eventflow-icon-192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "Staff Check-in",
+      "short_name": "Staff",
+      "description": "QR code check-in for event staff",
+      "url": "/eventflow/reception",
+      "icons": [{ "src": "/eventflow-icon-192.png", "sizes": "192x192" }]
+    }
+  ],
+  "categories": ["entertainment", "business", "social"]
+}
