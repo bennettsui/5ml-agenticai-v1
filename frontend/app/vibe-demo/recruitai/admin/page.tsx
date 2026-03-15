@@ -835,14 +835,19 @@ function RecruitMediaLibraryTab() {
   async function handleGenerate(visualId: string) {
     setGenerating(p => ({ ...p, [visualId]: true }));
     try {
-      await fetch(`${API_BASE}/api/recruitai-media/generate`, {
+      const res = await fetch(`${API_BASE}/api/recruitai-media/generate`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ id: visualId }),
       });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ error: res.statusText }));
+        alert(`生成失敗 (${res.status}): ${err.error || res.statusText}`);
+      }
       await Promise.all([loadStatus(), loadMedia()]);
-    } catch { /* ignore */ }
-    finally { setGenerating(p => ({ ...p, [visualId]: false })); }
+    } catch (e: unknown) {
+      alert(`生成失敗: ${e instanceof Error ? e.message : String(e)}`);
+    } finally { setGenerating(p => ({ ...p, [visualId]: false })); }
   }
 
   async function handlePushCdn(key: string) {
