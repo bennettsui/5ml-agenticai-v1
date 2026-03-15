@@ -4205,6 +4205,26 @@ try {
   console.warn('⚠️ Presentation Deck routes not loaded:', error.message);
 }
 
+// 貓貓暖湯 TAP TAP — Cherry Game (cozy tapping game for Cherry 💕)
+try {
+  const cherryGameRoutes = require('./use-cases/cherry-game/api/routes');
+  app.use('/api/cherry-game', cherryGameRoutes);
+  // Serve the vanilla HTML/CSS/JS game at /cherry-game
+  app.get('/cherry-game', (req, res) =>
+    res.sendFile(path.join(__dirname, 'use-cases', 'cherry-game', 'public', 'index.html'))
+  );
+  app.use('/cherry-game/static', express.static(path.join(__dirname, 'use-cases', 'cherry-game', 'public')));
+  // Init DB tables if Postgres is available
+  if (process.env.DATABASE_URL) {
+    cherryGameRoutes.initDb(pool).catch(err =>
+      console.warn('⚠️ Cherry Game DB init error:', err.message)
+    );
+  }
+  console.log('✅ Cherry Game routes loaded: /cherry-game, /api/cherry-game');
+} catch (error) {
+  console.warn('⚠️ Cherry Game routes not loaded:', error.message);
+}
+
 // Scheduler Service
 const scheduler = require('./services/scheduler');
 const scheduleRegistry = require('./services/schedule-registry');
