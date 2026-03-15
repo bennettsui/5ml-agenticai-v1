@@ -62,14 +62,14 @@ interface VersionEntry {
 function CoverSlide({ content }: { content: Record<string, string> }) {
   return (
     <div className="h-full flex flex-col items-center justify-center text-center px-16">
-      <div className="text-red-400 text-xs font-medium tracking-widest uppercase mb-6">
+      <div className="text-[#0057A8] text-xs font-medium tracking-widest uppercase mb-6">
         {content.company} · Tender Response
       </div>
-      <h1 className="text-5xl font-bold text-white leading-tight mb-4 max-w-3xl">{content.main_title}</h1>
-      <p className="text-2xl text-slate-400 mb-8">{content.subtitle_cn}</p>
-      <div className="w-16 h-px bg-red-500/50 mb-8" />
-      <p className="text-slate-400 text-sm max-w-lg leading-relaxed">{content.project_name}</p>
-      <p className="text-slate-600 text-sm mt-6">{content.date}</p>
+      <h1 className="text-5xl font-bold text-slate-900 leading-tight mb-4 max-w-3xl">{content.main_title}</h1>
+      <p className="text-2xl text-slate-600 mb-8">{content.subtitle_cn}</p>
+      <div className="w-16 h-px bg-[#0057A8]/40 mb-8" />
+      <p className="text-slate-600 text-sm max-w-lg leading-relaxed">{content.project_name}</p>
+      <p className="text-slate-400 text-sm mt-6">{content.date}</p>
     </div>
   );
 }
@@ -78,15 +78,15 @@ function StatementSlide({ content }: { content: Record<string, string | string[]
   const points = Array.isArray(content.supporting_points) ? content.supporting_points : [];
   return (
     <div className="h-full flex flex-col justify-center px-16 max-w-4xl mx-auto w-full">
-      <p className="text-slate-400 text-lg mb-6 leading-relaxed">{String(content.problem)}</p>
-      <h2 className="text-3xl font-bold text-white mb-8 leading-snug">{String(content.our_difference)}</h2>
+      <p className="text-slate-600 text-lg mb-6 leading-relaxed">{String(content.problem)}</p>
+      <h2 className="text-3xl font-bold text-slate-900 mb-8 leading-snug">{String(content.our_difference)}</h2>
       <div className="space-y-3">
         {points.map((pt, i) => (
           <div key={i} className="flex items-start gap-3">
-            <div className="w-5 h-5 rounded-full bg-red-500/20 border border-red-500/30 flex items-center justify-center flex-shrink-0 mt-0.5">
-              <div className="w-1.5 h-1.5 rounded-full bg-red-400" />
+            <div className="w-5 h-5 rounded-full bg-[#0057A8]/10 border border-[#0057A8]/20 flex items-center justify-center flex-shrink-0 mt-0.5">
+              <div className="w-1.5 h-1.5 rounded-full bg-[#0057A8]" />
             </div>
-            <p className="text-slate-300 text-base leading-relaxed">{pt}</p>
+            <p className="text-slate-700 text-base leading-relaxed">{pt}</p>
           </div>
         ))}
       </div>
@@ -101,12 +101,12 @@ function ContentSlide({ content }: { content: { blocks?: { heading: string; body
       <div className="space-y-7">
         {blocks.map((block, i) => (
           <div key={i} className="flex gap-6">
-            <div className="w-8 h-8 rounded-lg bg-white/[0.04] border border-white/[0.06] flex items-center justify-center flex-shrink-0 mt-0.5">
+            <div className="w-8 h-8 rounded-lg bg-slate-100 border border-slate-200 flex items-center justify-center flex-shrink-0 mt-0.5">
               <span className="text-xs font-mono text-slate-500">{String(i + 1).padStart(2, '0')}</span>
             </div>
             <div>
-              <h3 className="text-base font-semibold text-white mb-1.5">{block.heading}</h3>
-              <p className="text-slate-400 text-sm leading-relaxed">{block.body}</p>
+              <h3 className="text-base font-semibold text-slate-900 mb-1.5">{block.heading}</h3>
+              <p className="text-slate-600 text-sm leading-relaxed">{block.body}</p>
             </div>
           </div>
         ))}
@@ -128,9 +128,9 @@ function VisualHeavySlide({ content }: { content: Record<string, unknown> }) {
       {colorStrategy && (
         <div className="grid grid-cols-3 gap-4">
           {Object.entries(colorStrategy).map(([k, v]) => (
-            <div key={k} className="bg-white/[0.03] border border-white/[0.06] rounded-xl p-4">
+            <div key={k} className="bg-slate-50 border border-slate-200 rounded-xl p-4">
               <div className="text-xs font-medium text-slate-500 mb-2 capitalize">{k.replace('_', ' ')}</div>
-              <p className="text-xs text-slate-300 leading-relaxed">{v}</p>
+              <p className="text-xs text-slate-700 leading-relaxed">{v}</p>
             </div>
           ))}
         </div>
@@ -138,15 +138,15 @@ function VisualHeavySlide({ content }: { content: Record<string, unknown> }) {
       {characterDesign && (
         <div className="grid grid-cols-2 gap-4">
           {Object.entries(characterDesign).map(([k, v]) => (
-            <div key={k} className="bg-white/[0.03] border border-white/[0.06] rounded-xl p-4">
-              <div className="text-xs font-medium text-amber-400/80 mb-2 capitalize">{k.replace('_', ' ')}</div>
-              <p className="text-xs text-slate-300 leading-relaxed">{v}</p>
+            <div key={k} className="bg-slate-50 border border-slate-200 rounded-xl p-4">
+              <div className="text-xs font-medium text-[#0057A8] mb-2 capitalize">{k.replace('_', ' ')}</div>
+              <p className="text-xs text-slate-700 leading-relaxed">{v}</p>
             </div>
           ))}
         </div>
       )}
       {sceneStyle && (
-        <p className="text-sm text-slate-400 leading-relaxed italic border-l-2 border-slate-700 pl-4">{sceneStyle}</p>
+        <p className="text-sm text-slate-600 leading-relaxed italic border-l-2 border-slate-300 pl-4">{sceneStyle}</p>
       )}
     </div>
   );
@@ -158,12 +158,12 @@ function TwoColumnSlide({ content }: { content: { left: { title: string; items: 
       <div className="grid grid-cols-2 gap-12 w-full">
         {[content.left, content.right].map((col, ci) => (
           <div key={ci}>
-            <h3 className="text-base font-semibold text-white mb-4 pb-3 border-b border-white/[0.06]">{col.title}</h3>
+            <h3 className="text-base font-semibold text-slate-900 mb-4 pb-3 border-b border-slate-200">{col.title}</h3>
             <div className="space-y-3">
               {col.items.map((item, i) => (
                 <div key={i} className="flex items-start gap-2.5">
-                  <ChevronRight className="w-3.5 h-3.5 text-slate-600 flex-shrink-0 mt-0.5" />
-                  <p className="text-slate-300 text-sm leading-relaxed">{item}</p>
+                  <ChevronRight className="w-3.5 h-3.5 text-slate-400 flex-shrink-0 mt-0.5" />
+                  <p className="text-slate-700 text-sm leading-relaxed">{item}</p>
                 </div>
               ))}
             </div>
@@ -181,20 +181,20 @@ function TimelineSlide({ content }: { content: { phases: { label: string; title:
         {content.phases.map((phase, i) => (
           <div key={i} className="relative">
             {i < content.phases.length - 1 && (
-              <div className="absolute top-4 left-full w-4 h-px bg-slate-700 z-10" />
+              <div className="absolute top-4 left-full w-4 h-px bg-slate-300 z-10" />
             )}
-            <div className="bg-white/[0.03] border border-white/[0.06] rounded-xl p-4">
-              <div className="text-xs font-mono text-slate-600 mb-2">{phase.label}</div>
-              <h4 className="text-xs font-semibold text-white mb-3 leading-snug">{phase.title}</h4>
+            <div className="bg-slate-50 border border-slate-200 rounded-xl p-4">
+              <div className="text-xs font-mono text-[#0057A8] mb-2">{phase.label}</div>
+              <h4 className="text-xs font-semibold text-slate-900 mb-3 leading-snug">{phase.title}</h4>
               <div className="space-y-1.5 mb-3">
                 {phase.activities.map((act, j) => (
                   <div key={j} className="flex items-start gap-1.5">
-                    <div className="w-1 h-1 rounded-full bg-slate-600 flex-shrink-0 mt-1.5" />
-                    <p className="text-xs text-slate-400 leading-relaxed">{act}</p>
+                    <div className="w-1 h-1 rounded-full bg-slate-400 flex-shrink-0 mt-1.5" />
+                    <p className="text-xs text-slate-600 leading-relaxed">{act}</p>
                   </div>
                 ))}
               </div>
-              <p className="text-xs text-slate-600 italic">{phase.client_role}</p>
+              <p className="text-xs text-slate-500 italic">{phase.client_role}</p>
             </div>
           </div>
         ))}
@@ -204,12 +204,12 @@ function TimelineSlide({ content }: { content: { phases: { label: string; title:
 }
 
 function SectionDividerSlide({ content, section }: { content: { section_title: string; section_subtitle: string }; section: string }) {
-  const accent = SECTION_ACCENT[section] || '#E60000';
+  const accent = SECTION_ACCENT[section] || '#0057A8';
   return (
     <div className="h-full flex flex-col items-center justify-center text-center px-16">
       <div className="w-16 h-1 rounded-full mb-8" style={{ backgroundColor: accent }} />
-      <h2 className="text-5xl font-bold text-white mb-4">{content.section_title}</h2>
-      <p className="text-xl text-slate-400 max-w-xl">{content.section_subtitle}</p>
+      <h2 className="text-5xl font-bold text-slate-900 mb-4">{content.section_title}</h2>
+      <p className="text-xl text-slate-600 max-w-xl">{content.section_subtitle}</p>
     </div>
   );
 }
@@ -219,15 +219,15 @@ function SplitMetricsSlide({ content }: { content: { left: { title: string; item
     <div className="h-full flex items-center px-16 max-w-4xl mx-auto w-full">
       <div className="grid grid-cols-2 gap-8 w-full">
         {[content.left, content.right].map((col, ci) => (
-          <div key={ci} className="bg-white/[0.03] border border-white/[0.06] rounded-2xl p-6">
-            <h3 className="text-sm font-semibold text-white mb-4">{col.title}</h3>
+          <div key={ci} className="bg-slate-50 border border-slate-200 rounded-2xl p-6">
+            <h3 className="text-sm font-semibold text-slate-900 mb-4">{col.title}</h3>
             <div className="space-y-2.5">
               {col.items.map((item, i) => (
                 <div key={i} className="flex items-start gap-2.5">
-                  <div className="w-4 h-4 rounded bg-white/[0.04] border border-white/[0.06] flex items-center justify-center flex-shrink-0 mt-0.5">
-                    <div className="w-1 h-1 rounded-full bg-slate-500" />
+                  <div className="w-4 h-4 rounded bg-slate-100 border border-slate-200 flex items-center justify-center flex-shrink-0 mt-0.5">
+                    <div className="w-1 h-1 rounded-full bg-slate-400" />
                   </div>
-                  <p className="text-slate-300 text-sm leading-relaxed">{item}</p>
+                  <p className="text-slate-700 text-sm leading-relaxed">{item}</p>
                 </div>
               ))}
             </div>
@@ -798,16 +798,16 @@ function SlidesPresenter() {
   const bgOpacity = ['cover', 'section-divider'].includes(slide.layout_type) ? 0.28 : 0.14;
 
   return (
-    <div className="h-screen bg-slate-950 flex flex-col overflow-hidden">
+    <div className="h-screen bg-gray-100 flex flex-col overflow-hidden">
       {/* Top bar */}
-      <div className="flex items-center justify-between px-5 py-2.5 border-b border-slate-800/60 bg-slate-900/60 flex-shrink-0">
+      <div className="flex items-center justify-between px-5 py-2.5 border-b border-slate-200 bg-white flex-shrink-0">
         <div className="flex items-center gap-3">
-          <Link href="/presentation-deck/2603CLPtender" className="text-slate-500 hover:text-slate-300 transition-colors">
+          <Link href="/presentation-deck/2603CLPtender" className="text-slate-500 hover:text-slate-800 transition-colors">
             <ChevronLeft className="w-4 h-4" />
           </Link>
           <div>
             <div className="text-xs text-slate-500 font-medium">CLP Power Hong Kong</div>
-            <div className="text-xs text-slate-300 font-semibold flex items-center gap-1.5">
+            <div className="text-xs text-slate-700 font-semibold flex items-center gap-1.5">
               {slide.title}
               {override && <span className="text-[9px] px-1 py-0.5 rounded bg-amber-500/10 text-amber-400 border border-amber-500/20 font-normal">edited</span>}
             </div>
@@ -841,32 +841,32 @@ function SlidesPresenter() {
           </button>
           <button
             onClick={() => setShowThumbnails(!showThumbnails)}
-            className={`p-1.5 rounded transition-colors ${showThumbnails ? 'text-white' : 'text-slate-600 hover:text-slate-400'}`}
+            className={`p-1.5 rounded transition-colors ${showThumbnails ? 'text-slate-900' : 'text-slate-500 hover:text-slate-700'}`}
             title="Slide grid"
           >
             <Grid3X3 className="w-4 h-4" />
           </button>
-          <div className="h-4 w-px bg-slate-800 mx-0.5" />
+          <div className="h-4 w-px bg-slate-200 mx-0.5" />
           {/* AI assistant toggle */}
           <button
             onClick={() => setShowAI(!showAI)}
-            className={`p-1.5 rounded transition-colors ${showAI ? 'text-purple-400 bg-purple-500/10' : 'text-slate-600 hover:text-slate-400'}`}
+            className={`p-1.5 rounded transition-colors ${showAI ? 'text-purple-600 bg-purple-100' : 'text-slate-500 hover:text-slate-700'}`}
             title="AI Assistant"
           >
             <BrainCircuit className="w-4 h-4" />
           </button>
-          <div className="h-4 w-px bg-slate-800 mx-0.5" />
+          <div className="h-4 w-px bg-slate-200 mx-0.5" />
           {/* Download PPTX */}
           <button
             onClick={handleDownloadPptx}
             disabled={downloading}
-            className="flex items-center gap-1.5 px-2.5 py-1 rounded text-xs font-medium bg-slate-800/80 hover:bg-slate-700/80 text-slate-300 hover:text-white disabled:opacity-50 transition-colors border border-slate-700/60"
+            className="flex items-center gap-1.5 px-2.5 py-1 rounded text-xs font-medium bg-slate-100 hover:bg-slate-200 text-slate-700 hover:text-slate-900 disabled:opacity-50 transition-colors border border-slate-200"
             title="Download as PPTX"
           >
             {downloading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Download className="w-3.5 h-3.5" />}
             {downloading ? 'Exporting…' : 'PPTX'}
           </button>
-          <div className="h-4 w-px bg-slate-800 mx-0.5" />
+          <div className="h-4 w-px bg-slate-200 mx-0.5" />
           <span className="text-xs text-slate-500 tabular-nums">
             {currentIndex + 1} / {slides.length}
           </span>
@@ -890,13 +890,13 @@ function SlidesPresenter() {
           {/* Slide title */}
           {slide.layout_type !== 'cover' && slide.layout_type !== 'section-divider' && (
             <div className="px-16 pt-4 pb-2 flex-shrink-0">
-              <h1 className="text-2xl font-bold text-white leading-snug">{slide.title}</h1>
-              {slide.subtitle && <p className="text-slate-400 text-sm mt-1">{slide.subtitle}</p>}
+              <h1 className="text-2xl font-bold text-slate-900 leading-snug">{slide.title}</h1>
+              {slide.subtitle && <p className="text-slate-600 text-sm mt-1">{slide.subtitle}</p>}
             </div>
           )}
 
           {/* Slide content (with generated image as background) */}
-          <div className={`flex-1 overflow-y-auto relative transition-all duration-300 ${slideFlash ? 'ring-2 ring-inset ring-purple-500/50' : ''}`}>
+          <div className={`flex-1 overflow-y-auto relative bg-white transition-all duration-300 ${slideFlash ? 'ring-2 ring-inset ring-purple-500/50' : ''}`}>
             {showBgImage && bgImageUrl && (
               <div
                 className="absolute inset-0 z-0 bg-cover bg-center"
@@ -910,11 +910,11 @@ function SlidesPresenter() {
 
           {/* Notes / Visuals panel */}
           {(showNotes || showVisuals) && (
-            <div className="border-t border-slate-800/60 bg-slate-900/40 flex-shrink-0 max-h-56 overflow-y-auto">
+            <div className="border-t border-slate-200 bg-slate-50 flex-shrink-0 max-h-56 overflow-y-auto">
               {showNotes && slide.notes && (
                 <div className="px-6 py-3">
-                  <div className="text-xs font-medium text-amber-400 mb-1">Speaker notes</div>
-                  <p className="text-sm text-slate-400 leading-relaxed">{slide.notes}</p>
+                  <div className="text-xs font-medium text-amber-600 mb-1">Speaker notes</div>
+                  <p className="text-sm text-slate-600 leading-relaxed">{slide.notes}</p>
                 </div>
               )}
               {showVisuals && (
@@ -938,19 +938,19 @@ function SlidesPresenter() {
                   )}
                   {(slide.visual_prompts?.length ?? 0) > 0 && (
                     <div>
-                      <div className="text-xs font-medium text-blue-400 mb-2">Visual prompts</div>
+                      <div className="text-xs font-medium text-blue-600 mb-2">Visual prompts</div>
                       <div className="space-y-1.5">
                         {(slide.visual_prompts || []).map((vp, i) => (
                           <div key={i} className="flex items-start gap-2">
-                            <span className="text-xs font-mono text-slate-600 flex-shrink-0">{i + 1}.</span>
-                            <p className="text-xs text-slate-400 leading-relaxed">{vp}</p>
+                            <span className="text-xs font-mono text-slate-500 flex-shrink-0">{i + 1}.</span>
+                            <p className="text-xs text-slate-600 leading-relaxed">{vp}</p>
                           </div>
                         ))}
                       </div>
                     </div>
                   )}
                   {(genImages[rawSlide.slide_number] || []).length === 0 && (slide.visual_prompts?.length ?? 0) === 0 && (
-                    <p className="text-xs text-slate-600">No visuals for this slide.</p>
+                    <p className="text-xs text-slate-500">No visuals for this slide.</p>
                   )}
                 </div>
               )}
@@ -958,15 +958,15 @@ function SlidesPresenter() {
           )}
 
           {/* Nav controls */}
-          <div className="flex items-center justify-between px-5 py-3 border-t border-slate-800/40 flex-shrink-0">
+          <div className="flex items-center justify-between px-5 py-3 border-t border-slate-200 bg-white flex-shrink-0">
             <button
               onClick={() => goTo(currentIndex - 1)}
               disabled={currentIndex === 0}
-              className="flex items-center gap-2 text-sm text-slate-400 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+              className="flex items-center gap-2 text-sm text-slate-500 hover:text-slate-900 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
             >
               <ChevronLeft className="w-4 h-4" />Previous
             </button>
-            <div className="flex-1 mx-8 h-1 bg-slate-800 rounded-full overflow-hidden">
+            <div className="flex-1 mx-8 h-1 bg-slate-200 rounded-full overflow-hidden">
               <div
                 className="h-full rounded-full transition-all duration-300"
                 style={{ width: `${((currentIndex + 1) / slides.length) * 100}%`, backgroundColor: accent }}
@@ -975,7 +975,7 @@ function SlidesPresenter() {
             <button
               onClick={() => goTo(currentIndex + 1)}
               disabled={currentIndex === slides.length - 1}
-              className="flex items-center gap-2 text-sm text-slate-400 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+              className="flex items-center gap-2 text-sm text-slate-500 hover:text-slate-900 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
             >
               Next<ChevronRight className="w-4 h-4" />
             </button>
@@ -984,23 +984,23 @@ function SlidesPresenter() {
 
         {/* Thumbnail panel */}
         {showThumbnails && (
-          <div className="w-56 border-l border-slate-800/60 bg-slate-900/40 overflow-y-auto flex-shrink-0">
+          <div className="w-56 border-l border-slate-200 bg-white overflow-y-auto flex-shrink-0">
             <div className="p-3 space-y-2">
               {slides.map((s, i) => (
                 <button
                   key={s.slide_number}
                   onClick={() => { goTo(i); setShowThumbnails(false); }}
                   className={`w-full text-left px-3 py-2 rounded-lg transition-colors ${
-                    i === currentIndex ? 'bg-white/[0.08] border border-white/[0.1]' : 'hover:bg-white/[0.03]'
+                    i === currentIndex ? 'bg-slate-100 border border-slate-300' : 'hover:bg-slate-50'
                   }`}
                 >
                   <div className="flex items-center gap-2 mb-0.5">
-                    <span className="text-xs font-mono text-slate-600">{String(s.slide_number).padStart(2, '0')}</span>
+                    <span className="text-xs font-mono text-slate-400">{String(s.slide_number).padStart(2, '0')}</span>
                     <div className="w-1 h-1 rounded-full flex-shrink-0" style={{ backgroundColor: SECTION_ACCENT[s.section] }} />
                     {overrides[s.slide_number] && <div className="w-1 h-1 rounded-full bg-amber-400 flex-shrink-0" title="Edited" />}
                     {genImages[s.slide_number]?.length > 0 && <div className="w-1 h-1 rounded-full bg-emerald-400 flex-shrink-0" title="Has generated image" />}
                   </div>
-                  <p className="text-xs text-slate-400 leading-snug line-clamp-2">{s.title}</p>
+                  <p className="text-xs text-slate-600 leading-snug line-clamp-2">{s.title}</p>
                 </button>
               ))}
             </div>
@@ -1027,7 +1027,7 @@ function SlidesPresenter() {
 
 export default function SlidesPage() {
   return (
-    <Suspense fallback={<div className="h-screen bg-slate-950 flex items-center justify-center text-slate-500 text-sm">Loading…</div>}>
+    <Suspense fallback={<div className="h-screen bg-white flex items-center justify-center text-slate-500 text-sm">Loading…</div>}>
       <SlidesPresenter />
     </Suspense>
   );
