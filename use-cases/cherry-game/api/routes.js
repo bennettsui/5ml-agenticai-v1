@@ -148,19 +148,19 @@ const ASSET_PROMPTS = {
   // ── SOUP STAGE IMAGES (progressive visual upgrade every ~20 taps) ──────────
 
   soup_stage_1:
-    `A single simple round clay soup pot sitting on a wooden surface, plain water just starting to warm, tiny wisps of steam just beginning, the pot is humble and empty-looking, soft warm cream and clay colors, very cute chunky round proportions, gentle amber light from below, Pixar 3D CGI animation style, centered portrait composition, isolated with soft warm blurred background, extremely cute, no text`,
+    `A single simple round clay soup pot, plain water just starting to warm, tiny wisps of steam just beginning, the pot is humble and empty-looking, soft warm clay colors, very cute chunky round proportions, gentle amber light from below, Pixar 3D CGI animation style, centered portrait composition, VERY DARK deep navy-black vignette background fading to pure black at edges, subject isolated in center with dramatic dark surround, extremely cute, no text`,
 
   soup_stage_2:
-    `A cute round clay soup pot filled with light golden broth just starting to simmer, a few small vegetable slices (carrot, mushroom) just dropped in, small delicate steam wisps rising upward, the broth beginning to glow warm amber, cute chunky proportions, warm golden light from within the pot, Pixar 3D CGI animation style, centered portrait composition, soft warm background, no text`,
+    `A cute round clay soup pot filled with light golden broth just starting to simmer, a few small vegetable slices (carrot, mushroom) just dropped in, small delicate steam wisps rising upward, the broth beginning to glow warm amber, cute chunky proportions, warm golden light from within the pot, Pixar 3D CGI animation style, centered portrait composition, VERY DARK deep navy-black background with dark vignette, pot glowing against darkness, no text`,
 
   soup_stage_3:
-    `A beautiful round soup pot bubbling with rich golden broth, colorful vegetables clearly visible inside — orange carrots, soft white tofu, dark mushrooms, bright green leaves — generous steam rising in beautiful curls, the pot glowing warm amber-gold from within, appetizing and abundant, Pixar 3D CGI animation style, centered portrait composition, warm golden-amber colors, ultra cute, no text`,
+    `A beautiful round soup pot bubbling with rich golden broth, colorful vegetables clearly visible inside — orange carrots, soft white tofu, dark mushrooms, bright green leaves — generous steam rising in beautiful curls, the pot glowing warm amber-gold from within, appetizing and abundant, Pixar 3D CGI animation style, centered portrait composition, DARK background deep brown-black vignette with warm glow emanating from pot, ultra cute, no text`,
 
   soup_stage_4:
-    `A magnificent round magical soup cauldron overflowing with gorgeous rich golden broth, abundant delicious ingredients clearly visible, thick rising steam forming beautiful cloud shapes, the cauldron radiating warm golden light outward, truly beautiful and comforting, surrounded by soft golden glow, Pixar 3D CGI animation style, centered portrait composition, radiant warm amber-gold palette, ultra cute chunky proportions, no text`,
+    `A magnificent round magical soup cauldron overflowing with gorgeous rich golden broth, abundant delicious ingredients clearly visible, thick rising steam forming beautiful cloud shapes, the cauldron radiating warm golden light outward, truly beautiful and comforting, surrounded by golden glow against darkness, Pixar 3D CGI animation style, centered portrait composition, VERY DARK background — deep black with only warm light from the cauldron illuminating surrounding space, ultra cute chunky proportions, no text`,
 
   soup_stage_5:
-    `A magical glowing soup cauldron that has transcended ordinary cooking — the soup inside shimmers and sparkles with magical golden light, tiny glowing particles rise from the surface like fireflies, the entire cauldron is surrounded by a brilliant warm golden aura radiating outward, the steam itself is made of golden light, the ultimate magical healing soup, Pixar 3D CGI animation style, centered portrait composition, radiant magical golden palette, maximum magical glow, ultra cute, no text`,
+    `A magical glowing soup cauldron transcending ordinary cooking — the soup shimmers and sparkles with magical golden light, tiny glowing particles rise like fireflies, the entire cauldron surrounded by brilliant warm golden aura radiating outward into pure darkness, the steam itself made of golden light, the ultimate magical healing soup, Pixar 3D CGI animation style, centered portrait composition, PURE BLACK background — like a jewel floating in the void, maximum magical glow, radiant golden palette, ultra cute, no text`,
 
   // ── BACKGROUNDS (story-correlated full kitchen scenes) ────────────────────
 
