@@ -35,6 +35,23 @@ interface FormField {
   id: number; field_key: string; field_type: string; label: string;
   placeholder: string | null; required: boolean; options: string[] | null; sort_order: number;
 }
+interface DiscountCode {
+  id: number; code: string; type: string; value: number; max_uses: number | null;
+  uses: number; expires_at: string | null; is_active: boolean; source: string | null;
+}
+interface ReferralProgram {
+  id: number; event_id: number; scheme: string | null; discount_pct: number | null;
+  reward_amount: number | null; reward_type: string | null;
+}
+interface SponsorFlag {
+  event_id: number; seeking: boolean; brief: string | null;
+  package_types: string[] | null; budget_range: string | null;
+}
+interface KolBriefItem {
+  id: number; event_id: number; budget_range: string | null;
+  deliverables: string[] | null; deadline: string | null;
+  categories: string[] | null; notes: string | null; status: string;
+}
 
 // Built-in core fields always present (organizer can toggle required)
 const CORE_FIELDS = [
@@ -57,7 +74,7 @@ const FIELD_TYPES = [
   { value: 'checkbox', label: 'Checkboxes (Multi)' },
 ];
 
-type Tab = 'overview' | 'attendees' | 'checkin' | 'notifications' | 'ai' | 'form' | 'settings';
+type Tab = 'overview' | 'attendees' | 'checkin' | 'notifications' | 'ai' | 'form' | 'discounts' | 'referral' | 'sponsors' | 'kol' | 'settings';
 
 type AITool = 'describe' | 'social' | 'agenda' | 'email' | 'banner';
 
@@ -103,6 +120,33 @@ export default function EventManagePage({ id }: { id: string }) {
   const [newField, setNewField] = useState({ label: '', field_key: '', field_type: 'text', placeholder: '', required: false, options: '' });
   const [fieldSaving, setFieldSaving] = useState(false);
 
+  // Discounts
+  const [discounts, setDiscounts] = useState<DiscountCode[]>([]);
+  const [discountsLoading, setDiscountsLoading] = useState(false);
+  const [discountForm, setDiscountForm] = useState({ code: '', type: 'percent', value: '', max_uses: '', expires_at: '' });
+  const [discountSaving, setDiscountSaving] = useState(false);
+  const [discountError, setDiscountError] = useState('');
+  const [showDiscountForm, setShowDiscountForm] = useState(false);
+
+  // Referral
+  const [referralData, setReferralData] = useState<{ program: ReferralProgram | null; ref_codes: DiscountCode[] } | null>(null);
+  const [referralForm, setReferralForm] = useState({ scheme: 'code', discount_pct: '10', reward_amount: '', reward_type: 'credit' });
+  const [referralSaving, setReferralSaving] = useState(false);
+  const [referralMsg, setReferralMsg] = useState('');
+
+  // Sponsor flag
+  const [sponsorFlag, setSponsorFlag] = useState<SponsorFlag | null>(null);
+  const [sponsorFlagForm, setSponsorFlagForm] = useState({ seeking: false, brief: '', package_types: '', budget_range: '' });
+  const [sponsorFlagSaving, setSponsorFlagSaving] = useState(false);
+  const [sponsorFlagMsg, setSponsorFlagMsg] = useState('');
+
+  // KOL briefs
+  const [kolBriefs, setKolBriefs] = useState<KolBriefItem[]>([]);
+  const [kolBriefForm, setKolBriefForm] = useState({ budget_range: '', deliverables: '', deadline: '', categories: '', notes: '' });
+  const [kolBriefSaving, setKolBriefSaving] = useState(false);
+  const [kolBriefMsg, setKolBriefMsg] = useState('');
+  const [showKolBriefForm, setShowKolBriefForm] = useState(false);
+
   const sseRef = useRef<EventSource | null>(null);
 
   useEffect(() => {
@@ -114,6 +158,10 @@ export default function EventManagePage({ id }: { id: string }) {
     if (tab === 'notifications') loadNotifLog();
     if (tab === 'ai') setAiResult('');
     if (tab === 'form') loadFormFields();
+    if (tab === 'discounts') loadDiscounts();
+    if (tab === 'referral') loadReferral();
+    if (tab === 'sponsors') loadSponsorFlag();
+    if (tab === 'kol') loadKolBriefs();
   }, [tab]);
 
   // SSE for live stats
@@ -240,6 +288,149 @@ export default function EventManagePage({ id }: { id: string }) {
     }
   }
 
+  async function loadDiscounts() {
+    setDiscountsLoading(true);
+    try {
+      const r = await fetch(`${API}/api/eventflow/events/${eventId}/discounts`, { headers: authHeaders() });
+      const data = await r.json();
+      setDiscounts(data.codes || []);
+    } finally { setDiscountsLoading(false); }
+  }
+
+  async function createDiscount(e: React.FormEvent) {
+    e.preventDefault();
+    setDiscountSaving(true); setDiscountError('');
+    try {
+      const r = await fetch(`${API}/api/eventflow/events/${eventId}/discounts`, {
+        method: 'POST', headers: authHeaders(),
+        body: JSON.stringify({
+          code: discountForm.code.toUpperCase(),
+          type: discountForm.type,
+          value: parseFloat(discountForm.value),
+          max_uses: discountForm.max_uses ? parseInt(discountForm.max_uses) : null,
+          expires_at: discountForm.expires_at || null,
+        }),
+      });
+      const data = await r.json();
+      if (!r.ok) throw new Error(data.error || 'Failed');
+      setDiscounts(prev => [data.discount, ...prev]);
+      setDiscountForm({ code: '', type: 'percent', value: '', max_uses: '', expires_at: '' });
+      setShowDiscountForm(false);
+    } catch (err: unknown) {
+      setDiscountError(err instanceof Error ? err.message : 'Failed');
+    } finally { setDiscountSaving(false); }
+  }
+
+  async function toggleDiscount(id: number, is_active: boolean) {
+    const r = await fetch(`${API}/api/eventflow/events/${eventId}/discounts/${id}`, {
+      method: 'PATCH', headers: authHeaders(),
+      body: JSON.stringify({ is_active }),
+    });
+    if (r.ok) { const data = await r.json(); setDiscounts(prev => prev.map(d => d.id === id ? data.discount : d)); }
+  }
+
+  async function deleteDiscount(id: number) {
+    await fetch(`${API}/api/eventflow/events/${eventId}/discounts/${id}`, { method: 'DELETE', headers: authHeaders() });
+    setDiscounts(prev => prev.filter(d => d.id !== id));
+  }
+
+  async function loadReferral() {
+    const r = await fetch(`${API}/api/eventflow/referral/programs/${eventId}`, { headers: authHeaders() });
+    const data = await r.json();
+    setReferralData({ program: data.program || null, ref_codes: data.ref_codes || [] });
+  }
+
+  async function createReferral(e: React.FormEvent) {
+    e.preventDefault();
+    setReferralSaving(true); setReferralMsg('');
+    try {
+      const r = await fetch(`${API}/api/eventflow/referral/programs`, {
+        method: 'POST', headers: authHeaders(),
+        body: JSON.stringify({
+          event_id: parseInt(eventId),
+          scheme: referralForm.scheme,
+          discount_pct: referralForm.discount_pct ? parseFloat(referralForm.discount_pct) : null,
+          reward_amount: referralForm.reward_amount ? parseFloat(referralForm.reward_amount) : null,
+          reward_type: referralForm.reward_type,
+        }),
+      });
+      const data = await r.json();
+      if (!r.ok) throw new Error(data.error || 'Failed');
+      await loadReferral();
+      setReferralMsg(`Referral program created! Share code: ${data.ref_code}`);
+    } catch (err: unknown) {
+      setReferralMsg(err instanceof Error ? err.message : 'Failed');
+    } finally { setReferralSaving(false); }
+  }
+
+  async function loadSponsorFlag() {
+    const r = await fetch(`${API}/api/eventflow/sponsors/events/${eventId}/flag`, { headers: authHeaders() });
+    const data = await r.json();
+    if (data.flag) {
+      setSponsorFlag(data.flag);
+      setSponsorFlagForm({
+        seeking: data.flag.seeking || false,
+        brief: data.flag.brief || '',
+        package_types: (data.flag.package_types || []).join(', '),
+        budget_range: data.flag.budget_range || '',
+      });
+    }
+  }
+
+  async function saveSponsorFlag(e: React.FormEvent) {
+    e.preventDefault();
+    setSponsorFlagSaving(true); setSponsorFlagMsg('');
+    try {
+      const r = await fetch(`${API}/api/eventflow/sponsors/events/${eventId}/flag`, {
+        method: 'POST', headers: authHeaders(),
+        body: JSON.stringify({
+          seeking: sponsorFlagForm.seeking,
+          brief: sponsorFlagForm.brief || null,
+          package_types: sponsorFlagForm.package_types ? sponsorFlagForm.package_types.split(',').map(s => s.trim()).filter(Boolean) : null,
+          budget_range: sponsorFlagForm.budget_range || null,
+        }),
+      });
+      const data = await r.json();
+      if (!r.ok) throw new Error(data.error || 'Failed');
+      setSponsorFlag(data.flag);
+      setSponsorFlagMsg('Saved');
+    } catch (err: unknown) {
+      setSponsorFlagMsg(err instanceof Error ? err.message : 'Failed');
+    } finally { setSponsorFlagSaving(false); }
+  }
+
+  async function loadKolBriefs() {
+    const r = await fetch(`${API}/api/eventflow/kol/briefs`, { headers: authHeaders() });
+    const data = await r.json();
+    setKolBriefs((data.briefs || []).filter((b: KolBriefItem) => b.event_id === parseInt(eventId)));
+  }
+
+  async function createKolBrief(e: React.FormEvent) {
+    e.preventDefault();
+    setKolBriefSaving(true); setKolBriefMsg('');
+    try {
+      const r = await fetch(`${API}/api/eventflow/kol/briefs`, {
+        method: 'POST', headers: authHeaders(),
+        body: JSON.stringify({
+          event_id: parseInt(eventId),
+          budget_range: kolBriefForm.budget_range || null,
+          deliverables: kolBriefForm.deliverables ? kolBriefForm.deliverables.split('\n').map(s => s.trim()).filter(Boolean) : null,
+          deadline: kolBriefForm.deadline || null,
+          categories: kolBriefForm.categories ? kolBriefForm.categories.split(',').map(s => s.trim()).filter(Boolean) : null,
+          notes: kolBriefForm.notes || null,
+        }),
+      });
+      const data = await r.json();
+      if (!r.ok) throw new Error(data.error || 'Failed');
+      setKolBriefs(prev => [data.brief, ...prev]);
+      setKolBriefForm({ budget_range: '', deliverables: '', deadline: '', categories: '', notes: '' });
+      setShowKolBriefForm(false);
+      setKolBriefMsg('Brief posted!');
+    } catch (err: unknown) {
+      setKolBriefMsg(err instanceof Error ? err.message : 'Failed');
+    } finally { setKolBriefSaving(false); }
+  }
+
   async function runAI() {
     if (!event) return;
     setAiLoading(true); setAiResult('');
@@ -282,6 +473,10 @@ export default function EventManagePage({ id }: { id: string }) {
     { key: 'notifications',  label: 'Notifications' },
     { key: 'ai',             label: '✨ AI Studio' },
     { key: 'form',           label: '📋 RSVP Form' },
+    { key: 'discounts',      label: '🏷 Discounts' },
+    { key: 'referral',       label: '🔗 Referral' },
+    { key: 'sponsors',       label: '🤝 Sponsors' },
+    { key: 'kol',            label: '🌟 KOL Briefs' },
     { key: 'settings',       label: 'Settings' },
   ];
 
@@ -824,6 +1019,423 @@ export default function EventManagePage({ id }: { id: string }) {
             <div className="font-semibold">📋 Form Preview</div>
             <p className="text-slate-400">Attendees will see the core fields above followed by your custom fields in the order listed. Changes apply immediately to new registrations.</p>
           </div>
+        </div>
+      )}
+
+      {/* Discounts */}
+      {tab === 'discounts' && (
+        <div className="max-w-3xl space-y-6">
+          <div className="bg-slate-800/60 border border-white/[0.08] rounded-2xl overflow-hidden">
+            <div className="px-6 py-4 border-b border-white/[0.06] flex items-center justify-between">
+              <div>
+                <h3 className="font-bold text-sm">Discount Codes</h3>
+                <p className="text-xs text-slate-500 mt-0.5">Manage promo codes for this event.</p>
+              </div>
+              <button onClick={() => setShowDiscountForm(!showDiscountForm)}
+                className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-amber-500/15 text-amber-400 hover:bg-amber-500/25 transition-colors">
+                + Create Code
+              </button>
+            </div>
+
+            {showDiscountForm && (
+              <form onSubmit={createDiscount} className="px-6 py-5 border-b border-amber-500/20 bg-amber-500/[0.03] space-y-4">
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs text-slate-500 mb-1.5">Code *</label>
+                    <input required value={discountForm.code}
+                      onChange={e => setDiscountForm(f => ({ ...f, code: e.target.value.toUpperCase() }))}
+                      placeholder="SUMMER20"
+                      className="w-full px-3 py-2 bg-slate-900/60 border border-white/[0.08] rounded-lg text-white text-sm font-mono focus:outline-none focus:border-amber-500/50" />
+                  </div>
+                  <div>
+                    <label className="block text-xs text-slate-500 mb-1.5">Type</label>
+                    <select value={discountForm.type}
+                      onChange={e => setDiscountForm(f => ({ ...f, type: e.target.value }))}
+                      className="w-full px-3 py-2 bg-slate-900/60 border border-white/[0.08] rounded-lg text-white text-sm focus:outline-none focus:border-amber-500/50">
+                      <option value="percent">Percent (%)</option>
+                      <option value="fixed">Fixed (HKD)</option>
+                    </select>
+                  </div>
+                </div>
+                <div className="grid grid-cols-3 gap-3">
+                  <div>
+                    <label className="block text-xs text-slate-500 mb-1.5">Value *</label>
+                    <input required type="number" min="0" value={discountForm.value}
+                      onChange={e => setDiscountForm(f => ({ ...f, value: e.target.value }))}
+                      placeholder={discountForm.type === 'percent' ? '10' : '100'}
+                      className="w-full px-3 py-2 bg-slate-900/60 border border-white/[0.08] rounded-lg text-white text-sm focus:outline-none focus:border-amber-500/50" />
+                  </div>
+                  <div>
+                    <label className="block text-xs text-slate-500 mb-1.5">Max Uses</label>
+                    <input type="number" min="1" value={discountForm.max_uses}
+                      onChange={e => setDiscountForm(f => ({ ...f, max_uses: e.target.value }))}
+                      placeholder="∞"
+                      className="w-full px-3 py-2 bg-slate-900/60 border border-white/[0.08] rounded-lg text-white text-sm focus:outline-none focus:border-amber-500/50" />
+                  </div>
+                  <div>
+                    <label className="block text-xs text-slate-500 mb-1.5">Expires</label>
+                    <input type="date" value={discountForm.expires_at}
+                      onChange={e => setDiscountForm(f => ({ ...f, expires_at: e.target.value }))}
+                      className="w-full px-3 py-2 bg-slate-900/60 border border-white/[0.08] rounded-lg text-white text-sm focus:outline-none focus:border-amber-500/50" />
+                  </div>
+                </div>
+                {discountError && <p className="text-red-400 text-xs">{discountError}</p>}
+                <div className="flex gap-2">
+                  <button type="button" onClick={() => setShowDiscountForm(false)}
+                    className="text-xs text-slate-500 hover:text-slate-300 px-3 py-2 transition-colors">Cancel</button>
+                  <button type="submit" disabled={discountSaving}
+                    className="bg-amber-500 hover:bg-amber-400 disabled:opacity-50 text-slate-950 font-bold text-xs px-4 py-2 rounded-lg transition-colors">
+                    {discountSaving ? 'Creating…' : 'Create Code'}
+                  </button>
+                </div>
+              </form>
+            )}
+
+            {discountsLoading ? (
+              <div className="px-6 py-8 text-center text-slate-600 text-sm">Loading…</div>
+            ) : discounts.length === 0 ? (
+              <div className="px-6 py-8 text-center text-slate-600 text-sm">No discount codes yet.</div>
+            ) : (
+              <table className="w-full">
+                <thead>
+                  <tr className="text-xs font-semibold text-slate-500 uppercase tracking-wider border-b border-white/[0.06]">
+                    <th className="text-left px-6 py-3">Code</th>
+                    <th className="text-left px-6 py-3">Discount</th>
+                    <th className="text-center px-6 py-3">Uses</th>
+                    <th className="text-left px-6 py-3">Expires</th>
+                    <th className="text-center px-6 py-3">Active</th>
+                    <th className="px-6 py-3" />
+                  </tr>
+                </thead>
+                <tbody>
+                  {discounts.map(d => (
+                    <tr key={d.id} className="border-b border-slate-700/50">
+                      <td className="px-6 py-3">
+                        <span className="font-mono text-sm text-amber-300">{d.code}</span>
+                        {d.source === 'referral' && (
+                          <span className="ml-2 text-xs bg-blue-500/15 text-blue-400 px-1.5 py-0.5 rounded">referral</span>
+                        )}
+                      </td>
+                      <td className="px-6 py-3 text-sm text-slate-300">
+                        {d.type === 'percent' ? `${d.value}%` : `HKD ${d.value}`}
+                      </td>
+                      <td className="px-6 py-3 text-center text-sm text-slate-400">
+                        {d.uses}{d.max_uses ? `/${d.max_uses}` : ''}
+                      </td>
+                      <td className="px-6 py-3 text-sm text-slate-500">
+                        {d.expires_at ? new Date(d.expires_at).toLocaleDateString('en-HK') : '—'}
+                      </td>
+                      <td className="px-6 py-3 text-center">
+                        <button onClick={() => toggleDiscount(d.id, !d.is_active)}
+                          className={`relative w-9 h-5 rounded-full transition-colors ${d.is_active ? 'bg-green-500' : 'bg-slate-700'}`}>
+                          <span className={`absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform ${d.is_active ? 'translate-x-4' : ''}`} />
+                        </button>
+                      </td>
+                      <td className="px-6 py-3 text-right">
+                        <button onClick={() => deleteDiscount(d.id)}
+                          className="text-slate-600 hover:text-red-400 text-xs transition-colors">Delete</button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Referral */}
+      {tab === 'referral' && (
+        <div className="max-w-2xl space-y-6">
+          {!referralData?.program ? (
+            <div className="bg-slate-800/60 border border-white/[0.08] rounded-2xl overflow-hidden">
+              <div className="px-6 py-4 border-b border-white/[0.06]">
+                <h3 className="font-bold text-sm">Set Up Referral Program</h3>
+                <p className="text-xs text-slate-500 mt-0.5">Create a referral program that auto-generates a shareable promo code.</p>
+              </div>
+              <form onSubmit={createReferral} className="px-6 py-5 space-y-4">
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs text-slate-500 mb-1.5">Scheme</label>
+                    <select value={referralForm.scheme}
+                      onChange={e => setReferralForm(f => ({ ...f, scheme: e.target.value }))}
+                      className="w-full px-3 py-2 bg-slate-900/60 border border-white/[0.08] rounded-lg text-white text-sm focus:outline-none focus:border-amber-500/50">
+                      <option value="code">Discount Code</option>
+                      <option value="credit">Credit Reward</option>
+                      <option value="both">Code + Credit</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-xs text-slate-500 mb-1.5">Referee Discount (%)</label>
+                    <input type="number" min="1" max="100" value={referralForm.discount_pct}
+                      onChange={e => setReferralForm(f => ({ ...f, discount_pct: e.target.value }))}
+                      placeholder="10"
+                      className="w-full px-3 py-2 bg-slate-900/60 border border-white/[0.08] rounded-lg text-white text-sm focus:outline-none focus:border-amber-500/50" />
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs text-slate-500 mb-1.5">Referrer Reward (HKD)</label>
+                    <input type="number" min="0" value={referralForm.reward_amount}
+                      onChange={e => setReferralForm(f => ({ ...f, reward_amount: e.target.value }))}
+                      placeholder="50"
+                      className="w-full px-3 py-2 bg-slate-900/60 border border-white/[0.08] rounded-lg text-white text-sm focus:outline-none focus:border-amber-500/50" />
+                  </div>
+                  <div>
+                    <label className="block text-xs text-slate-500 mb-1.5">Reward Type</label>
+                    <select value={referralForm.reward_type}
+                      onChange={e => setReferralForm(f => ({ ...f, reward_type: e.target.value }))}
+                      className="w-full px-3 py-2 bg-slate-900/60 border border-white/[0.08] rounded-lg text-white text-sm focus:outline-none focus:border-amber-500/50">
+                      <option value="credit">Platform Credit</option>
+                      <option value="voucher">Gift Voucher</option>
+                      <option value="cash">Cash</option>
+                    </select>
+                  </div>
+                </div>
+                {referralMsg && <p className="text-sm text-amber-400">{referralMsg}</p>}
+                <button type="submit" disabled={referralSaving}
+                  className="bg-amber-500 hover:bg-amber-400 disabled:opacity-50 text-slate-950 font-bold px-5 py-2.5 rounded-xl text-sm transition-colors">
+                  {referralSaving ? 'Creating…' : 'Launch Referral Program →'}
+                </button>
+              </form>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              <div className="bg-slate-800/60 border border-white/[0.08] rounded-2xl p-6">
+                <div className="flex items-center gap-2 mb-4">
+                  <div className="w-2 h-2 rounded-full bg-green-400" />
+                  <span className="text-sm font-bold text-green-400">Referral Program Active</span>
+                </div>
+                <div className="grid grid-cols-2 gap-4 text-sm">
+                  <div>
+                    <div className="text-xs text-slate-500 mb-1">Scheme</div>
+                    <div className="font-semibold capitalize">{referralData.program.scheme}</div>
+                  </div>
+                  {referralData.program.discount_pct && (
+                    <div>
+                      <div className="text-xs text-slate-500 mb-1">Referee Discount</div>
+                      <div className="font-semibold">{referralData.program.discount_pct}%</div>
+                    </div>
+                  )}
+                  {referralData.program.reward_amount && (
+                    <div>
+                      <div className="text-xs text-slate-500 mb-1">Referrer Reward</div>
+                      <div className="font-semibold">HKD {referralData.program.reward_amount} {referralData.program.reward_type}</div>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {referralData.ref_codes.length > 0 && (
+                <div className="bg-slate-800/60 border border-white/[0.08] rounded-2xl overflow-hidden">
+                  <div className="px-6 py-4 border-b border-white/[0.06]">
+                    <h3 className="font-bold text-sm">Referral Codes</h3>
+                    <p className="text-xs text-slate-500 mt-0.5">Share these links with ambassadors and participants.</p>
+                  </div>
+                  <div className="divide-y divide-white/[0.04]">
+                    {referralData.ref_codes.map(rc => (
+                      <div key={rc.id} className="px-6 py-4">
+                        <div className="flex items-center justify-between gap-3">
+                          <div>
+                            <span className="font-mono text-amber-300 text-sm">{rc.code}</span>
+                            <div className="text-xs text-slate-500 mt-1">
+                              Used {rc.uses} time{rc.uses !== 1 ? 's' : ''}
+                              {rc.max_uses ? ` / ${rc.max_uses} max` : ''}
+                            </div>
+                          </div>
+                          <button
+                            onClick={() => event && navigator.clipboard.writeText(`${typeof window !== 'undefined' ? window.location.origin : ''}/eventflow/${event.slug}?ref=${rc.code}`)}
+                            className="text-xs text-slate-400 hover:text-amber-400 border border-white/[0.08] hover:border-amber-500/40 px-3 py-1.5 rounded-lg transition-colors">
+                            Copy Link
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {referralMsg && <p className="text-sm text-amber-400">{referralMsg}</p>}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Sponsors */}
+      {tab === 'sponsors' && (
+        <div className="max-w-xl space-y-6">
+          <div className="bg-blue-500/5 border border-blue-500/20 rounded-xl p-4 text-xs text-blue-300">
+            <div className="font-semibold mb-1">🤝 Sponsor Visibility</div>
+            <p className="text-slate-400">Toggle this event as &ldquo;seeking sponsors&rdquo; to appear on the public sponsors page. Interested companies can then express interest and be connected to you.</p>
+          </div>
+          <div className="bg-slate-800/60 border border-white/[0.08] rounded-2xl p-6">
+            <form onSubmit={saveSponsorFlag} className="space-y-5">
+              {/* Toggle */}
+              <div className="flex items-center justify-between bg-slate-900/40 border border-white/[0.06] rounded-xl p-4">
+                <div>
+                  <div className="text-sm font-semibold">
+                    {sponsorFlagForm.seeking ? '✅ Seeking Sponsors' : '⬜ Not Seeking Sponsors'}
+                  </div>
+                  <div className="text-xs text-slate-500 mt-0.5">
+                    {sponsorFlagForm.seeking ? 'Listed on public sponsors page' : 'Hidden from sponsor discovery'}
+                  </div>
+                </div>
+                <button type="button"
+                  onClick={() => setSponsorFlagForm(f => ({ ...f, seeking: !f.seeking }))}
+                  className={`relative w-11 h-6 rounded-full transition-colors ${sponsorFlagForm.seeking ? 'bg-blue-500' : 'bg-slate-700'}`}>
+                  <span className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform ${sponsorFlagForm.seeking ? 'translate-x-5' : ''}`} />
+                </button>
+              </div>
+
+              <div>
+                <label className="block text-xs text-slate-500 mb-1.5">Sponsorship Brief</label>
+                <textarea value={sponsorFlagForm.brief} rows={4}
+                  onChange={e => setSponsorFlagForm(f => ({ ...f, brief: e.target.value }))}
+                  placeholder="Describe the sponsorship opportunity, audience demographics, expected footfall…"
+                  className="w-full px-3 py-2 bg-slate-900/60 border border-white/[0.08] rounded-lg text-white text-sm focus:outline-none focus:border-blue-500/50 transition-colors resize-none" />
+              </div>
+
+              <div>
+                <label className="block text-xs text-slate-500 mb-1.5">Package Types (comma-separated)</label>
+                <input type="text" value={sponsorFlagForm.package_types}
+                  onChange={e => setSponsorFlagForm(f => ({ ...f, package_types: e.target.value }))}
+                  placeholder="Title Sponsor, Gold, Silver, Networking Sponsor"
+                  className="w-full px-3 py-2 bg-slate-900/60 border border-white/[0.08] rounded-lg text-white text-sm focus:outline-none focus:border-blue-500/50 transition-colors" />
+              </div>
+
+              <div>
+                <label className="block text-xs text-slate-500 mb-1.5">Budget Range</label>
+                <input type="text" value={sponsorFlagForm.budget_range}
+                  onChange={e => setSponsorFlagForm(f => ({ ...f, budget_range: e.target.value }))}
+                  placeholder="HK$50,000 – 200,000"
+                  className="w-full px-3 py-2 bg-slate-900/60 border border-white/[0.08] rounded-lg text-white text-sm focus:outline-none focus:border-blue-500/50 transition-colors" />
+              </div>
+
+              {sponsorFlagMsg && (
+                <p className={`text-sm ${sponsorFlagMsg === 'Saved' ? 'text-green-400' : 'text-red-400'}`}>{sponsorFlagMsg}</p>
+              )}
+              <button type="submit" disabled={sponsorFlagSaving}
+                className="bg-blue-500 hover:bg-blue-400 disabled:opacity-50 text-white font-bold px-5 py-2.5 rounded-xl text-sm transition-colors">
+                {sponsorFlagSaving ? 'Saving…' : 'Save Sponsor Settings'}
+              </button>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* KOL Briefs */}
+      {tab === 'kol' && (
+        <div className="max-w-2xl space-y-6">
+          <div className="bg-slate-800/60 border border-white/[0.08] rounded-2xl overflow-hidden">
+            <div className="px-6 py-4 border-b border-white/[0.06] flex items-center justify-between">
+              <div>
+                <h3 className="font-bold text-sm">KOL Briefs</h3>
+                <p className="text-xs text-slate-500 mt-0.5">Post collaboration briefs for KOLs and influencers to discover.</p>
+              </div>
+              <button onClick={() => setShowKolBriefForm(!showKolBriefForm)}
+                className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-amber-500/15 text-amber-400 hover:bg-amber-500/25 transition-colors">
+                + Post Brief
+              </button>
+            </div>
+
+            {showKolBriefForm && (
+              <form onSubmit={createKolBrief} className="px-6 py-5 border-b border-amber-500/20 bg-amber-500/[0.03] space-y-4">
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs text-slate-500 mb-1.5">Budget Range</label>
+                    <input type="text" value={kolBriefForm.budget_range}
+                      onChange={e => setKolBriefForm(f => ({ ...f, budget_range: e.target.value }))}
+                      placeholder="HK$3,000 – 8,000"
+                      className="w-full px-3 py-2 bg-slate-900/60 border border-white/[0.08] rounded-lg text-white text-sm focus:outline-none focus:border-amber-500/50" />
+                  </div>
+                  <div>
+                    <label className="block text-xs text-slate-500 mb-1.5">Deadline</label>
+                    <input type="date" value={kolBriefForm.deadline}
+                      onChange={e => setKolBriefForm(f => ({ ...f, deadline: e.target.value }))}
+                      className="w-full px-3 py-2 bg-slate-900/60 border border-white/[0.08] rounded-lg text-white text-sm focus:outline-none focus:border-amber-500/50" />
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-xs text-slate-500 mb-1.5">Categories (comma-separated)</label>
+                  <input type="text" value={kolBriefForm.categories}
+                    onChange={e => setKolBriefForm(f => ({ ...f, categories: e.target.value }))}
+                    placeholder="Technology, Business, Lifestyle"
+                    className="w-full px-3 py-2 bg-slate-900/60 border border-white/[0.08] rounded-lg text-white text-sm focus:outline-none focus:border-amber-500/50" />
+                </div>
+                <div>
+                  <label className="block text-xs text-slate-500 mb-1.5">Deliverables (one per line)</label>
+                  <textarea rows={4} value={kolBriefForm.deliverables}
+                    onChange={e => setKolBriefForm(f => ({ ...f, deliverables: e.target.value }))}
+                    placeholder={"3x Instagram Stories\n1x Feed Post (min 500 words)\n1x TikTok video (30–60s)"}
+                    className="w-full px-3 py-2 bg-slate-900/60 border border-white/[0.08] rounded-lg text-white text-sm focus:outline-none focus:border-amber-500/50 resize-none" />
+                </div>
+                <div>
+                  <label className="block text-xs text-slate-500 mb-1.5">Additional Notes</label>
+                  <textarea rows={2} value={kolBriefForm.notes}
+                    onChange={e => setKolBriefForm(f => ({ ...f, notes: e.target.value }))}
+                    placeholder="Brand tone, content guidelines, hashtags required…"
+                    className="w-full px-3 py-2 bg-slate-900/60 border border-white/[0.08] rounded-lg text-white text-sm focus:outline-none focus:border-amber-500/50 resize-none" />
+                </div>
+                {kolBriefMsg && <p className="text-sm text-amber-400">{kolBriefMsg}</p>}
+                <div className="flex gap-2">
+                  <button type="button" onClick={() => setShowKolBriefForm(false)}
+                    className="text-xs text-slate-500 hover:text-slate-300 px-3 py-2 transition-colors">Cancel</button>
+                  <button type="submit" disabled={kolBriefSaving}
+                    className="bg-amber-500 hover:bg-amber-400 disabled:opacity-50 text-slate-950 font-bold text-xs px-4 py-2 rounded-lg transition-colors">
+                    {kolBriefSaving ? 'Posting…' : 'Post Brief'}
+                  </button>
+                </div>
+              </form>
+            )}
+
+            {kolBriefs.length === 0 ? (
+              <div className="px-6 py-8 text-center text-slate-600 text-sm">
+                No KOL briefs posted yet. Click <span className="text-amber-400">+ Post Brief</span> to attract influencers.
+              </div>
+            ) : (
+              <div className="divide-y divide-white/[0.04]">
+                {kolBriefs.map(b => (
+                  <div key={b.id} className="px-6 py-5">
+                    <div className="flex items-start justify-between gap-3 mb-3">
+                      <div className="flex flex-wrap gap-2">
+                        {b.categories?.map(cat => (
+                          <span key={cat} className="text-xs bg-violet-500/15 text-violet-300 px-2 py-0.5 rounded-full">{cat}</span>
+                        ))}
+                      </div>
+                      <span className={`text-xs font-semibold px-2 py-0.5 rounded-full flex-shrink-0 ${
+                        b.status === 'open' ? 'bg-green-500/15 text-green-400' :
+                        b.status === 'closed' ? 'bg-slate-700 text-slate-400' : 'bg-amber-500/15 text-amber-400'
+                      }`}>{b.status}</span>
+                    </div>
+                    <div className="grid grid-cols-2 gap-3 text-sm mb-3">
+                      {b.budget_range && (
+                        <div>
+                          <div className="text-xs text-slate-500">Budget</div>
+                          <div className="text-slate-300">{b.budget_range}</div>
+                        </div>
+                      )}
+                      {b.deadline && (
+                        <div>
+                          <div className="text-xs text-slate-500">Deadline</div>
+                          <div className="text-slate-300">{new Date(b.deadline).toLocaleDateString('en-HK')}</div>
+                        </div>
+                      )}
+                    </div>
+                    {b.deliverables && b.deliverables.length > 0 && (
+                      <ul className="space-y-1 mb-2">
+                        {b.deliverables.map((d, i) => (
+                          <li key={i} className="flex items-start gap-2 text-xs text-slate-400">
+                            <span className="text-amber-500 mt-0.5">•</span>{d}
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                    {b.notes && <p className="text-xs text-slate-500 mt-2">{b.notes}</p>}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+          {kolBriefMsg && !showKolBriefForm && <p className="text-sm text-green-400">{kolBriefMsg}</p>}
         </div>
       )}
 
