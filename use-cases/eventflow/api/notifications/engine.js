@@ -12,6 +12,7 @@ const db       = require('../db');
 const email    = require('./email');
 const whatsapp = require('./whatsapp');
 const line     = require('./line');
+const push     = require('./push');
 
 let running = false;
 
@@ -103,6 +104,45 @@ async function scheduleForAttendee(attendee, event) {
   await db.scheduleAllChannels(
     attendee.id, event.id, attendee.contact_id, event.start_at, channels
   );
+
+  // Send immediate push confirmation to participant (fire-and-forget)
+  sendParticipantPush(attendee, event, 'confirmation').catch(() => {});
 }
 
-module.exports = { start, processQueue, scheduleForAttendee };
+/**
+ * Send a push notification to a participant (keyed by session_id if provided).
+ * session_id is stored on the attendee.metadata._session_id when passed during RSVP.
+ */
+async function sendParticipantPush(attendee, event, type) {
+  try {
+    const sessionId = attendee.metadata && attendee.metadata._session_id;
+    if (!sessionId) return;
+    const tokens = await db.getPushTokensByContext('participant', sessionId);
+    if (!tokens.length) return;
+    const tpl = push.templates[type];
+    if (!tpl) return;
+    const { title, body } = tpl(event.title, attendee.first_name);
+    await push.sendPush(tokens, title, body, {
+      type,
+      event_slug: event.slug,
+      registration_code: attendee.registration_code,
+    });
+  } catch (err) {
+    console.warn('[eventflow/push] participant push error:', err.message);
+  }
+}
+
+/**
+ * Send push to an organizer (e.g. new registration alert).
+ */
+async function sendOrganizerPush(organizerId, title, body, data = {}) {
+  try {
+    const tokens = await db.getPushTokensByContext('organizer', organizerId);
+    if (!tokens.length) return;
+    await push.sendPush(tokens, title, body, data);
+  } catch (err) {
+    console.warn('[eventflow/push] organizer push error:', err.message);
+  }
+}
+
+module.exports = { start, processQueue, scheduleForAttendee, sendOrganizerPush };

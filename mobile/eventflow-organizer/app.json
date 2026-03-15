@@ -37,6 +37,16 @@
       "expo-font",
       "expo-secure-store",
       [
+        "expo-notifications",
+        {
+          "icon": "./assets/notification-icon.png",
+          "color": "#f97316",
+          "sounds": [],
+          "androidMode": "default",
+          "androidCollapsedTitle": "EventFlow Organizer"
+        }
+      ],
+      [
         "expo-camera",
         {
           "cameraPermission": "Allow EventFlow Organizer to access your camera for QR code scanning."

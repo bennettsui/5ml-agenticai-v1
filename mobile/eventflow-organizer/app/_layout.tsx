@@ -1,13 +1,15 @@
 import { Stack, useRouter, useSegments } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
+import * as Notifications from 'expo-notifications';
 import { AuthProvider, useAuth } from '../lib/auth';
 
 function RouteGuard() {
   const { isAuthenticated, isLoading } = useAuth();
   const segments = useSegments();
   const router = useRouter();
+  const responseListener = useRef<Notifications.Subscription>();
 
   useEffect(() => {
     if (isLoading) return;
@@ -21,6 +23,17 @@ function RouteGuard() {
       router.replace('/(tabs)/dashboard');
     }
   }, [isAuthenticated, isLoading, segments]);
+
+  // Handle push notification taps
+  useEffect(() => {
+    responseListener.current = Notifications.addNotificationResponseReceivedListener(response => {
+      const data = response.notification.request.content.data as Record<string, string>;
+      if (data?.event_id) {
+        router.push(`/event/${data.event_id}`);
+      }
+    });
+    return () => responseListener.current?.remove();
+  }, []);
 
   return null;
 }

@@ -37,11 +37,18 @@ export const publicApi = {
   getFormFields: (slug: string) =>
     request<{ fields: import('./types').FormField[] }>(`/public/events/${slug}/form-fields`),
 
-  rsvp: (slug: string, data: RSVPRequest) =>
-    request<RSVPResponse>(`/public/events/${slug}/rsvp`, {
+  rsvp: async (slug: string, data: RSVPRequest) => {
+    // Include session_id so backend can link push token → attendee
+    let sessionId: string | undefined;
+    try {
+      const { getSessionId } = await import('./storage');
+      sessionId = await getSessionId();
+    } catch {}
+    return request<RSVPResponse>(`/public/events/${slug}/rsvp`, {
       method: 'POST',
-      body: JSON.stringify(data),
-    }),
+      body: JSON.stringify({ ...data, _session_id: sessionId }),
+    });
+  },
 
   getQrUrl: (code: string) =>
     `${API_BASE}/public/qr/${code}`,

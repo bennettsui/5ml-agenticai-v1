@@ -13,7 +13,7 @@
       "backgroundColor": "#0f172a"
     },
     "ios": {
-      "supportsTablet": false,
+      "supportsTablet": true,
       "bundleIdentifier": "com.eventflow.participant",
       "infoPlist": {
         "NSCameraUsageDescription": "Used to scan QR codes for event check-in"
@@ -34,7 +34,17 @@
     },
     "plugins": [
       "expo-router",
-      "expo-font"
+      "expo-font",
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/notification-icon.png",
+          "color": "#f97316",
+          "sounds": [],
+          "androidMode": "default",
+          "androidCollapsedTitle": "EventFlow"
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true

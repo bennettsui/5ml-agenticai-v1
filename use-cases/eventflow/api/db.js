@@ -215,6 +215,20 @@ async function init() {
     );
   `);
 
+  // Push notification tokens (Expo Push)
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS ef_push_tokens (
+      id          SERIAL PRIMARY KEY,
+      token       TEXT NOT NULL,
+      context     TEXT NOT NULL CHECK(context IN ('participant','organizer')),
+      context_id  TEXT NOT NULL,
+      created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      UNIQUE(token)
+    );
+  `);
+  await pool.query(`CREATE INDEX IF NOT EXISTS idx_ef_push_tokens_ctx ON ef_push_tokens(context, context_id);`);
+
   console.log('[eventflow] DB tables ready');
 }
 
@@ -769,4 +783,29 @@ module.exports = {
   createWishlistItem, listWishlistItems, voteWishlistItem, updateWishlistStatus,
   // form fields
   listFormFields, createFormField, updateFormField, deleteFormField,
+  // push tokens
+  upsertPushToken, deletePushToken, getPushTokensByContext,
 };
+
+// ─── Push Tokens ──────────────────────────────────────────────────────────────
+
+async function upsertPushToken(token, context, contextId) {
+  await pool.query(
+    `INSERT INTO ef_push_tokens (token, context, context_id, updated_at)
+     VALUES ($1, $2, $3, NOW())
+     ON CONFLICT (token) DO UPDATE SET context=$2, context_id=$3, updated_at=NOW()`,
+    [token, context, String(contextId)]
+  );
+}
+
+async function deletePushToken(token) {
+  await pool.query(`DELETE FROM ef_push_tokens WHERE token=$1`, [token]);
+}
+
+async function getPushTokensByContext(context, contextId) {
+  const { rows } = await pool.query(
+    `SELECT token FROM ef_push_tokens WHERE context=$1 AND context_id=$2`,
+    [context, String(contextId)]
+  );
+  return rows.map(r => r.token);
+}

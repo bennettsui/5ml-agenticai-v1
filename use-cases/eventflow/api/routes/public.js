@@ -4,7 +4,8 @@ const router = require('express').Router();
 const db     = require('../db');
 const { broadcast } = require('../sse');
 const { sendConfirmation } = require('../notifications/email');
-const { scheduleForAttendee } = require('../notifications/engine');
+const { scheduleForAttendee, sendOrganizerPush } = require('../notifications/engine');
+const push = require('../notifications/push');
 
 // GET /api/eventflow/public/events  — published public event listing
 router.get('/events', async (req, res) => {
@@ -87,6 +88,7 @@ router.post('/events/:slug/rsvp', async (req, res) => {
       first_name, last_name, email, organization, phone, title,
       tier_id, notify_whatsapp, notify_line, line_user_id,
       custom_responses,  // object: { field_key: value }
+      _session_id,       // optional: participant app session ID for push linking
     } = req.body;
 
     // Sanitize core fields
@@ -144,7 +146,10 @@ router.post('/events/:slug/rsvp', async (req, res) => {
       notify_whatsapp: !!notify_whatsapp,
       notify_line: !!notify_line,
       line_user_id: line_user_id ? sanitizeStr(line_user_id, 100) : null,
-      metadata: Object.keys(sanitizedCustom).length ? sanitizedCustom : undefined,
+      metadata: {
+        ...sanitizedCustom,
+        ...(_session_id ? { _session_id: String(_session_id).slice(0, 128) } : {}),
+      },
     });
 
     await db.incrementTierSold(tier.id);
@@ -163,6 +168,14 @@ router.post('/events/:slug/rsvp', async (req, res) => {
     broadcast(event.id, 'attendee_registered', {
       id: attendee.id, first_name, last_name, organization, tier_name: tier.name,
     });
+
+    // Push notification to organizer (fire-and-forget)
+    const { title: pushTitle, body: pushBody } = push.templates.new_attendee(s_first, s_last, event.title);
+    sendOrganizerPush(event.organizer_id, pushTitle, pushBody, {
+      type: 'new_attendee',
+      event_id: event.id,
+      event_slug: event.slug,
+    }).catch(() => {});
 
     res.status(201).json({
       attendee: {

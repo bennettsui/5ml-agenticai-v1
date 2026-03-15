@@ -1,6 +1,8 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { authApi, getToken, setToken, clearToken } from './api';
 import { Organizer } from './types';
+import { registerForPushNotifications, unregisterPushToken } from './notifications';
+import * as Notifications from 'expo-notifications';
 
 interface AuthState {
   organizer: Organizer | null;
@@ -46,15 +48,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const { token, organizer } = await authApi.login(email, password);
     await setToken(token);
     setState({ organizer, isLoading: false, isAuthenticated: true });
+    // Register push token after login (non-blocking)
+    registerForPushNotifications(organizer.id, token).catch(() => {});
   }
 
   async function signup(name: string, email: string, password: string) {
     const { token, organizer } = await authApi.signup(name, email, password);
     await setToken(token);
     setState({ organizer, isLoading: false, isAuthenticated: true });
+    registerForPushNotifications(organizer.id, token).catch(() => {});
   }
 
   async function logout() {
+    // Unregister push token on logout
+    try {
+      const tokenData = await Notifications.getExpoPushTokenAsync();
+      if (tokenData?.data) await unregisterPushToken(tokenData.data);
+    } catch {}
     await clearToken();
     setState({ organizer: null, isLoading: false, isAuthenticated: false });
   }
