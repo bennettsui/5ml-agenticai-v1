@@ -194,4 +194,86 @@ router.get('/notifications', async (req, res) => {
   }
 });
 
+// ─── Sponsors (P5) ───────────────────────────────────────────────────────────
+
+router.get('/sponsors', async (req, res) => {
+  try {
+    const sponsors = await db.listSponsorProfiles();
+    const seeking  = await db.listSeekingSponsorEvents();
+    const matches  = await db.listSponsorMatches();
+    res.json({ sponsors, seeking, matches });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+router.patch('/sponsors/:id/status', async (req, res) => {
+  try {
+    const updated = await db.updateSponsorStatus(parseInt(req.params.id), req.body.status);
+    res.json({ sponsor: updated });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+router.post('/sponsors/match', async (req, res) => {
+  try {
+    const { event_id, sponsor_id, notes } = req.body;
+    const match = await db.createSponsorMatch(parseInt(event_id), parseInt(sponsor_id), notes);
+    res.status(201).json({ match });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+router.patch('/sponsors/matches/:id/status', async (req, res) => {
+  try {
+    const updated = await db.updateSponsorMatchStatus(parseInt(req.params.id), req.body.status);
+    res.json({ match: updated });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// ─── KOL (P6) ────────────────────────────────────────────────────────────────
+
+router.get('/kol', async (req, res) => {
+  try {
+    const profiles = await db.listKolProfiles();
+    const briefs   = await db.listAllKolBriefs();
+    res.json({ profiles, briefs });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+router.patch('/kol/:id/status', async (req, res) => {
+  try {
+    const updated = await db.updateKolStatus(parseInt(req.params.id), req.body.status);
+    res.json({ profile: updated });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// ─── Ambassadors (P3) ────────────────────────────────────────────────────────
+
+router.get('/ambassadors', async (req, res) => {
+  try {
+    const ambassadors = await db.listAmbassadors();
+    res.json({ ambassadors });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+router.patch('/ambassadors/:id/status', async (req, res) => {
+  try {
+    const updated = await db.updateAmbassadorStatus(parseInt(req.params.id), req.body.status);
+    res.json({ ambassador: updated });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// ─── Agency Inquiries (P4) ───────────────────────────────────────────────────
+
+router.get('/inquiries', async (req, res) => {
+  try {
+    const inquiries = await db.listAgencyInquiries();
+    res.json({ inquiries });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+router.patch('/inquiries/:id/status', async (req, res) => {
+  try {
+    const updated = await db.updateInquiryStatus(parseInt(req.params.id), req.body.status);
+    res.json({ inquiry: updated });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
 module.exports = router;

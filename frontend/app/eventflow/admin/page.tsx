@@ -48,7 +48,7 @@ const WISHLIST_STATUS_COLORS: Record<string, string> = {
   declined: 'text-slate-500 bg-slate-700',
 };
 
-type Tab = 'overview' | 'organizers' | 'events' | 'notifications' | 'wishlist' | 'flows';
+type Tab = 'overview' | 'organizers' | 'events' | 'notifications' | 'wishlist' | 'flows' | 'status';
 
 // ─── Flows data (inline for admin panel) ──────────────────────────────────────
 
@@ -140,6 +140,251 @@ const FLOWS: Flow[] = [
     ] },
 ];
 
+// ─── Platform Status Data ────────────────────────────────────────────────────
+
+type DevStatus = 'live' | 'in-dev' | 'scaffold' | 'planned';
+
+interface PlatformFeature {
+  id: string;
+  name: string;
+  category: string;
+  status: DevStatus;
+  description: string;
+  files: string[];
+  dbTables: string[];
+  apiEndpoints: string[];
+  notes: string;
+  devPrompt: string;
+}
+
+const STATUS_BADGE: Record<DevStatus, { label: string; cls: string }> = {
+  live:     { label: '✅ Live',     cls: 'bg-green-500/15 text-green-400 border border-green-500/30' },
+  'in-dev': { label: '🔧 In Dev',  cls: 'bg-amber-500/15 text-amber-400 border border-amber-500/30' },
+  scaffold: { label: '🪜 Scaffold', cls: 'bg-blue-500/15 text-blue-400 border border-blue-500/30' },
+  planned:  { label: '📋 Planned',  cls: 'bg-slate-700 text-slate-400 border border-white/[0.06]' },
+};
+
+const PLATFORM: PlatformFeature[] = [
+  // ── Infrastructure ──────────────────────────────────────────────────────────
+  {
+    id: 'db', name: 'PostgreSQL Database', category: 'Infrastructure',
+    status: 'live',
+    description: 'Fly.io managed Postgres. All tables prefixed ef_. Migrations run on startup via db.init(). pgvector extension available.',
+    files: ['use-cases/eventflow/api/db.js', 'db.js (root pool)'],
+    dbTables: ['ef_organizers','ef_events','ef_ticket_tiers','ef_attendees','ef_contacts','ef_notification_schedule','ef_wishlist','+ all P2–P6 tables'],
+    apiEndpoints: [],
+    notes: 'Root pool (db.js) used for admin queries. Feature pool (api/db.js) handles migrations and per-feature queries.',
+    devPrompt: 'Add a new table ef_example with columns (id SERIAL PRIMARY KEY, event_id INT REFERENCES ef_events(id), created_at TIMESTAMPTZ DEFAULT NOW()). Add migration in db.init() using IF NOT EXISTS pattern. Export CRUD helpers from api/db.js.',
+  },
+  {
+    id: 'auth', name: 'Auth System', category: 'Infrastructure',
+    status: 'live',
+    description: 'Two auth layers: Organizer JWT (Bearer token via x-organizer-token header) and Admin secret (x-admin-secret header or ?_secret query param).',
+    files: ['use-cases/eventflow/api/auth.js', 'use-cases/eventflow/api/routes/admin.js'],
+    dbTables: ['ef_organizers (email + password_hash + token)'],
+    apiEndpoints: ['POST /api/eventflow/organizer/login', 'POST /api/eventflow/organizer/register'],
+    notes: 'requireAuth middleware attaches req.organizer. requireAdmin in admin.js checks EVENTFLOW_ADMIN_SECRET env var (default: 5milesLab01).',
+    devPrompt: 'To add a new protected organizer route: import { requireAuth } from "../auth"; then router.get("/my-route", requireAuth, async (req, res) => { /* req.organizer.id available */ }). For admin routes add to routes/admin.js after router.use(requireAdmin).',
+  },
+  {
+    id: 'notifications', name: 'Notification Engine', category: 'Infrastructure',
+    status: 'live',
+    description: 'Background cron engine that processes ef_notification_schedule. Sends email via SMTP (Nodemailer). WhatsApp and LINE channels are scaffolded but not wired to real APIs.',
+    files: ['use-cases/eventflow/api/notifications/engine.js', 'use-cases/eventflow/api/notifications/email.js', 'use-cases/eventflow/api/routes/notifications.js'],
+    dbTables: ['ef_notification_schedule'],
+    apiEndpoints: ['GET /api/eventflow/notifications/status', 'POST /api/eventflow/notifications/trigger (admin)'],
+    notes: 'Engine runs engine.start() at route load. Processes pending notifications every 60s. Types: registration_confirm, reminder_7d, reminder_1d, doors_open, post_event_thanks.',
+    devPrompt: 'To add a new notification type: 1) Add type to engine.js HANDLERS map. 2) Insert rows into ef_notification_schedule with type=\'your_type\', scheduled_at=target time. 3) Implement handler function that calls email.send() or mock WhatsApp. 4) Test with POST /api/eventflow/notifications/trigger?event_id=X.',
+  },
+  // ── Core Event Management ───────────────────────────────────────────────────
+  {
+    id: 'events', name: 'Event CRUD', category: 'Core',
+    status: 'live',
+    description: 'Full event lifecycle: create, read, update, delete, publish/unpublish. Slug auto-generated. Supports banner image, location, capacity, check-in PIN, category tags.',
+    files: ['use-cases/eventflow/api/routes/events.js', 'use-cases/eventflow/api/routes/organizer.js', 'frontend/app/eventflow/organizer/page.tsx'],
+    dbTables: ['ef_events', 'ef_ticket_tiers'],
+    apiEndpoints: ['GET /api/eventflow/events/:slug', 'POST /api/eventflow/organizer/events', 'PATCH /api/eventflow/organizer/events/:id', 'DELETE /api/eventflow/organizer/events/:id', 'GET /api/eventflow/admin/events'],
+    notes: 'Events must be published (status=published, is_public=true) to appear in public listing. Check-in PIN is stored plaintext (acceptable for low-security venue use).',
+    devPrompt: 'To add a field to events: 1) ALTER TABLE ef_events ADD COLUMN new_field TEXT in db.init(). 2) Add to SELECT in relevant queries. 3) Add to PATCH handler body parse. 4) Add input to organizer/page.tsx event form.',
+  },
+  {
+    id: 'tiers', name: 'Ticket Tiers', category: 'Core',
+    status: 'in-dev',
+    description: 'Pricing tiers per event (Free/Paid/VIP/Early Bird etc.). Basic tier: name, price, capacity, color. Extended fields added: tier_type, sale_starts_at, sale_ends_at, benefits, visibility, max_per_order — DB migrated but UI not yet built.',
+    files: ['use-cases/eventflow/api/routes/organizer.js', 'use-cases/eventflow/api/db.js', 'frontend/app/eventflow/organizer/page.tsx'],
+    dbTables: ['ef_ticket_tiers'],
+    apiEndpoints: ['GET /api/eventflow/organizer/events/:id/tiers', 'POST /api/eventflow/organizer/events/:id/tiers', 'PATCH /api/eventflow/organizer/events/:id/tiers/:tierId', 'DELETE /api/eventflow/organizer/events/:id/tiers/:tierId'],
+    notes: 'Extended columns added via IF NOT EXISTS: tier_type VARCHAR(20), sale_starts_at TIMESTAMPTZ, sale_ends_at TIMESTAMPTZ, benefits TEXT[], visibility VARCHAR(20) DEFAULT public, max_per_order INT.',
+    devPrompt: 'Extend the tier builder UI in organizer/page.tsx TierForm component to add: 1) tier_type selector (general/vip/early_bird/group/staff). 2) sale_starts_at + sale_ends_at date-time pickers. 3) benefits: array of text inputs with add/remove. 4) visibility toggle (public/hidden/invite_only). 5) max_per_order number input. All fields already exist in DB.',
+  },
+  {
+    id: 'checkin', name: 'QR Check-in Kiosk', category: 'Core',
+    status: 'live',
+    description: 'Self-service kiosk at /eventflow/checkin. Staff enters PIN, attendees scan QR from email. Shows name/tier/status. One-tap check-in. Live counter.',
+    files: ['frontend/app/eventflow/checkin/page.tsx', 'use-cases/eventflow/api/routes/checkin.js'],
+    dbTables: ['ef_attendees (status: checked_in)', 'ef_events (checkin_pin)'],
+    apiEndpoints: ['POST /api/eventflow/checkin/verify-pin', 'POST /api/eventflow/checkin/scan', 'GET /api/eventflow/checkin/stats/:eventId'],
+    notes: 'QR code = attendee UUID. Scan endpoint validates UUID, checks event PIN, updates attendee status to checked_in and sets checked_in_at timestamp.',
+    devPrompt: 'To add badge printing on check-in: 1) Add POST /api/eventflow/checkin/print-badge endpoint that returns attendee name+tier as PDF/label data. 2) In checkin/page.tsx success screen, call print endpoint and trigger window.print() or thermal printer API. Consider adding a badge_template field to ef_events.',
+  },
+  {
+    id: 'reception', name: 'Reception Staff View', category: 'Core',
+    status: 'live',
+    description: 'Mobile-optimized reception panel at /eventflow/reception. PIN login, real-time check-in progress bar, name search, QR scan, attendee card with tier info.',
+    files: ['frontend/app/eventflow/reception/page.tsx'],
+    dbTables: ['ef_attendees', 'ef_events', 'ef_ticket_tiers'],
+    apiEndpoints: ['POST /api/eventflow/checkin/verify-pin', 'GET /api/eventflow/checkin/attendees/:eventId', 'POST /api/eventflow/checkin/scan'],
+    notes: 'No separate backend — reuses checkin routes. Differs from kiosk in UX: search-first vs scan-first, staff-operated vs self-service.',
+    devPrompt: 'To add bulk check-in (mark all in a tier as checked in): 1) Add POST /api/eventflow/checkin/bulk endpoint accepting event_id + tier_id. 2) UPDATE ef_attendees SET status=checked_in WHERE event_id=$1 AND tier_id=$2 AND status=registered. 3) Add "Mark Tier as Present" button in reception panel.',
+  },
+  {
+    id: 'participant', name: 'Participant Registration', category: 'Core',
+    status: 'live',
+    description: 'Public RSVP form at /eventflow/[slug]. Supports tier selection, custom form fields, QR code generation on success. Email confirmation triggered automatically.',
+    files: ['frontend/app/eventflow/[slug]/page.tsx', 'use-cases/eventflow/api/routes/public.js', 'use-cases/eventflow/api/routes/participant.js'],
+    dbTables: ['ef_attendees', 'ef_contacts'],
+    apiEndpoints: ['GET /api/eventflow/public/event/:slug', 'POST /api/eventflow/participant/register', 'GET /api/eventflow/participant/ticket/:uuid'],
+    notes: 'Custom RSVP form fields stored as JSONB in ef_attendees.custom_fields. Promo/referral code field not yet added to form UI (discount codes table exists but validation not wired into registration).',
+    devPrompt: 'Add promo code field to registration: 1) Add input below tier selector in [slug]/page.tsx. 2) On input blur/submit call POST /api/eventflow/events/:eventId/discounts/validate with {code}. 3) Show discount info if valid. 4) Pass discount_code_id to POST /api/eventflow/participant/register. 5) In register handler, apply discount and increment code uses.',
+  },
+  {
+    id: 'crm', name: 'CRM / Contact List', category: 'Core',
+    status: 'live',
+    description: 'Every registration auto-upserts into ef_contacts (per organizer). Organizer can view and export contact list. Tracks event history per contact.',
+    files: ['use-cases/eventflow/api/routes/organizer.js', 'frontend/app/eventflow/organizer/page.tsx (Contacts tab)'],
+    dbTables: ['ef_contacts'],
+    apiEndpoints: ['GET /api/eventflow/organizer/contacts', 'GET /api/eventflow/organizer/contacts/:id', 'GET /api/eventflow/organizer/contacts/export'],
+    notes: 'Contact is identified by email per organizer. If same person registers for 2 events under same organizer, one contact record with multiple event references.',
+    devPrompt: 'Add contact tags/segmentation: 1) ALTER TABLE ef_contacts ADD COLUMN tags TEXT[] DEFAULT \'{}\'. 2) Add PATCH /api/eventflow/organizer/contacts/:id endpoint to update tags. 3) Add tag filter to GET /api/eventflow/organizer/contacts. 4) Add tag chip UI in Contacts tab.',
+  },
+  {
+    id: 'ai-studio', name: 'AI Studio', category: 'Core',
+    status: 'live',
+    description: 'Organizer AI tools: event description, social post copy (LinkedIn/Twitter/Facebook), email draft, agenda builder, banner art prompt. Uses DeepSeek reasoner via platform AI service.',
+    files: ['use-cases/eventflow/api/routes/ai.js', 'frontend/app/eventflow/organizer/page.tsx (AI Studio tab)'],
+    dbTables: [],
+    apiEndpoints: ['POST /api/eventflow/ai/generate'],
+    notes: 'Stateless — no DB storage of generated content. Organizer copies output. Prompt type selected via body.type field. Falls back to Claude Haiku if DeepSeek unavailable.',
+    devPrompt: 'Add new AI generation type: 1) In routes/ai.js, add case to PROMPTS map with type key and system+user prompt template. 2) In organizer/page.tsx AI Studio tab, add a button for the new type. 3) Types currently available: description, social_linkedin, social_twitter, social_facebook, email_draft, agenda, banner_prompt.',
+  },
+  {
+    id: 'wishlist', name: 'Community Wishlist', category: 'Core',
+    status: 'live',
+    description: 'Public feature request board at /eventflow/wishlist. Anyone can submit ideas, vote, filter by category. Admins can update status (open/planned/done/declined).',
+    files: ['frontend/app/eventflow/wishlist/page.tsx', 'use-cases/eventflow/api/routes/wishlist.js'],
+    dbTables: ['ef_wishlist'],
+    apiEndpoints: ['GET /api/eventflow/wishlist', 'POST /api/eventflow/wishlist', 'PATCH /api/eventflow/wishlist/:id/vote', 'PATCH /api/eventflow/wishlist/:id (admin)'],
+    notes: 'Voting is session-based (localStorage) with no duplicate vote enforcement on backend. Categories: feature, ux, integration, ai, other.',
+    devPrompt: 'Add comment threads to wishlist: 1) CREATE TABLE ef_wishlist_comments (id SERIAL PK, item_id INT REFS ef_wishlist, author_name VARCHAR, content TEXT, created_at TIMESTAMPTZ). 2) Add GET/POST /api/eventflow/wishlist/:id/comments. 3) Add collapsible comment section in wishlist/page.tsx per item card.',
+  },
+  {
+    id: 'rsvp-forms', name: 'Custom RSVP Forms', category: 'Core',
+    status: 'live',
+    description: 'Organizer can define custom registration form fields per event: toggle optional built-in fields, add custom fields (text/select/date/checkbox/radio). Responses stored as JSONB.',
+    files: ['use-cases/eventflow/api/routes/organizer.js', 'frontend/app/eventflow/organizer/page.tsx (RSVP Form tab)', 'frontend/app/eventflow/[slug]/page.tsx'],
+    dbTables: ['ef_events (rsvp_fields JSONB)', 'ef_attendees (custom_fields JSONB)'],
+    apiEndpoints: ['GET /api/eventflow/organizer/events/:id/rsvp-fields', 'PUT /api/eventflow/organizer/events/:id/rsvp-fields'],
+    notes: 'rsvp_fields schema: [{key, label, type, required, options?}]. Core fields (first_name, last_name, email) are always included and cannot be removed.',
+    devPrompt: 'Add field ordering (drag-and-drop): 1) Add an order property to each field object in rsvp_fields JSONB. 2) Integrate @dnd-kit/sortable in the RSVP Form tab. 3) On drop, update field.order values and save. 4) In [slug]/page.tsx render fields sorted by order.',
+  },
+  // ── P2 — Discount Codes ─────────────────────────────────────────────────────
+  {
+    id: 'discounts', name: 'Discount Codes', category: 'P2 — Discounts',
+    status: 'scaffold',
+    description: 'Organizer-created promo codes per event. Supports percentage or fixed amount discounts. Max uses, expiry date, active toggle. Referral codes stored here too (source=referral).',
+    files: ['use-cases/eventflow/api/routes/discounts.js', 'use-cases/eventflow/api/db.js (discount fns)'],
+    dbTables: ['ef_discount_codes'],
+    apiEndpoints: ['GET /api/eventflow/events/:eventId/discounts', 'POST /api/eventflow/events/:eventId/discounts', 'PATCH /api/eventflow/events/:eventId/discounts/:id', 'DELETE /api/eventflow/events/:eventId/discounts/:id', 'POST /api/eventflow/events/:eventId/discounts/validate'],
+    notes: 'Backend complete. Missing: 1) Discounts tab in organizer event management UI. 2) Promo code input in registration form. 3) Discount application logic in participant/register endpoint.',
+    devPrompt: 'Add Discounts tab to organizer event management: 1) Add "Discounts" to the event detail tab list in organizer/page.tsx. 2) Fetch GET /api/eventflow/events/:id/discounts. 3) Render table: code | type | value | uses/max | expires | active | actions. 4) Add "New Code" form: code (text), type (percent/fixed), value (number), max_uses (optional), expires_at (optional). 5) Wire POST to create, PATCH :id to toggle active, DELETE :id to remove.',
+  },
+  // ── P3 — Referral & Ambassadors ─────────────────────────────────────────────
+  {
+    id: 'referral', name: 'Referral Program', category: 'P3 — Referral',
+    status: 'scaffold',
+    description: "Organizer creates a referral program per event with two schemes: scheme A (referrer gets reward when referee registers), scheme B (both get discount). Auto-generates a referral code stored in ef_discount_codes with source='referral'.",
+    files: ['use-cases/eventflow/api/routes/referral.js', 'use-cases/eventflow/api/db.js (referral fns)'],
+    dbTables: ['ef_referral_programs', 'ef_discount_codes (source=referral)', 'ef_referral_events'],
+    apiEndpoints: ['POST /api/eventflow/referral/programs', 'GET /api/eventflow/referral/programs/:eventId', 'POST /api/eventflow/referral/validate-code'],
+    notes: 'Backend routes done. Missing: 1) Referral tab in organizer portal. 2) Referral code field in registration form. 3) Payout/reward tracking UI.',
+    devPrompt: 'Add Referral tab in organizer event management: 1) Add "Referral" to event detail tabs. 2) GET /api/eventflow/referral/programs/:eventId to check if program exists. 3) If none: show setup form (scheme: A or B, discount_pct, reward_amount, reward_type: credit/cash/gift). 4) POST to create. 5) Show generated referral code + shareable link. 6) Show referral events table (who referred whom, reward status). The validate-code endpoint already handles attribution on registration.',
+  },
+  {
+    id: 'ambassadors', name: 'Ambassador Program', category: 'P3 — Referral',
+    status: 'scaffold',
+    description: 'Public ambassador registration form. Ambassadors promote events and earn commissions. Admin approves/rejects. Organizers see their ambassador list.',
+    files: ['use-cases/eventflow/api/routes/referral.js', 'use-cases/eventflow/api/db.js (ambassador fns)', 'use-cases/eventflow/api/routes/admin.js'],
+    dbTables: ['ef_ambassador_profiles'],
+    apiEndpoints: ['POST /api/eventflow/referral/ambassador', 'GET /api/eventflow/referral/ambassadors (organizer)', 'GET /api/eventflow/admin/ambassadors', 'PATCH /api/eventflow/admin/ambassadors/:id/status'],
+    notes: 'Backend done. Missing: 1) Public /eventflow/ambassadors registration page. 2) Admin UI for ambassador approval. 3) Ambassador code generation (referral code linked to ambassador).',
+    devPrompt: 'Create public ambassador registration page at /eventflow/ambassadors: 1) Light-themed marketing page explaining ambassador benefits. 2) Registration form: name, email, social handle, platform (Instagram/TikTok/YouTube/LinkedIn), follower count, bio, categories (tech/lifestyle/business/etc), referral code preference. 3) POST /api/eventflow/referral/ambassador. 4) Thank-you confirmation. Admin panel ambassador tab: list pending profiles with approve/reject buttons calling PATCH /api/eventflow/admin/ambassadors/:id/status.',
+  },
+  // ── P4 — Agency Services ────────────────────────────────────────────────────
+  {
+    id: 'services', name: 'Agency Service Catalog', category: 'P4 — Agency',
+    status: 'scaffold',
+    description: 'Static catalog of 5 agency services: Full-Service Event Management, Event Production, PR & Media, LED Sphere Rental, AI Photo Booth. Public listing + inquiry submission form.',
+    files: ['use-cases/eventflow/api/routes/services.js', 'use-cases/eventflow/api/db.js (createAgencyInquiry)'],
+    dbTables: ['ef_agency_inquiries'],
+    apiEndpoints: ['GET /api/eventflow/services', 'GET /api/eventflow/services/:slug', 'POST /api/eventflow/services/inquire'],
+    notes: 'Catalog is static (edit SERVICES array in services.js). Inquiries stored in DB. Backend done. Missing: public frontend page at /eventflow/services.',
+    devPrompt: 'Create /eventflow/services page: 1) Light-themed marketing page. 2) Hero section: "Professional Event Production & Agency Services". 3) Service cards grid: name, tagline, price_hkd/price_unit, features list, "Enquire" CTA. 4) Inquiry modal: pre-fill service_slug, collect contact_name, email, phone, company, event_date, budget_range, notes. 5) POST /api/eventflow/services/inquire. 6) Thank-you state. Prices: services.base_price_hkd is in HKD cents (/100 to display).',
+  },
+  {
+    id: 'inquiries', name: 'Agency Inquiry Management', category: 'P4 — Agency',
+    status: 'scaffold',
+    description: 'Admin panel view of all agency service inquiries. Status workflow: new → contacted → quoted → won/lost.',
+    files: ['use-cases/eventflow/api/routes/admin.js', 'use-cases/eventflow/api/db.js'],
+    dbTables: ['ef_agency_inquiries'],
+    apiEndpoints: ['GET /api/eventflow/admin/inquiries', 'PATCH /api/eventflow/admin/inquiries/:id/status'],
+    notes: 'Backend done. Missing: Admin UI tab for inquiries in admin/page.tsx.',
+    devPrompt: 'Add Inquiries tab to admin panel: 1) Add "📨 Inquiries" to Tab type and TABS array. 2) loadInquiries() fetches GET /api/eventflow/admin/inquiries. 3) Table: service | company | contact | email | event_date | budget | status | actions. 4) Status select: new/contacted/quoted/won/lost. 5) PATCH :id/status on change. Also add Services/Inquiries summary card to Overview tab.',
+  },
+  // ── P5 — Sponsor Matching ───────────────────────────────────────────────────
+  {
+    id: 'sponsors', name: 'Sponsor Matching', category: 'P5 — Sponsors',
+    status: 'scaffold',
+    description: 'Three-sided marketplace: sponsors register publicly, organizers flag events as seeking sponsors, admin creates matches. Sponsors see open events. No self-serve matching.',
+    files: ['use-cases/eventflow/api/routes/sponsors.js', 'use-cases/eventflow/api/routes/admin.js', 'use-cases/eventflow/api/db.js (sponsor fns)'],
+    dbTables: ['ef_sponsor_profiles', 'ef_event_sponsor_flags', 'ef_sponsor_matches'],
+    apiEndpoints: ['POST /api/eventflow/sponsors/register', 'GET /api/eventflow/sponsors/seeking', 'POST /api/eventflow/sponsors/events/:eventId/flag (organizer)', 'GET /api/eventflow/admin/sponsors', 'POST /api/eventflow/admin/sponsors/match', 'PATCH /api/eventflow/admin/sponsors/matches/:id/status'],
+    notes: 'All backend routes done. Missing: 1) /eventflow/sponsors public registration page. 2) Sponsor seeking page. 3) Admin Sponsors tab in admin/page.tsx. 4) Organizer event flag tab.',
+    devPrompt: 'Add Sponsors tab to admin panel: 1) Add "🤝 Sponsors" to Tab type and TABS. 2) loadSponsors() fetches GET /api/eventflow/admin/sponsors (returns {sponsors, seeking, matches}). 3) Three sub-sections: Sponsor Profiles (table: company, industries, budget_range, status + approve/reject), Seeking Events (event title + organizer + brief), Matches (event + sponsor + status + notes + PATCH status). 4) "Create Match" form: select event_id from seeking list, select sponsor_id from approved sponsors, notes text area. POST /api/eventflow/admin/sponsors/match.',
+  },
+  // ── P6 — KOL Program ────────────────────────────────────────────────────────
+  {
+    id: 'kol', name: 'KOL / KOC Program', category: 'P6 — KOL',
+    status: 'scaffold',
+    description: 'KOLs register publicly (status: pending → admin approves to active). Organizers create KOL briefs per event. Admin matches KOLs to briefs. KOLs apply to briefs.',
+    files: ['use-cases/eventflow/api/routes/kol.js', 'use-cases/eventflow/api/routes/admin.js', 'use-cases/eventflow/api/db.js (kol fns)'],
+    dbTables: ['ef_kol_profiles', 'ef_kol_briefs', 'ef_kol_applications'],
+    apiEndpoints: ['POST /api/eventflow/kol/register', 'GET /api/eventflow/kol/profiles (public active)', 'POST /api/eventflow/kol/briefs (organizer)', 'GET /api/eventflow/kol/briefs (organizer)', 'GET /api/eventflow/admin/kol', 'PATCH /api/eventflow/admin/kol/:id/status'],
+    notes: 'follower_counts stored as JSONB: {instagram: 50000, youtube: 10000}. All backend done. Missing: public /eventflow/kol page, admin KOL tab, organizer brief tab.',
+    devPrompt: 'Add KOL tab to admin panel: 1) Add "🌟 KOL" to Tab type and TABS. 2) loadKol() fetches GET /api/eventflow/admin/kol (returns {profiles, briefs}). 3) Profiles table: name, handle, platforms, follower totals, categories, status + approve/reject (PATCH /admin/kol/:id/status). 4) Briefs table: event, budget_range, deliverables, deadline, categories, status. 5) Consider a "suggest match" button that opens a modal to select a KOL for a brief. Public /eventflow/kol page: KOL registration form with multi-platform follower count inputs (JSONB), categories multi-select, rate range.',
+  },
+  // ── Public Pages ────────────────────────────────────────────────────────────
+  {
+    id: 'public-listing', name: 'Public Event Listing', category: 'Public Pages',
+    status: 'live',
+    description: 'Homepage at /eventflow showing all published public events. Category filter, search, event cards with date/location/tier info.',
+    files: ['frontend/app/eventflow/page.tsx'],
+    dbTables: ['ef_events', 'ef_ticket_tiers'],
+    apiEndpoints: ['GET /api/eventflow/public/events'],
+    notes: 'Filter by category works. Search by title works. Pagination not yet implemented.',
+    devPrompt: 'Add pagination to public event listing: 1) Add limit/offset query params to GET /api/eventflow/public/events. 2) Return total_count in response. 3) Add "Load more" button or page controls in eventflow/page.tsx. Also add a featured events section (pin 1-3 events via ef_events.featured boolean column).',
+  },
+  {
+    id: 'flows-page', name: 'Flows / Journey Map', category: 'Public Pages',
+    status: 'live',
+    description: 'Visual stakeholder journey map at /eventflow/flows. Shows step-by-step flows for all roles: organizer, participant, kiosk, reception, admin, AI studio, wishlist, RSVP forms.',
+    files: ['frontend/app/eventflow/flows/page.tsx'],
+    dbTables: [],
+    apiEndpoints: [],
+    notes: 'Static page. Flows data is duplicated in admin/page.tsx for the Flows tab. If flows are updated, update both files.',
+    devPrompt: 'Add new flow: 1) Add flow object to FLOWS array in flows/page.tsx AND admin/page.tsx (both files). Fields: id, title, role, accent (hex color), icon (emoji), steps [{icon, label, sub, highlight?}], link? {href, label}. Accent colors should be distinct from existing: amber (#f59e0b), blue (#3b82f6), green (#22c55e), purple (#a855f7). Use teal (#14b8a6) or rose (#f43f5e) for new flows.',
+  },
+];
+
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export default function AdminPage() {
@@ -156,6 +401,7 @@ export default function AdminPage() {
   const [notifSummary, setNotifSummary] = useState<NotifSummary[]>([]);
   const [wishlist, setWishlist]     = useState<WishlistItem[]>([]);
   const [loading, setLoading]       = useState(false);
+  const [expandedFeature, setExpandedFeature]       = useState<string | null>(null);
   const [planUpdating, setPlanUpdating]             = useState<number | null>(null);
   const [eventStatusUpdating, setEventStatusUpdating] = useState<number | null>(null);
   const [wishlistUpdating, setWishlistUpdating]     = useState<number | null>(null);
@@ -284,6 +530,7 @@ export default function AdminPage() {
     { key: 'notifications', label: 'Notifications' },
     { key: 'wishlist',      label: '💡 Wishlist' },
     { key: 'flows',         label: '🗺️ Flows' },
+    { key: 'status',        label: '🏗️ Platform Status' },
   ];
 
   return (
@@ -678,6 +925,128 @@ export default function AdminPage() {
             </div>
           </div>
         )}
+
+        {/* Platform Status */}
+        {tab === 'status' && (() => {
+          const categories = Array.from(new Set(PLATFORM.map(f => f.category)));
+          const statusCounts = PLATFORM.reduce((acc, f) => { acc[f.status] = (acc[f.status] || 0) + 1; return acc; }, {} as Record<string, number>);
+          return (
+            <div className="space-y-8">
+              {/* Summary */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                {(['live', 'in-dev', 'scaffold', 'planned'] as DevStatus[]).map(s => (
+                  <div key={s} className="bg-slate-800/60 border border-white/[0.08] rounded-xl px-4 py-3 flex items-center justify-between">
+                    <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${STATUS_BADGE[s].cls}`}>{STATUS_BADGE[s].label}</span>
+                    <span className="font-black text-white text-lg">{statusCounts[s] || 0}</span>
+                  </div>
+                ))}
+              </div>
+
+              {/* Feature Groups */}
+              {categories.map(cat => {
+                const features = PLATFORM.filter(f => f.category === cat);
+                return (
+                  <div key={cat}>
+                    <h3 className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-3">{cat}</h3>
+                    <div className="space-y-2">
+                      {features.map(feature => {
+                        const isExpanded = expandedFeature === feature.id;
+                        const badge = STATUS_BADGE[feature.status];
+                        return (
+                          <div key={feature.id}
+                            className="bg-slate-800/60 border border-white/[0.08] rounded-2xl overflow-hidden transition-all">
+                            {/* Header row — click to expand */}
+                            <button
+                              onClick={() => setExpandedFeature(isExpanded ? null : feature.id)}
+                              className="w-full flex items-center justify-between px-5 py-4 text-left hover:bg-white/[0.02] transition-colors">
+                              <div className="flex items-center gap-3 min-w-0">
+                                <span className={`flex-shrink-0 text-xs font-semibold px-2.5 py-1 rounded-full ${badge.cls}`}>{badge.label}</span>
+                                <span className="font-semibold text-sm text-white">{feature.name}</span>
+                                <span className="text-xs text-slate-600 hidden sm:block truncate">{feature.description.slice(0, 80)}…</span>
+                              </div>
+                              <span className="text-slate-600 text-xs flex-shrink-0 ml-4">{isExpanded ? '▲ collapse' : '▼ expand'}</span>
+                            </button>
+
+                            {/* Expanded content */}
+                            {isExpanded && (
+                              <div className="border-t border-white/[0.06] px-5 pb-5 pt-4 space-y-4">
+                                {/* Description */}
+                                <p className="text-sm text-slate-300">{feature.description}</p>
+
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                  {/* Files */}
+                                  {feature.files.length > 0 && (
+                                    <div>
+                                      <div className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Files</div>
+                                      <ul className="space-y-1">
+                                        {feature.files.map(f => (
+                                          <li key={f} className="text-xs font-mono text-blue-400 bg-blue-500/[0.06] px-2.5 py-1.5 rounded-lg">{f}</li>
+                                        ))}
+                                      </ul>
+                                    </div>
+                                  )}
+
+                                  {/* DB Tables */}
+                                  {feature.dbTables.length > 0 && (
+                                    <div>
+                                      <div className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">DB Tables</div>
+                                      <ul className="space-y-1">
+                                        {feature.dbTables.map(t => (
+                                          <li key={t} className="text-xs font-mono text-violet-400 bg-violet-500/[0.06] px-2.5 py-1.5 rounded-lg">{t}</li>
+                                        ))}
+                                      </ul>
+                                    </div>
+                                  )}
+                                </div>
+
+                                {/* API Endpoints */}
+                                {feature.apiEndpoints.length > 0 && (
+                                  <div>
+                                    <div className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">API Endpoints</div>
+                                    <ul className="flex flex-wrap gap-2">
+                                      {feature.apiEndpoints.map(ep => {
+                                        const method = ep.split(' ')[0];
+                                        const methodColor = method === 'GET' ? 'text-green-400 bg-green-500/[0.08]' : method === 'POST' ? 'text-blue-400 bg-blue-500/[0.08]' : method === 'PATCH' ? 'text-amber-400 bg-amber-500/[0.08]' : 'text-red-400 bg-red-500/[0.08]';
+                                        return (
+                                          <li key={ep} className={`text-xs font-mono px-2.5 py-1 rounded-lg ${methodColor}`}>{ep}</li>
+                                        );
+                                      })}
+                                    </ul>
+                                  </div>
+                                )}
+
+                                {/* Notes */}
+                                {feature.notes && (
+                                  <div className="bg-amber-500/[0.06] border border-amber-500/20 rounded-xl px-4 py-3">
+                                    <div className="text-xs font-bold text-amber-400 mb-1">📝 Notes</div>
+                                    <p className="text-xs text-slate-300">{feature.notes}</p>
+                                  </div>
+                                )}
+
+                                {/* Dev Prompt */}
+                                <div className="bg-white/[0.02] border border-white/[0.06] rounded-xl px-4 py-3">
+                                  <div className="flex items-center justify-between mb-2">
+                                    <div className="text-xs font-bold text-slate-400">💡 Dev Prompt</div>
+                                    <button
+                                      onClick={() => navigator.clipboard?.writeText(feature.devPrompt)}
+                                      className="text-xs text-slate-600 hover:text-slate-300 transition-colors">
+                                      copy
+                                    </button>
+                                  </div>
+                                  <p className="text-xs text-slate-400 leading-relaxed whitespace-pre-wrap">{feature.devPrompt}</p>
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          );
+        })()}
 
       </div>
     </div>
