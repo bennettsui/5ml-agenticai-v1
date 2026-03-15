@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef, useCallback } from 'react';
+import { useLang } from './context/LangContext';
 import Link from 'next/link';
 import {
   CheckCircle,
@@ -720,7 +721,7 @@ export default function RecruitAIPage() {
   const [activeAgent, setActiveAgent] = useState(0);
   const [activeCaseStudy, setActiveCaseStudy] = useState(0);
   const [expandedWorkflow, setExpandedWorkflow] = useState<number | null>(null);
-  const [lang, setLang] = useState<'zh' | 'en'>('zh');
+  const { lang } = useLang();
   const [showExitIntent, setShowExitIntent] = useState(false);
   const exitShown = useRef(false);
 
@@ -767,23 +768,6 @@ export default function RecruitAIPage() {
           {/* subtle radial glow */}
           <div className="absolute inset-0 pointer-events-none" style={{background:'radial-gradient(ellipse 80% 60% at 50% 40%, rgba(99,179,237,0.18) 0%, transparent 70%)'}} />
           <div className="max-w-4xl mx-auto text-center relative z-10">
-            {/* Language toggle */}
-            <div className="flex justify-center mb-6">
-              <div className="flex items-center gap-1 bg-white/10 rounded-full p-1 border border-white/20 backdrop-blur-sm">
-                {(['zh', 'en'] as const).map(l => (
-                  <button
-                    key={l}
-                    onClick={() => setLang(l)}
-                    className={`px-4 py-1.5 rounded-full text-xs font-bold transition-all ${
-                      lang === l ? 'bg-white text-blue-700 shadow-sm' : 'text-white/70 hover:text-white'
-                    }`}
-                  >
-                    {l === 'zh' ? '中文' : 'EN'}
-                  </button>
-                ))}
-              </div>
-            </div>
-
             {/* Urgency ticker */}
             <div className="flex justify-center mb-5">
               <UrgencyTicker lang={lang} />
