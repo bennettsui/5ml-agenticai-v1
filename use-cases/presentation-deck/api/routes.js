@@ -1111,14 +1111,16 @@ const PPTX_GRAY500 = '64748B';  // muted / labels
 const PPTX_CARD_BG = 'F1F5F9';  // card / block backgrounds
 const PPTX_BORDER  = 'E2E8F0';  // card borders
 const PPTX_ACCENT  = { opening: '0057A8', understanding: '0057A8', approach: 'F4A742', logistics: '22C55E', lettershop: 'A855F7', hsse: 'F97316', team: '14B8A6', closing: '0057A8' };
+const FONT_TITLE = 'Nourd';
+const FONT_BODY  = 'Canva Sans';
 const PPTX_SECTION = { opening: 'Opening', understanding: 'Understanding', approach: 'Design & Production', logistics: 'Logistics', lettershop: 'Lettershop', hsse: 'HSSE', team: 'Team', closing: 'Closing' };
 
 function pptxAddSlideHeader(sl, pptx, s) {
   const accent = PPTX_ACCENT[s.section] || '0057A8';
   sl.addShape(pptx.ShapeType.rect, { x: 0.5, y: 0.28, w: 0.28, h: 0.05, fill: { color: accent }, line: { color: accent } });
-  sl.addText((PPTX_SECTION[s.section] || s.section).toUpperCase(), { x: 0.88, y: 0.18, w: 6, h: 0.28, color: PPTX_GRAY500, fontSize: 7.5, charSpacing: 1.5 });
-  sl.addText(s.title || '', { x: 0.5, y: 0.58, w: 12.33, h: 0.65, color: PPTX_DARK, fontSize: 21, bold: true });
-  if (s.subtitle) sl.addText(s.subtitle, { x: 0.5, y: 1.26, w: 12.33, h: 0.3, color: PPTX_GRAY400, fontSize: 11 });
+  sl.addText((PPTX_SECTION[s.section] || s.section).toUpperCase(), { x: 0.88, y: 0.18, w: 6, h: 0.28, color: PPTX_GRAY500, fontSize: 7.5, charSpacing: 1.5, fontFace: FONT_BODY });
+  sl.addText(s.title || '', { x: 0.5, y: 0.58, w: 12.33, h: 0.65, color: PPTX_DARK, fontSize: 21, bold: true, fontFace: FONT_TITLE });
+  if (s.subtitle) sl.addText(s.subtitle, { x: 0.5, y: 1.26, w: 12.33, h: 0.3, color: PPTX_GRAY400, fontSize: 11, fontFace: FONT_BODY });
   sl.addShape(pptx.ShapeType.rect, { x: 0.5, y: 1.62, w: 12.33, h: 0.007, fill: { color: PPTX_BORDER }, line: { color: PPTX_BORDER } });
 }
 
@@ -1173,30 +1175,30 @@ router.get('/:slug/export/pptx', async (req, res) => {
 
       // ── Cover ──────────────────────────────────────────────────────────────
       if (s.layout_type === 'cover') {
-        sl.addText('CLP  ·  5 MILES LAB', { x: 0, y: 1.5, w: 13.33, h: 0.35, align: 'center', color: accent, fontSize: 9, bold: true, charSpacing: 3 });
-        sl.addText(c.main_title || s.title || '', { x: 1, y: 2.05, w: 11.33, h: 1.85, align: 'center', color: PPTX_DARK, fontSize: 34, bold: true });
-        sl.addText(c.subtitle_cn || s.subtitle || '', { x: 1, y: 4.0, w: 11.33, h: 0.65, align: 'center', color: PPTX_GRAY400, fontSize: 19 });
+        sl.addText('CLP  ·  5 MILES LAB', { x: 0, y: 1.5, w: 13.33, h: 0.35, align: 'center', color: accent, fontSize: 9, bold: true, charSpacing: 3, fontFace: FONT_BODY });
+        sl.addText(c.main_title || s.title || '', { x: 1, y: 2.05, w: 11.33, h: 1.85, align: 'center', color: PPTX_DARK, fontSize: 34, bold: true, fontFace: FONT_TITLE });
+        sl.addText(c.subtitle_cn || s.subtitle || '', { x: 1, y: 4.0, w: 11.33, h: 0.65, align: 'center', color: PPTX_GRAY400, fontSize: 19, fontFace: FONT_BODY });
         sl.addShape(pptx.ShapeType.rect, { x: 5.67, y: 4.85, w: 2, h: 0.04, fill: { color: accent }, line: { color: accent } });
-        if (c.project_name) sl.addText(c.project_name, { x: 1, y: 5.15, w: 11.33, h: 0.35, align: 'center', color: PPTX_GRAY500, fontSize: 10 });
-        if (c.date) sl.addText(c.date, { x: 1, y: 6.55, w: 11.33, h: 0.35, align: 'center', color: PPTX_GRAY500, fontSize: 9 });
+        if (c.project_name) sl.addText(c.project_name, { x: 1, y: 5.15, w: 11.33, h: 0.35, align: 'center', color: PPTX_GRAY500, fontSize: 10, fontFace: FONT_BODY });
+        if (c.date) sl.addText(c.date, { x: 1, y: 6.55, w: 11.33, h: 0.35, align: 'center', color: PPTX_GRAY500, fontSize: 9, fontFace: FONT_BODY });
       }
 
       // ── Section divider ────────────────────────────────────────────────────
       else if (s.layout_type === 'section-divider') {
         sl.addShape(pptx.ShapeType.rect, { x: 5.67, y: 2.52, w: 2, h: 0.05, fill: { color: accent }, line: { color: accent } });
-        sl.addText(c.section_title || s.title || '', { x: 0.5, y: 2.88, w: 12.33, h: 1.3, align: 'center', color: PPTX_DARK, fontSize: 38, bold: true });
-        sl.addText(c.section_subtitle || s.subtitle || '', { x: 1.5, y: 4.28, w: 10.33, h: 0.7, align: 'center', color: PPTX_GRAY400, fontSize: 16 });
+        sl.addText(c.section_title || s.title || '', { x: 0.5, y: 2.88, w: 12.33, h: 1.3, align: 'center', color: PPTX_DARK, fontSize: 38, bold: true, fontFace: FONT_TITLE });
+        sl.addText(c.section_subtitle || s.subtitle || '', { x: 1.5, y: 4.28, w: 10.33, h: 0.7, align: 'center', color: PPTX_GRAY400, fontSize: 16, fontFace: FONT_BODY });
       }
 
       // ── Statement ──────────────────────────────────────────────────────────
       else if (s.layout_type === 'statement') {
         pptxAddSlideHeader(sl, pptx, s);
         const y0 = 1.78;
-        if (c.problem) sl.addText(c.problem, { x: 0.5, y: y0, w: 12.33, h: 0.65, color: PPTX_GRAY400, fontSize: 13 });
-        if (c.our_difference) sl.addText(c.our_difference, { x: 0.5, y: y0 + 0.8, w: 12.33, h: 1.4, color: PPTX_DARK, fontSize: 19, bold: true });
+        if (c.problem) sl.addText(c.problem, { x: 0.5, y: y0, w: 12.33, h: 0.65, color: PPTX_GRAY400, fontSize: 13, fontFace: FONT_BODY });
+        if (c.our_difference) sl.addText(c.our_difference, { x: 0.5, y: y0 + 0.8, w: 12.33, h: 1.4, color: PPTX_DARK, fontSize: 19, bold: true, fontFace: FONT_TITLE });
         (Array.isArray(c.supporting_points) ? c.supporting_points : []).forEach((pt, i) => {
           sl.addShape(pptx.ShapeType.ellipse, { x: 0.5, y: y0 + 2.48 + i * 0.52, w: 0.14, h: 0.14, fill: { color: accent + '33' }, line: { color: accent } });
-          sl.addText(String(pt), { x: 0.76, y: y0 + 2.41 + i * 0.52, w: 11.57, h: 0.36, color: PPTX_GRAY300, fontSize: 12 });
+          sl.addText(String(pt), { x: 0.76, y: y0 + 2.41 + i * 0.52, w: 11.57, h: 0.36, color: PPTX_GRAY300, fontSize: 12, fontFace: FONT_BODY });
         });
       }
 
@@ -1207,9 +1209,9 @@ router.get('/:slug/export/pptx', async (req, res) => {
         const gap = blocks.length > 4 ? 1.1 : 1.3;
         blocks.slice(0, 6).forEach((block, i) => {
           const y = 1.78 + i * gap;
-          sl.addText(String(i + 1).padStart(2, '0'), { x: 0.5, y, w: 0.55, h: 0.35, color: PPTX_GRAY500, fontSize: 9, fontFace: 'Courier New' });
-          sl.addText(block.heading || '', { x: 1.15, y, w: 11.5, h: 0.38, color: PPTX_DARK, fontSize: 13, bold: true });
-          sl.addText(block.body || '', { x: 1.15, y: y + 0.42, w: 11.5, h: 0.58, color: PPTX_GRAY400, fontSize: 11 });
+          sl.addText(String(i + 1).padStart(2, '0'), { x: 0.5, y, w: 0.55, h: 0.35, color: PPTX_GRAY500, fontSize: 9, fontFace: FONT_BODY });
+          sl.addText(block.heading || '', { x: 1.15, y, w: 11.5, h: 0.38, color: PPTX_DARK, fontSize: 13, bold: true, fontFace: FONT_TITLE });
+          sl.addText(block.body || '', { x: 1.15, y: y + 0.42, w: 11.5, h: 0.58, color: PPTX_GRAY400, fontSize: 11, fontFace: FONT_BODY });
         });
       }
 
@@ -1219,10 +1221,10 @@ router.get('/:slug/export/pptx', async (req, res) => {
         [c.left, c.right].forEach((col, ci) => {
           if (!col) return;
           const x = ci === 0 ? 0.5 : 7.1;
-          sl.addText(col.title || '', { x, y: 1.82, w: 5.8, h: 0.38, color: PPTX_DARK, fontSize: 13, bold: true });
+          sl.addText(col.title || '', { x, y: 1.82, w: 5.8, h: 0.38, color: PPTX_DARK, fontSize: 13, bold: true, fontFace: FONT_TITLE });
           sl.addShape(pptx.ShapeType.rect, { x, y: 2.24, w: 5.8, h: 0.006, fill: { color: PPTX_BORDER }, line: { color: PPTX_BORDER } });
           (Array.isArray(col.items) ? col.items : []).forEach((item, j) => {
-            sl.addText(`›  ${item}`, { x, y: 2.38 + j * 0.52, w: 5.8, h: 0.44, color: PPTX_GRAY300, fontSize: 11 });
+            sl.addText(`›  ${item}`, { x, y: 2.38 + j * 0.52, w: 5.8, h: 0.44, color: PPTX_GRAY300, fontSize: 11, fontFace: FONT_BODY });
           });
         });
       }
@@ -1234,13 +1236,13 @@ router.get('/:slug/export/pptx', async (req, res) => {
         phases.slice(0, 4).forEach((phase, i) => {
           const x = 0.4 + i * 3.25;
           sl.addShape(pptx.ShapeType.roundRect, { x, y: 1.75, w: 3.0, h: 5.45, fill: { color: PPTX_CARD_BG }, line: { color: PPTX_BORDER, pt: 0.6 }, rectRadius: 0.07 });
-          sl.addText(phase.label || `Phase ${i + 1}`, { x: x + 0.2, y: 1.92, w: 2.6, h: 0.28, color: accent, fontSize: 8.5, fontFace: 'Courier New' });
-          sl.addText(phase.title || '', { x: x + 0.2, y: 2.24, w: 2.6, h: 0.58, color: PPTX_DARK, fontSize: 11, bold: true });
+          sl.addText(phase.label || `Phase ${i + 1}`, { x: x + 0.2, y: 1.92, w: 2.6, h: 0.28, color: accent, fontSize: 8.5, fontFace: FONT_BODY });
+          sl.addText(phase.title || '', { x: x + 0.2, y: 2.24, w: 2.6, h: 0.58, color: PPTX_DARK, fontSize: 11, bold: true, fontFace: FONT_TITLE });
           (Array.isArray(phase.activities) ? phase.activities : []).slice(0, 5).forEach((act, j) => {
             sl.addShape(pptx.ShapeType.ellipse, { x: x + 0.22, y: 3.04 + j * 0.47, w: 0.07, h: 0.07, fill: { color: PPTX_GRAY500 }, line: { color: PPTX_GRAY500 } });
-            sl.addText(act, { x: x + 0.35, y: 2.97 + j * 0.47, w: 2.45, h: 0.38, color: PPTX_GRAY400, fontSize: 9.5 });
+            sl.addText(act, { x: x + 0.35, y: 2.97 + j * 0.47, w: 2.45, h: 0.38, color: PPTX_GRAY400, fontSize: 9.5, fontFace: FONT_BODY });
           });
-          if (phase.client_role) sl.addText(phase.client_role, { x: x + 0.2, y: 6.5, w: 2.6, h: 0.38, color: PPTX_GRAY500, fontSize: 8.5, italic: true });
+          if (phase.client_role) sl.addText(phase.client_role, { x: x + 0.2, y: 6.5, w: 2.6, h: 0.38, color: PPTX_GRAY500, fontSize: 8.5, italic: true, fontFace: FONT_BODY });
         });
       }
 
@@ -1254,20 +1256,20 @@ router.get('/:slug/export/pptx', async (req, res) => {
             const x = i % 2 === 0 ? 0.5 : 6.9;
             const y = y0 + Math.floor(i / 2) * 1.28;
             sl.addShape(pptx.ShapeType.roundRect, { x, y, w: 5.85, h: 1.14, fill: { color: PPTX_CARD_BG }, line: { color: PPTX_BORDER, pt: 0.5 }, rectRadius: 0.06 });
-            sl.addText(block.heading || '', { x: x + 0.2, y: y + 0.1, w: 5.45, h: 0.36, color: PPTX_DARK, fontSize: 12, bold: true });
-            sl.addText(block.body || '', { x: x + 0.2, y: y + 0.5, w: 5.45, h: 0.54, color: PPTX_GRAY400, fontSize: 10.5 });
+            sl.addText(block.heading || '', { x: x + 0.2, y: y + 0.1, w: 5.45, h: 0.36, color: PPTX_DARK, fontSize: 12, bold: true, fontFace: FONT_TITLE });
+            sl.addText(block.body || '', { x: x + 0.2, y: y + 0.5, w: 5.45, h: 0.54, color: PPTX_GRAY400, fontSize: 10.5, fontFace: FONT_BODY });
           });
         } else if (c.left && c.right) {
           [c.left, c.right].forEach((col, ci) => {
             const x = ci === 0 ? 0.5 : 7.1;
             sl.addShape(pptx.ShapeType.roundRect, { x, y: y0, w: 5.8, h: 5.0, fill: { color: PPTX_CARD_BG }, line: { color: PPTX_BORDER, pt: 0.5 }, rectRadius: 0.08 });
-            sl.addText(col.title || '', { x: x + 0.25, y: y0 + 0.2, w: 5.3, h: 0.38, color: PPTX_DARK, fontSize: 12, bold: true });
+            sl.addText(col.title || '', { x: x + 0.25, y: y0 + 0.2, w: 5.3, h: 0.38, color: PPTX_DARK, fontSize: 12, bold: true, fontFace: FONT_TITLE });
             (Array.isArray(col.items) ? col.items : []).forEach((item, j) => {
-              sl.addText(`·  ${item}`, { x: x + 0.25, y: y0 + 0.72 + j * 0.52, w: 5.3, h: 0.44, color: PPTX_GRAY300, fontSize: 11 });
+              sl.addText(`·  ${item}`, { x: x + 0.25, y: y0 + 0.72 + j * 0.52, w: 5.3, h: 0.44, color: PPTX_GRAY300, fontSize: 11, fontFace: FONT_BODY });
             });
           });
         } else {
-          sl.addText(JSON.stringify(c, null, 2), { x: 0.5, y: y0, w: 12.33, h: 5.2, color: PPTX_GRAY500, fontSize: 9, fontFace: 'Courier New' });
+          sl.addText(JSON.stringify(c, null, 2), { x: 0.5, y: y0, w: 12.33, h: 5.2, color: PPTX_GRAY500, fontSize: 9, fontFace: FONT_BODY });
         }
       }
 
