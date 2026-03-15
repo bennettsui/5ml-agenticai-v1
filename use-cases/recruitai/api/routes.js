@@ -26,7 +26,6 @@ const express = require('express');
 const router = express.Router();
 const fs = require('fs');
 const path = require('path');
-const { createGeminiImageClient } = require('../../photo-booth/lib/geminiImageClient');
 
 const OUTPUT_DIR  = path.join(__dirname, '../../../frontend/public/recruitai');
 const PAGES_DIR   = path.join(__dirname, '../../../frontend/app/vibe-demo/recruitai');
@@ -381,9 +380,28 @@ async function uploadToMmdb(imageBuffer) {
 }
 
 // ─── Gemini image generation ────────────────────────────────────────────────
-async function generateVisual(client, prompt, dimensions) {
+async function generateVisual(prompt, dimensions) {
   const sharp = require('sharp');
-  const imageBuffer = await client.generateImage(prompt);
+  const MODEL = 'gemini-2.0-flash-preview-image-generation';
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent?key=${GEMINI_API_KEY}`;
+  const body = {
+    contents: [{ parts: [{ text: prompt }] }],
+    generationConfig: { responseModalities: ['TEXT', 'IMAGE'] },
+  };
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+  if (!response.ok) {
+    const errText = await response.text();
+    throw new Error(`Gemini API error ${response.status}: ${errText}`);
+  }
+  const data = await response.json();
+  const parts = data?.candidates?.[0]?.content?.parts ?? [];
+  const imagePart = parts.find(p => p.inlineData?.mimeType?.startsWith('image/'));
+  if (!imagePart) throw new Error('No image returned by Gemini');
+  const imageBuffer = Buffer.from(imagePart.inlineData.data, 'base64');
   const { w, h } = dimensions || { w: 1920, h: 1080 };
   const optimized = await sharp(imageBuffer)
     .resize(w, h, { fit: 'cover', position: 'center' })
@@ -429,9 +447,8 @@ router.post('/generate', async (req, res) => {
   if (!GEMINI_API_KEY) return res.status(503).json({ error: 'GEMINI_API_KEY not set' });
 
   try {
-    const client = createGeminiImageClient(GEMINI_API_KEY);
     console.log(`[RecruitAI] Generating ${id}...`);
-    const imgBuffer = await generateVisual(client, visual.prompt, visual.dimensions);
+    const imgBuffer = await generateVisual(visual.prompt, visual.dimensions);
 
     // Save locally
     const localPath = path.join(OUTPUT_DIR, visual.filename);
@@ -473,10 +490,9 @@ router.post('/generate-all', (req, res) => {
   res.json({ success: true, message: `Generating ${toGenerate.length} visuals in background`, state: batchState });
 
   (async () => {
-    const client = createGeminiImageClient(GEMINI_API_KEY);
     for (const visual of toGenerate) {
       try {
-        const imgBuffer = await generateVisual(client, visual.prompt, visual.dimensions);
+        const imgBuffer = await generateVisual(visual.prompt, visual.dimensions);
         const localPath = path.join(OUTPUT_DIR, visual.filename);
         fs.writeFileSync(localPath, imgBuffer);
         let publicUrl = null;
@@ -709,9 +725,8 @@ router.post('/media/regenerate', async (req, res) => {
   if (!visual) return res.status(404).json({ error: `No VISUAL definition for '${key}'` });
 
   try {
-    const client = createGeminiImageClient(GEMINI_API_KEY);
     const prompt = instructions ? `${visual.prompt}\n\nAdditional instructions: ${instructions}` : visual.prompt;
-    const imgBuffer = await generateVisual(client, prompt, visual.dimensions);
+    const imgBuffer = await generateVisual(prompt, visual.dimensions);
 
     // Archive old file
     const localPath = path.join(OUTPUT_DIR, key);
