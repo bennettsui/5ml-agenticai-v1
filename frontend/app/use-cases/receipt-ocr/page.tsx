@@ -59,6 +59,17 @@ interface Receipt {
   requires_review: boolean | null;
 }
 
+interface ModelUsage {
+  inputTokens: number;
+  outputTokens: number;
+  costUsd: number;
+}
+
+interface TokenUsage {
+  models: Record<string, ModelUsage>;
+  totalCostUsd: number;
+}
+
 interface BatchStatus {
   batch_id: string;
   status: string;
@@ -67,6 +78,7 @@ interface BatchStatus {
   processed_receipts: number;
   failed_receipts: number;
   total_amount: number;
+  token_usage?: TokenUsage | null;
   message?: string;
 }
 
@@ -666,7 +678,19 @@ export default function ReceiptOCRPage() {
                           {b.created_at ? new Date(b.created_at).toLocaleString('en-HK') : ''}
                           {b.total_receipts ? ` · ${b.total_receipts} receipts` : ''}
                           {b.total_amount ? ` · HKD ${fmt(b.total_amount)}` : ''}
+                          {b.token_usage?.totalCostUsd != null && (
+                            <span className="ml-2 text-yellow-500/70">AI: ${Number(b.token_usage.totalCostUsd).toFixed(5)}</span>
+                          )}
                         </div>
+                        {b.token_usage?.models && (
+                          <div className="flex flex-wrap gap-x-3 gap-y-0.5 mt-1">
+                            {Object.entries(b.token_usage.models as Record<string, ModelUsage>).map(([model, u]) => (
+                              <span key={model} className="text-[10px] text-slate-600 font-mono">
+                                {model} {(u.inputTokens + u.outputTokens).toLocaleString()} tok
+                              </span>
+                            ))}
+                          </div>
+                        )}
                       </div>
                       <div className="flex items-center gap-3">
                         <StatusBadge status={b.status} />
@@ -1195,6 +1219,29 @@ export default function ReceiptOCRPage() {
                   </div>
                 ))}
               </div>
+
+              {/* AI cost breakdown */}
+              {batchStatus?.token_usage && (() => {
+                const tu = batchStatus.token_usage!;
+                return (
+                  <div className="bg-slate-800/40 border border-slate-700/50 rounded-xl px-4 py-3">
+                    <div className="text-xs text-slate-500 mb-2 uppercase tracking-wider">AI Usage &amp; Cost</div>
+                    <div className="flex flex-wrap gap-x-6 gap-y-1.5">
+                      {Object.entries(tu.models).map(([model, u]) => (
+                        <div key={model} className="flex items-center gap-2 text-xs">
+                          <span className="text-slate-400 font-mono bg-slate-900/60 px-1.5 py-0.5 rounded">{model}</span>
+                          <span className="text-slate-500">in: <span className="text-slate-300">{u.inputTokens.toLocaleString()}</span></span>
+                          <span className="text-slate-500">out: <span className="text-slate-300">{u.outputTokens.toLocaleString()}</span></span>
+                          <span className="text-yellow-500/80">${u.costUsd.toFixed(5)}</span>
+                        </div>
+                      ))}
+                      <div className="ml-auto text-xs font-semibold text-yellow-400">
+                        Total: ${tu.totalCostUsd.toFixed(5)}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })()}
 
               {/* Table */}
               <div className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden">

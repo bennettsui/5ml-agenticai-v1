@@ -20,10 +20,11 @@ let schemaEnsured = false;
 async function ensureReceiptsSchema() {
   if (schemaEnsured) return;
   // pg does not support multiple statements in one query() call — run separately
-  await db.query(`ALTER TABLE receipts ADD COLUMN IF NOT EXISTS ocr_boxes  JSONB`);
-  await db.query(`ALTER TABLE receipts ADD COLUMN IF NOT EXISTS image_data TEXT`);
-  await db.query(`ALTER TABLE receipts ADD COLUMN IF NOT EXISTS remarks    TEXT`);
-  await db.query(`ALTER TABLE receipt_batches ADD COLUMN IF NOT EXISTS ocr_provider VARCHAR(50) DEFAULT 'google-vision'`);
+  await db.query(`ALTER TABLE receipts ADD COLUMN IF NOT EXISTS ocr_boxes    JSONB`);
+  await db.query(`ALTER TABLE receipts ADD COLUMN IF NOT EXISTS image_data   TEXT`);
+  await db.query(`ALTER TABLE receipts ADD COLUMN IF NOT EXISTS remarks      TEXT`);
+  await db.query(`ALTER TABLE receipt_batches ADD COLUMN IF NOT EXISTS ocr_provider  VARCHAR(50) DEFAULT 'google-vision'`);
+  await db.query(`ALTER TABLE receipt_batches ADD COLUMN IF NOT EXISTS token_usage   JSONB`);
   schemaEnsured = true;
 }
 
@@ -60,6 +61,13 @@ async function loadPreviousLearning(limit = 40) {
   } catch {
     return null; // non-fatal — proceed without learning context
   }
+}
+
+// Pricing per 1M tokens (USD)
+const DEEPSEEK_PRICE = { input: 0.27, output: 1.10 };
+
+function calcDeepSeekCost(inputTokens, outputTokens) {
+  return (inputTokens / 1e6) * DEEPSEEK_PRICE.input + (outputTokens / 1e6) * DEEPSEEK_PRICE.output;
 }
 
 // ---------------------------------------------------------------------------
@@ -126,11 +134,25 @@ Rules:
   const data = await response.json();
   const content = data.choices?.[0]?.message?.content || '';
 
+  // Capture token usage from DeepSeek response (OpenAI-compatible format)
+  const modelUsed    = data.model || process.env.DEEPSEEK_MODEL || 'deepseek-chat';
+  const inputTokens  = data.usage?.prompt_tokens     || 0;
+  const outputTokens = data.usage?.completion_tokens || 0;
+  const _usage = {
+    model:        modelUsed,
+    inputTokens,
+    outputTokens,
+    totalTokens:  inputTokens + outputTokens,
+    costUsd:      calcDeepSeekCost(inputTokens, outputTokens),
+  };
+
   // Strip any accidental markdown fences
   const cleaned = content.replace(/```json\s*/g, '').replace(/```\s*/g, '').trim();
 
   try {
-    return JSON.parse(cleaned);
+    const parsed = JSON.parse(cleaned);
+    parsed._usage = _usage;
+    return parsed;
   } catch {
     // Best-effort fallback
     return {
@@ -145,6 +167,7 @@ Rules:
       category: 'Other',
       deductible: true,
       confidence: 0.3,
+      _usage,
     };
   }
 }
@@ -186,8 +209,10 @@ async function processOneFile(filePath, originalFilename, batchId, pageNumber, w
   for (const page of pages) {
     const label = pages.length > 1 ? `${originalFilename} (page ${page.pageNumber})` : originalFilename;
 
+    const ocrUsage = page.usage || {};
+    const ocrCostStr = ocrUsage.costUsd != null ? ` | $${ocrUsage.costUsd.toFixed(5)}` : '';
     wsServer.sendProgress(batchId, {
-      message: `Google Vision OCR: ${label} — ${page.boxes.length} words detected`,
+      message: `Gemini OCR [${ocrUsage.model || 'gemini-2.0-flash'}]: ${label} — ${page.boxes.length} words | in:${ocrUsage.inputTokens||0} out:${ocrUsage.outputTokens||0}${ocrCostStr}`,
     });
 
     if (!page.text || page.text.trim().length < 5) {
@@ -215,6 +240,13 @@ async function processOneFile(filePath, originalFilename, batchId, pageNumber, w
     let structured;
     try {
       structured = await structureWithDeepSeek(page.text, label, learningContext);
+      const du = structured._usage;
+      if (du) {
+        const dsCostStr = du.costUsd != null ? ` | $${du.costUsd.toFixed(5)}` : '';
+        wsServer.sendProgress(batchId, {
+          message: `DeepSeek [${du.model}]: ${label} — in:${du.inputTokens} out:${du.outputTokens}${dsCostStr}`,
+        });
+      }
     } catch (err) {
       wsServer.sendProgress(batchId, { message: `DeepSeek warning for ${label}: ${err.message}` });
       structured = {
@@ -239,6 +271,8 @@ async function processOneFile(filePath, originalFilename, batchId, pageNumber, w
       structured,
       imageData,
       imageMime,
+      usageOcr: page.usage || null,
+      usageDs:  structured._usage || null,
     });
   }
 
@@ -351,6 +385,35 @@ async function processReceiptBatch(batchId, dropboxUrl, clientName, uploadedFile
       [allReceipts.length, batchId]
     );
 
+    // Accumulate token usage across all receipts in this batch
+    const tokenUsage = {
+      models: {},   // keyed by model name
+      totalCostUsd: 0,
+    };
+    function addUsage(u) {
+      if (!u) return;
+      if (!tokenUsage.models[u.model]) {
+        tokenUsage.models[u.model] = { inputTokens: 0, outputTokens: 0, costUsd: 0 };
+      }
+      tokenUsage.models[u.model].inputTokens  += u.inputTokens  || 0;
+      tokenUsage.models[u.model].outputTokens += u.outputTokens || 0;
+      tokenUsage.models[u.model].costUsd      += u.costUsd      || 0;
+      tokenUsage.totalCostUsd                 += u.costUsd      || 0;
+    }
+    for (const item of allReceipts) {
+      addUsage(item.usageOcr);
+      addUsage(item.usageDs);
+    }
+
+    // Log cost summary to processing log
+    const modelLines = Object.entries(tokenUsage.models)
+      .map(([m, u]) => `${m}: in:${u.inputTokens} out:${u.outputTokens} $${u.costUsd.toFixed(5)}`)
+      .join(' | ');
+    await logProcessing(batchId, 'info', 'token_usage', `Token usage — ${modelLines} | TOTAL: $${tokenUsage.totalCostUsd.toFixed(5)}`);
+    wsServer.sendProgress(batchId, {
+      message: `Token usage — ${modelLines} | TOTAL: $${tokenUsage.totalCostUsd.toFixed(4)}`,
+    });
+
     // Step 5: Save to DB
     wsServer.sendProgress(batchId, { progress: 72, message: 'Saving to database...' });
     await logProcessing(batchId, 'info', 'save_start', `Saving ${allReceipts.filter(r => r.success).length} receipts`);
@@ -419,9 +482,10 @@ async function processReceiptBatch(batchId, dropboxUrl, clientName, uploadedFile
     await db.query(
       `UPDATE receipt_batches
        SET total_amount=$1, deductible_amount=$1,
-           processed_receipts=$2, failed_receipts=$3
-       WHERE batch_id=$4`,
-      [totalAmount, savedCount, failedCount, batchId]
+           processed_receipts=$2, failed_receipts=$3,
+           token_usage=$4
+       WHERE batch_id=$5`,
+      [totalAmount, savedCount, failedCount, JSON.stringify(tokenUsage), batchId]
     );
 
     console.log(`✅ Saved ${savedCount} receipts (total ${totalAmount.toFixed(2)}), ${failedCount} failed`);

@@ -390,7 +390,7 @@ router.get('/debug/table', async (req, res) => {
       `SELECT
         batch_id, client_name, status, total_receipts, processed_receipts, failed_receipts,
         total_amount, deductible_amount, non_deductible_amount, period_start, period_end,
-        created_at, updated_at, completed_at
+        created_at, updated_at, completed_at, token_usage
        FROM receipt_batches
        ORDER BY created_at DESC
        LIMIT $1`,
@@ -582,7 +582,7 @@ router.get('/batches/:batchId/status', async (req, res) => {
     const result = await db.query(
       `SELECT
         batch_id, status, total_receipts, processed_receipts, failed_receipts,
-        total_amount, deductible_amount, created_at, updated_at
+        total_amount, deductible_amount, created_at, updated_at, token_usage
        FROM receipt_batches
        WHERE batch_id = $1`,
       [batchId]

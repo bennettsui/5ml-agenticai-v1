@@ -73,6 +73,7 @@ router.get('/init-database', async (req, res) => {
     await db.query(`ALTER TABLE receipts ADD COLUMN IF NOT EXISTS image_data TEXT`);
     await db.query(`ALTER TABLE receipts ADD COLUMN IF NOT EXISTS remarks TEXT`);
     await db.query(`ALTER TABLE receipt_batches ADD COLUMN IF NOT EXISTS ocr_provider VARCHAR(50) DEFAULT 'google-vision'`);
+    await db.query(`ALTER TABLE receipt_batches ADD COLUMN IF NOT EXISTS token_usage JSONB`);
 
     console.log('✅ Database initialized successfully');
     console.log(`📊 Created ${result.rows.length} tables`);
