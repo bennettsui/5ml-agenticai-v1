@@ -9918,6 +9918,60 @@ if (pool) {
     )
   `).catch(err => console.warn('[ls] error_log table:', err.message));
 
+  pool.query(`
+    CREATE TABLE IF NOT EXISTS ls_daily_counts (
+      ip_hash VARCHAR(64) NOT NULL,
+      date DATE NOT NULL DEFAULT CURRENT_DATE,
+      count INTEGER DEFAULT 0,
+      PRIMARY KEY (ip_hash, date)
+    )
+  `).catch(err => console.warn('[ls] daily_counts table:', err.message));
+
+  pool.query(`
+    CREATE TABLE IF NOT EXISTS ls_link_pixels (
+      id SERIAL PRIMARY KEY,
+      link_id INTEGER NOT NULL REFERENCES ls_links(id) ON DELETE CASCADE,
+      pixel_type VARCHAR(30) NOT NULL,
+      pixel_id VARCHAR(200) NOT NULL,
+      created_at TIMESTAMPTZ DEFAULT NOW()
+    )
+  `).catch(err => console.warn('[ls] link_pixels table:', err.message));
+
+  pool.query(`
+    CREATE TABLE IF NOT EXISTS ls_ab_variants (
+      id SERIAL PRIMARY KEY,
+      link_id INTEGER NOT NULL REFERENCES ls_links(id) ON DELETE CASCADE,
+      variant_url TEXT NOT NULL,
+      weight INTEGER DEFAULT 50,
+      click_count INTEGER DEFAULT 0,
+      label VARCHAR(100),
+      created_at TIMESTAMPTZ DEFAULT NOW()
+    )
+  `).catch(err => console.warn('[ls] ab_variants table:', err.message));
+
+  pool.query(`
+    CREATE TABLE IF NOT EXISTS ls_api_keys (
+      id SERIAL PRIMARY KEY,
+      name VARCHAR(100) NOT NULL,
+      key_prefix VARCHAR(8) NOT NULL,
+      key_hash VARCHAR(64) NOT NULL UNIQUE,
+      tier VARCHAR(20) DEFAULT 'pro',
+      is_active BOOLEAN DEFAULT true,
+      created_at TIMESTAMPTZ DEFAULT NOW(),
+      last_used_at TIMESTAMPTZ
+    )
+  `).catch(err => console.warn('[ls] api_keys table:', err.message));
+
+  pool.query(`
+    CREATE TABLE IF NOT EXISTS ls_report_tokens (
+      id SERIAL PRIMARY KEY,
+      link_id INTEGER NOT NULL REFERENCES ls_links(id) ON DELETE CASCADE,
+      token VARCHAR(64) NOT NULL UNIQUE,
+      created_at TIMESTAMPTZ DEFAULT NOW(),
+      expires_at TIMESTAMPTZ
+    )
+  `).catch(err => console.warn('[ls] report_tokens table:', err.message));
+
   // ── helpers ────────────────────────────────────────────────────────────────
   function lsParseUA(ua = '') {
     const bot = /bot|crawl|spider|slurp|bingpreview|facebookexternalhit|twitterbot|linkedinbot|whatsapp|telegram|discord/i.test(ua);
@@ -9966,6 +10020,32 @@ if (pool) {
     return Array.from({ length: len }, () => chars[Math.floor(Math.random() * chars.length)]).join('');
   }
 
+  function lsGenerateApiKey() {
+    const prefix = crypto.randomBytes(4).toString('hex');
+    const secret = crypto.randomBytes(24).toString('hex');
+    const full = `ls_${prefix}_${secret}`;
+    const hash = crypto.createHash('sha256').update(full).digest('hex');
+    return { full, prefix, hash };
+  }
+
+  function lsPixelHtml(pixels, destUrl) {
+    const safeUrl = destUrl.replace(/"/g, '%22');
+    const scripts = pixels.map(p => {
+      const pid = String(p.pixel_id).replace(/[<>"']/g, '');
+      if (p.pixel_type === 'facebook') return `<script>!function(f,b,e,v,n,t,s){if(f.fbq)return;n=f.fbq=function(){n.callMethod?n.callMethod.apply(n,arguments):n.queue.push(arguments)};if(!f._fbq)f._fbq=n;n.push=n;n.loaded=!0;n.version='2.0';n.queue=[];t=b.createElement(e);t.async=!0;t.src=v;s=b.getElementsByTagName(e)[0];s.parentNode.insertBefore(t,s)}(window,document,'script','https://connect.facebook.net/en_US/fbevents.js');fbq('init','${pid}');fbq('track','PageView');<\/script>`;
+      if (p.pixel_type === 'google_analytics') return `<script async src="https://www.googletagmanager.com/gtag/js?id=${pid}"><\/script><script>window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments);}gtag('js',new Date());gtag('config','${pid}');<\/script>`;
+      if (p.pixel_type === 'linkedin') return `<script>_linkedin_partner_id="${pid}";window._linkedin_data_partner_ids=window._linkedin_data_partner_ids||[];window._linkedin_data_partner_ids.push(_linkedin_partner_id);(function(l){if(!l){window.lintrk=function(a,b){window.lintrk.q.push([a,b])};window.lintrk.q=[]}var s=document.getElementsByTagName("script")[0];var b=document.createElement("script");b.type="text/javascript";b.async=true;b.src="https://snap.licdn.com/li.lms-analytics/insight.min.js";s.parentNode.insertBefore(b,s)})(window.lintrk);<\/script>`;
+      if (p.pixel_type === 'google_ads') return `<script async src="https://www.googletagmanager.com/gtag/js?id=${pid}"><\/script><script>window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments);}gtag('js',new Date());gtag('config','${pid}');gtag('event','conversion',{'send_to':'${pid}'});<\/script>`;
+      return '';
+    }).join('\n');
+    return `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Redirecting...</title><meta http-equiv="refresh" content="0;url=${safeUrl}">${scripts}</head><body><script>setTimeout(function(){window.location.replace(${JSON.stringify(destUrl)});},150);<\/script><p style="font-family:sans-serif;color:#666;text-align:center;padding:40px">Redirecting...</p></body></html>`;
+  }
+
+  function lsPasswordHtml(slug) {
+    const safeSlug = JSON.stringify(slug);
+    return `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Password Required</title><style>body{font-family:system-ui,sans-serif;background:#0f172a;color:#e2e8f0;display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0}.card{background:#1e293b;border:1px solid #334155;border-radius:12px;padding:32px;width:100%;max-width:360px;text-align:center}h1{font-size:18px;margin-bottom:8px}p{color:#94a3b8;font-size:14px;margin-bottom:24px}input{width:100%;padding:10px 14px;background:#0f172a;border:1px solid #334155;border-radius:8px;color:white;font-size:14px;box-sizing:border-box;margin-bottom:12px}button{width:100%;padding:10px;background:#6366f1;color:white;border:none;border-radius:8px;font-size:14px;cursor:pointer}button:hover{background:#4f46e5}.err{color:#f87171;font-size:13px;margin-top:8px}</style></head><body><div class="card"><h1>🔒 Password Required</h1><p>This link is protected.</p><form id="f" onsubmit="go(event)"><input type="password" id="pw" placeholder="Enter password" autofocus/><button type="submit">Continue</button><div class="err" id="err"></div></form></div><script>async function go(e){e.preventDefault();const pw=document.getElementById('pw').value;const r=await fetch('/api/links/verify-password',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({slug:${safeSlug},password:pw})});const d=await r.json();if(d.ok)window.location.href=d.url;else document.getElementById('err').textContent=d.error||'Wrong password';}<\/script></body></html>`;
+  }
+
   // ==========================================
   // LINK SHORTENER — Redirect
   // ==========================================
@@ -9973,7 +10053,7 @@ if (pool) {
     const { slug } = req.params;
     try {
       const { rows } = await pool.query(
-        `SELECT id, original_url, is_active, expires_at, redirect_type, utm_source, utm_medium, utm_campaign, utm_term, utm_content
+        `SELECT id, original_url, is_active, expires_at, redirect_type, utm_source, utm_medium, utm_campaign, utm_term, utm_content, password_hash
          FROM ls_links WHERE slug=$1`, [slug]
       );
       if (!rows.length || !rows[0].is_active) {
@@ -9983,8 +10063,28 @@ if (pool) {
       if (link.expires_at && new Date(link.expires_at) < new Date()) {
         return res.status(410).send('This link has expired.');
       }
-      // Build final URL with UTM params if set
+      // Password-protected link: serve form
+      if (link.password_hash) {
+        return res.send(lsPasswordHtml(slug));
+      }
+      // Load pixels and A/B variants in parallel
+      const [pixelRes, variantRes] = await Promise.all([
+        pool.query(`SELECT pixel_type, pixel_id FROM ls_link_pixels WHERE link_id=$1`, [link.id]),
+        pool.query(`SELECT id, variant_url, weight FROM ls_ab_variants WHERE link_id=$1`, [link.id]),
+      ]);
+      // A/B rotation: pick weighted destination
       let dest = link.original_url;
+      let abVariantId = null;
+      if (variantRes.rows.length > 0) {
+        const allVariants = [{ id: null, variant_url: link.original_url, weight: 100 }, ...variantRes.rows];
+        const totalWeight = allVariants.reduce((s, v) => s + (parseInt(String(v.weight)) || 50), 0);
+        let rand = Math.random() * totalWeight;
+        for (const v of allVariants) {
+          rand -= parseInt(String(v.weight)) || 50;
+          if (rand <= 0) { dest = v.variant_url; abVariantId = v.id; break; }
+        }
+      }
+      // Apply UTM params
       try {
         const u = new URL(dest);
         if (link.utm_source) u.searchParams.set('utm_source', link.utm_source);
@@ -9994,10 +10094,13 @@ if (pool) {
         if (link.utm_content) u.searchParams.set('utm_content', link.utm_content);
         dest = u.toString();
       } catch {}
-
-      res.redirect(link.redirect_type || 302, dest);
-
-      // Async click tracking (fire-and-forget)
+      // Retargeting pixels: serve HTML tracking page instead of direct redirect
+      if (pixelRes.rows.length > 0) {
+        res.send(lsPixelHtml(pixelRes.rows, dest));
+      } else {
+        res.redirect(link.redirect_type || 302, dest);
+      }
+      // Async click tracking
       setImmediate(async () => {
         try {
           const ua = req.headers['user-agent'] || '';
@@ -10012,6 +10115,9 @@ if (pool) {
             [link.id, ipHash, device, browser, os, ref || null, refDomain, ua, bot]
           );
           await pool.query(`UPDATE ls_links SET total_clicks = total_clicks + 1 WHERE id=$1`, [link.id]);
+          if (abVariantId) {
+            await pool.query(`UPDATE ls_ab_variants SET click_count = click_count + 1 WHERE id=$1`, [abVariantId]);
+          }
         } catch (e) {
           console.warn('[ls] click tracking error:', e.message);
         }
@@ -10074,8 +10180,22 @@ if (pool) {
   app.post('/api/links', async (req, res) => {
     try {
       let { slug, original_url, title, campaign_id, expires_at, redirect_type, tags,
-            utm_source, utm_medium, utm_campaign, utm_term, utm_content } = req.body;
+            utm_source, utm_medium, utm_campaign, utm_term, utm_content, password } = req.body;
       if (!original_url) return res.status(400).json({ error: 'original_url required' });
+      // Rate limiting: 10 links/day (free tier) by IP
+      const ip = req.headers['x-forwarded-for']?.split(',')[0]?.trim() || req.ip || 'unknown';
+      const ipHash = crypto.createHash('sha256').update(ip).digest('hex');
+      const { rows: countRows } = await pool.query(
+        `INSERT INTO ls_daily_counts (ip_hash, date, count) VALUES ($1, CURRENT_DATE, 1)
+         ON CONFLICT (ip_hash, date) DO UPDATE SET count = ls_daily_counts.count + 1
+         RETURNING count`,
+        [ipHash]
+      ).catch(() => ({ rows: [{ count: 0 }] }));
+      const dailyCount = parseInt(countRows[0]?.count || 0);
+      if (dailyCount > 10) {
+        await pool.query(`UPDATE ls_daily_counts SET count = count - 1 WHERE ip_hash=$1 AND date=CURRENT_DATE`, [ipHash]).catch(() => {});
+        return res.status(429).json({ error: 'Daily limit reached (10 links/day on free tier). Upgrade to Pro for unlimited links.', code: 'DAILY_LIMIT' });
+      }
       if (!slug) {
         // Auto-generate unique slug
         let attempts = 0;
@@ -10090,12 +10210,13 @@ if (pool) {
         const exists = await pool.query(`SELECT id FROM ls_links WHERE slug=$1`, [slug]);
         if (exists.rows.length) return res.status(409).json({ error: 'Slug already taken' });
       }
+      const passwordHash = password ? crypto.createHash('sha256').update(password).digest('hex') : null;
       const { rows } = await pool.query(
-        `INSERT INTO ls_links (slug, original_url, title, campaign_id, expires_at, redirect_type, tags, utm_source, utm_medium, utm_campaign, utm_term, utm_content)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) RETURNING *`,
+        `INSERT INTO ls_links (slug, original_url, title, campaign_id, expires_at, redirect_type, tags, utm_source, utm_medium, utm_campaign, utm_term, utm_content, password_hash)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13) RETURNING *`,
         [slug, original_url, title || null, campaign_id || null, expires_at || null,
          redirect_type || 302, tags || null, utm_source || null, utm_medium || null,
-         utm_campaign || null, utm_term || null, utm_content || null]
+         utm_campaign || null, utm_term || null, utm_content || null, passwordHash]
       );
       await lsAudit('link', rows[0].id, 'create', { slug, original_url, title });
       res.status(201).json(rows[0]);
@@ -10187,16 +10308,21 @@ if (pool) {
     }
   });
 
-  // QR code for a link
+  // QR code for a link (supports ?dark=&light=&size= for white-label)
   app.get('/api/links/:id/qr', async (req, res) => {
     try {
       const { id } = req.params;
+      const { dark = '#000000', light = '#ffffff', size = '400' } = req.query;
       const { rows } = await pool.query(`SELECT slug FROM ls_links WHERE id=$1`, [id]);
       if (!rows.length) return res.status(404).json({ error: 'Not found' });
       const QRCode = require('qrcode');
       const baseUrl = process.env.APP_URL || `${req.protocol}://${req.get('host')}`;
       const shortUrl = `${baseUrl}/s/${rows[0].slug}`;
-      const dataUrl = await QRCode.toDataURL(shortUrl, { width: 400, margin: 2, color: { dark: '#0f172a', light: '#ffffff' } });
+      const dataUrl = await QRCode.toDataURL(shortUrl, {
+        width: Math.min(800, Math.max(100, parseInt(String(size)) || 400)),
+        margin: 2,
+        color: { dark: String(dark).match(/^#[0-9a-fA-F]{6}$/) ? dark : '#000000', light: String(light).match(/^#[0-9a-fA-F]{6}$/) ? light : '#ffffff' },
+      });
       res.json({ qr: dataUrl, url: shortUrl });
     } catch (err) {
       res.status(500).json({ error: err.message });
@@ -10324,6 +10450,269 @@ Respond in plain text, no markdown headers.`
       res.json(rows);
     } catch (err) {
       res.status(500).json({ error: err.message });
+    }
+  });
+
+  // Daily usage count for current IP
+  app.get('/api/links/stats/daily-usage', async (req, res) => {
+    try {
+      const ip = req.headers['x-forwarded-for']?.split(',')[0]?.trim() || req.ip || 'unknown';
+      const ipHash = crypto.createHash('sha256').update(ip).digest('hex');
+      const { rows } = await pool.query(
+        `SELECT count FROM ls_daily_counts WHERE ip_hash=$1 AND date=CURRENT_DATE`,
+        [ipHash]
+      );
+      res.json({ used: parseInt(rows[0]?.count || 0), limit: 10 });
+    } catch (err) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // Password verify
+  app.post('/api/links/verify-password', async (req, res) => {
+    try {
+      const { slug, password } = req.body;
+      if (!slug || !password) return res.status(400).json({ error: 'slug and password required' });
+      const { rows } = await pool.query(
+        `SELECT id, original_url, password_hash, utm_source, utm_medium, utm_campaign, utm_term, utm_content
+         FROM ls_links WHERE slug=$1 AND is_active=true`, [slug]
+      );
+      if (!rows.length) return res.status(404).json({ error: 'Link not found' });
+      const hash = crypto.createHash('sha256').update(password).digest('hex');
+      if (hash !== rows[0].password_hash) return res.status(401).json({ error: 'Wrong password' });
+      let dest = rows[0].original_url;
+      try {
+        const u = new URL(dest);
+        if (rows[0].utm_source) u.searchParams.set('utm_source', rows[0].utm_source);
+        if (rows[0].utm_medium) u.searchParams.set('utm_medium', rows[0].utm_medium);
+        if (rows[0].utm_campaign) u.searchParams.set('utm_campaign', rows[0].utm_campaign);
+        dest = u.toString();
+      } catch {}
+      res.json({ ok: true, url: dest });
+    } catch (err) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // Bulk create links
+  app.post('/api/links/bulk', async (req, res) => {
+    try {
+      const { links: items } = req.body;
+      if (!Array.isArray(items) || items.length === 0) return res.status(400).json({ error: 'links array required' });
+      if (items.length > 100) return res.status(400).json({ error: 'Max 100 links per bulk request' });
+      const results = [];
+      for (const item of items) {
+        try {
+          let slug = item.slug;
+          if (!slug) {
+            let attempts = 0;
+            do { slug = lsSlug(7); const ex = await pool.query(`SELECT id FROM ls_links WHERE slug=$1`, [slug]); if (!ex.rows.length) break; attempts++; } while (attempts < 10);
+          }
+          const { rows } = await pool.query(
+            `INSERT INTO ls_links (slug, original_url, title, campaign_id, utm_source, utm_medium, utm_campaign) VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING *`,
+            [slug, item.original_url, item.title || null, item.campaign_id || null, item.utm_source || null, item.utm_medium || null, item.utm_campaign || null]
+          );
+          results.push({ ok: true, link: rows[0] });
+        } catch (e) {
+          results.push({ ok: false, error: e.message, original_url: item.original_url });
+        }
+      }
+      res.json({ results, created: results.filter(r => r.ok).length, failed: results.filter(r => !r.ok).length });
+    } catch (err) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // Analytics CSV export
+  app.get('/api/links/:id/analytics/export', async (req, res) => {
+    try {
+      const { id } = req.params;
+      const { days = 90 } = req.query;
+      const [link, clicks] = await Promise.all([
+        pool.query(`SELECT slug, title FROM ls_links WHERE id=$1`, [id]),
+        pool.query(
+          `SELECT clicked_at, device_type, browser, os, referrer_domain, is_bot
+           FROM ls_clicks WHERE link_id=$1 AND clicked_at >= NOW() - ($2 || ' days')::INTERVAL
+           ORDER BY clicked_at DESC`,
+          [id, days]
+        ),
+      ]);
+      if (!link.rows.length) return res.status(404).json({ error: 'Not found' });
+      const slug = link.rows[0].slug;
+      const header = 'clicked_at,device_type,browser,os,referrer_domain,is_bot\n';
+      const rows = clicks.rows.map(r =>
+        `"${r.clicked_at}","${r.device_type || ''}","${r.browser || ''}","${r.os || ''}","${r.referrer_domain || ''}","${r.is_bot}"`
+      ).join('\n');
+      res.setHeader('Content-Type', 'text/csv');
+      res.setHeader('Content-Disposition', `attachment; filename="clicks-${slug}-${days}d.csv"`);
+      res.send(header + rows);
+    } catch (err) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // Pixels CRUD
+  app.get('/api/links/:id/pixels', async (req, res) => {
+    try {
+      const { rows } = await pool.query(`SELECT * FROM ls_link_pixels WHERE link_id=$1 ORDER BY created_at`, [req.params.id]);
+      res.json(rows);
+    } catch (err) { res.status(500).json({ error: err.message }); }
+  });
+
+  app.post('/api/links/:id/pixels', async (req, res) => {
+    try {
+      const { pixel_type, pixel_id } = req.body;
+      const VALID_TYPES = ['facebook', 'google_analytics', 'linkedin', 'google_ads'];
+      if (!VALID_TYPES.includes(pixel_type) || !pixel_id) return res.status(400).json({ error: 'pixel_type and pixel_id required' });
+      const { rows } = await pool.query(
+        `INSERT INTO ls_link_pixels (link_id, pixel_type, pixel_id) VALUES ($1,$2,$3) RETURNING *`,
+        [req.params.id, pixel_type, pixel_id]
+      );
+      await lsAudit('pixel', rows[0].id, 'create', { link_id: req.params.id, pixel_type });
+      res.status(201).json(rows[0]);
+    } catch (err) { res.status(500).json({ error: err.message }); }
+  });
+
+  app.delete('/api/links/:id/pixels/:pixelId', async (req, res) => {
+    try {
+      await pool.query(`DELETE FROM ls_link_pixels WHERE id=$1 AND link_id=$2`, [req.params.pixelId, req.params.id]);
+      res.json({ ok: true });
+    } catch (err) { res.status(500).json({ error: err.message }); }
+  });
+
+  // A/B Variants CRUD
+  app.get('/api/links/:id/variants', async (req, res) => {
+    try {
+      const { rows } = await pool.query(`SELECT * FROM ls_ab_variants WHERE link_id=$1 ORDER BY created_at`, [req.params.id]);
+      res.json(rows);
+    } catch (err) { res.status(500).json({ error: err.message }); }
+  });
+
+  app.post('/api/links/:id/variants', async (req, res) => {
+    try {
+      const { variant_url, weight = 50, label } = req.body;
+      if (!variant_url) return res.status(400).json({ error: 'variant_url required' });
+      const { rows } = await pool.query(
+        `INSERT INTO ls_ab_variants (link_id, variant_url, weight, label) VALUES ($1,$2,$3,$4) RETURNING *`,
+        [req.params.id, variant_url, weight, label || null]
+      );
+      res.status(201).json(rows[0]);
+    } catch (err) { res.status(500).json({ error: err.message }); }
+  });
+
+  app.put('/api/links/:id/variants/:variantId', async (req, res) => {
+    try {
+      const { variant_url, weight, label } = req.body;
+      const { rows } = await pool.query(
+        `UPDATE ls_ab_variants SET variant_url=COALESCE($1,variant_url), weight=COALESCE($2,weight), label=COALESCE($3,label) WHERE id=$4 AND link_id=$5 RETURNING *`,
+        [variant_url, weight, label, req.params.variantId, req.params.id]
+      );
+      res.json(rows[0] || {});
+    } catch (err) { res.status(500).json({ error: err.message }); }
+  });
+
+  app.delete('/api/links/:id/variants/:variantId', async (req, res) => {
+    try {
+      await pool.query(`DELETE FROM ls_ab_variants WHERE id=$1 AND link_id=$2`, [req.params.variantId, req.params.id]);
+      res.json({ ok: true });
+    } catch (err) { res.status(500).json({ error: err.message }); }
+  });
+
+  // API Keys CRUD
+  app.get('/api/ls-keys', async (req, res) => {
+    try {
+      const { rows } = await pool.query(`SELECT id, name, key_prefix, tier, is_active, created_at, last_used_at FROM ls_api_keys ORDER BY created_at DESC`);
+      res.json(rows);
+    } catch (err) { res.status(500).json({ error: err.message }); }
+  });
+
+  app.post('/api/ls-keys', async (req, res) => {
+    try {
+      const { name, tier = 'pro' } = req.body;
+      if (!name) return res.status(400).json({ error: 'name required' });
+      const { full, prefix, hash } = lsGenerateApiKey();
+      const { rows } = await pool.query(
+        `INSERT INTO ls_api_keys (name, key_prefix, key_hash, tier) VALUES ($1,$2,$3,$4) RETURNING id, name, key_prefix, tier, is_active, created_at`,
+        [name, prefix, hash, tier]
+      );
+      await lsAudit('api_key', rows[0].id, 'create', { name, tier });
+      res.status(201).json({ ...rows[0], key: full, note: 'Store this key securely — it will not be shown again.' });
+    } catch (err) { res.status(500).json({ error: err.message }); }
+  });
+
+  app.delete('/api/ls-keys/:id', async (req, res) => {
+    try {
+      await pool.query(`UPDATE ls_api_keys SET is_active=false WHERE id=$1`, [req.params.id]);
+      await lsAudit('api_key', parseInt(req.params.id), 'revoke', {});
+      res.json({ ok: true });
+    } catch (err) { res.status(500).json({ error: err.message }); }
+  });
+
+  // Shareable client report tokens
+  app.post('/api/links/:id/report-token', async (req, res) => {
+    try {
+      const { expires_days = 30 } = req.body;
+      const token = crypto.randomBytes(24).toString('hex');
+      const expiresAt = new Date(Date.now() + parseInt(expires_days) * 86400000).toISOString();
+      await pool.query(`DELETE FROM ls_report_tokens WHERE link_id=$1`, [req.params.id]);
+      const { rows } = await pool.query(
+        `INSERT INTO ls_report_tokens (link_id, token, expires_at) VALUES ($1,$2,$3) RETURNING *`,
+        [req.params.id, token, expiresAt]
+      );
+      const baseUrl = process.env.APP_URL || `${req.protocol}://${req.get('host')}`;
+      res.json({ token, url: `${baseUrl}/r/${token}`, expires_at: expiresAt });
+    } catch (err) { res.status(500).json({ error: err.message }); }
+  });
+
+  // Public report (served as HTML for agency client sharing)
+  app.get('/r/:token', async (req, res) => {
+    try {
+      const { rows } = await pool.query(
+        `SELECT rt.link_id, rt.expires_at, l.slug, l.title, l.original_url, l.total_clicks, l.created_at
+         FROM ls_report_tokens rt JOIN ls_links l ON l.id=rt.link_id WHERE rt.token=$1`,
+        [req.params.token]
+      );
+      if (!rows.length) return res.status(404).send('Report not found or expired.');
+      if (rows[0].expires_at && new Date(rows[0].expires_at) < new Date()) return res.status(410).send('Report link has expired.');
+      const r = rows[0];
+      const [daily, devices, referrers] = await Promise.all([
+        pool.query(`SELECT DATE(clicked_at) AS date, COUNT(*) AS clicks FROM ls_clicks WHERE link_id=$1 AND is_bot=false GROUP BY DATE(clicked_at) ORDER BY date DESC LIMIT 30`, [r.link_id]),
+        pool.query(`SELECT device_type, COUNT(*) AS cnt FROM ls_clicks WHERE link_id=$1 AND is_bot=false GROUP BY device_type ORDER BY cnt DESC`, [r.link_id]),
+        pool.query(`SELECT referrer_domain, COUNT(*) AS cnt FROM ls_clicks WHERE link_id=$1 AND referrer_domain IS NOT NULL AND is_bot=false GROUP BY referrer_domain ORDER BY cnt DESC LIMIT 8`, [r.link_id]),
+      ]);
+      const data = JSON.stringify({ link: r, daily: daily.rows, devices: devices.rows, referrers: referrers.rows });
+      res.setHeader('Content-Type', 'text/html');
+      res.send(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>Link Report — ${r.slug}</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<style>*{box-sizing:border-box}body{font-family:system-ui,sans-serif;background:#0f172a;color:#e2e8f0;margin:0;padding:24px}h1{font-size:20px;margin:0 0 4px}p.sub{color:#94a3b8;font-size:13px;margin:0 0 24px}.card{background:#1e293b;border:1px solid #334155;border-radius:12px;padding:20px;margin-bottom:16px}.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:16px}.stat{background:#0f172a;border:1px solid #334155;border-radius:8px;padding:16px;text-align:center}.stat .val{font-size:28px;font-weight:700;color:#6366f1}.stat .lbl{font-size:11px;color:#64748b;text-transform:uppercase;margin-top:4px}table{width:100%;border-collapse:collapse;font-size:12px}th{text-align:left;color:#64748b;padding:6px 8px;border-bottom:1px solid #334155}td{padding:6px 8px;border-bottom:1px solid #1e293b}tr:hover td{background:#ffffff08}.bar-bg{background:#1e293b;border-radius:4px;height:8px;margin-top:4px}.bar-fill{background:#6366f1;border-radius:4px;height:8px}footer{text-align:center;font-size:11px;color:#475569;margin-top:24px}</style></head>
+<body><h1>📊 Link Report: /${r.slug}</h1><p class="sub">${r.title || r.original_url} · Generated ${new Date().toLocaleDateString()}</p>
+<script>const D=${data};</script>
+<div class="stats">
+  <div class="stat"><div class="val">${r.total_clicks.toLocaleString()}</div><div class="lbl">Total Clicks</div></div>
+  <div class="stat"><div class="val" id="last30">—</div><div class="lbl">Last 30 Days</div></div>
+  <div class="stat"><div class="val" id="topRef">—</div><div class="lbl">Top Source</div></div>
+</div>
+<div class="card"><h3 style="margin:0 0 12px;font-size:14px">Daily Clicks (Last 30 Days)</h3>
+  <table><thead><tr><th>Date</th><th>Clicks</th><th style="width:40%">Volume</th></tr></thead>
+  <tbody id="dailyTbl"></tbody></table></div>
+<div class="card"><h3 style="margin:0 0 12px;font-size:14px">Devices</h3>
+  <div id="devices"></div></div>
+<div class="card"><h3 style="margin:0 0 12px;font-size:14px">Top Referrers</h3>
+  <table><thead><tr><th>Source</th><th>Clicks</th></tr></thead>
+  <tbody id="refTbl"></tbody></table></div>
+<footer>Powered by 5ML Link Shortener · Confidential client report</footer>
+<script>
+const last30=D.daily.reduce((s,r)=>s+parseInt(r.clicks),0);
+document.getElementById('last30').textContent=last30.toLocaleString();
+document.getElementById('topRef').textContent=D.referrers[0]?.referrer_domain||'Direct';
+const maxClicks=Math.max(...D.daily.map(r=>parseInt(r.clicks)),1);
+document.getElementById('dailyTbl').innerHTML=D.daily.map(r=>{const c=parseInt(r.clicks);return '<tr><td>'+r.date.slice(0,10)+'</td><td>'+c+'</td><td><div class="bar-bg"><div class="bar-fill" style="width:'+Math.round(c/maxClicks*100)+'%"></div></div></td></tr>';}).join('');
+const tot=D.devices.reduce((s,r)=>s+parseInt(r.cnt),0)||1;
+document.getElementById('devices').innerHTML=D.devices.map(r=>{const p=Math.round(parseInt(r.cnt)/tot*100);return '<div style="margin-bottom:8px"><div style="display:flex;justify-content:space-between;font-size:12px"><span>'+r.device_type+'</span><span>'+p+'%</span></div><div class="bar-bg"><div class="bar-fill" style="width:'+p+'%"></div></div></div>';}).join('');
+document.getElementById('refTbl').innerHTML=D.referrers.map(r=>'<tr><td>'+r.referrer_domain+'</td><td>'+r.cnt+'</td></tr>').join('');
+</script></body></html>`);
+    } catch (err) {
+      res.status(500).send('Server error');
     }
   });
 }
