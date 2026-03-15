@@ -13,7 +13,7 @@ const { pool } = require('../../../../db');
 // ─── Auth middleware ──────────────────────────────────────────────────────────
 
 function requireAdmin(req, res, next) {
-  const secret = process.env.EVENTFLOW_ADMIN_SECRET || 'eventflow-admin-dev-secret';
+  const secret = process.env.EVENTFLOW_ADMIN_SECRET || '5milesLab01';
   const provided = req.headers['x-admin-secret'] || req.query._secret;
   if (!provided || provided !== secret) {
     return res.status(401).json({ error: 'Admin access required' });

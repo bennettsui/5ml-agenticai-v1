@@ -37,8 +37,8 @@ function EventCard({ event, onClick }: { event: Event; onClick: () => void }) {
 
   return (
     <Link href={`/eventflow/${event.slug}`} className="group block" onClick={onClick}>
-      <div className="rounded-2xl overflow-hidden border border-gray-100 bg-white hover:border-orange-200 hover:shadow-xl hover:shadow-orange-500/10 transition-all duration-200">
-        <div className="relative h-44 bg-gradient-to-br from-orange-100 to-amber-50 overflow-hidden">
+      <div className="rounded-2xl overflow-hidden border border-gray-100 bg-white hover:border-blue-200 hover:shadow-xl hover:shadow-blue-500/10 transition-all duration-200">
+        <div className="relative h-44 bg-gradient-to-br from-blue-50 to-indigo-50 overflow-hidden">
           {event.banner_url
             ? <img src={event.banner_url} alt={event.title} className="w-full h-full object-cover group-hover:scale-[1.03] transition-transform duration-300" />
             : <div className="w-full h-full flex items-center justify-center"><span className="text-6xl opacity-25">{icon}</span></div>
@@ -52,19 +52,19 @@ function EventCard({ event, onClick }: { event: Event; onClick: () => void }) {
         </div>
         <div className="p-4">
           <div className="flex items-start gap-3 mb-3">
-            <div className="flex-shrink-0 bg-orange-50 border border-orange-100 rounded-xl w-12 text-center py-1.5">
-              <div className="text-orange-500 text-[10px] font-bold uppercase">{start.toLocaleString('en-HK', { month: 'short' })}</div>
+            <div className="flex-shrink-0 bg-blue-50 border border-blue-100 rounded-xl w-12 text-center py-1.5">
+              <div className="text-blue-600 text-[10px] font-bold uppercase">{start.toLocaleString('en-HK', { month: 'short' })}</div>
               <div className="text-gray-900 text-xl font-black leading-none">{start.getDate()}</div>
             </div>
             <div className="min-w-0">
-              <h3 className="font-bold text-base text-gray-900 leading-snug line-clamp-2 group-hover:text-orange-600 transition-colors">{event.title}</h3>
+              <h3 className="font-bold text-base text-gray-900 leading-snug line-clamp-2 group-hover:text-blue-600 transition-colors">{event.title}</h3>
               <p className="text-gray-400 text-xs mt-1">{start.toLocaleString('en-HK', { weekday: 'short', hour: '2-digit', minute: '2-digit' })}</p>
             </div>
           </div>
           {event.location && <p className="text-gray-400 text-xs mb-3 truncate">📍 {event.location}</p>}
           <div className="flex items-center justify-between">
             <span className="text-xs text-gray-400">by {event.organizer_name}</span>
-            <span className={`text-xs font-bold px-2.5 py-1 rounded-full ${free ? 'bg-green-50 text-green-600 border border-green-100' : 'bg-orange-50 text-orange-600 border border-orange-100'}`}>
+            <span className={`text-xs font-bold px-2.5 py-1 rounded-full ${free ? 'bg-green-50 text-green-600 border border-green-100' : 'bg-blue-50 text-blue-600 border border-blue-100'}`}>
               {free ? 'Free' : `From ${currency} ${(minPrice / 100).toFixed(0)}`}
             </span>
           </div>
@@ -145,13 +145,14 @@ export default function EventsPage() {
           <Link href="/eventflow" className="flex items-center gap-2">
             <span className="text-2xl">🎟️</span>
             <span className="font-black text-xl tracking-tight text-gray-900">EventFlow</span>
+            <span className="hidden sm:block text-xs font-bold text-blue-600 bg-blue-50 border border-blue-100 px-2 py-0.5 rounded-full ml-1">For Participants</span>
           </Link>
           <div className="flex items-center gap-2 sm:gap-3">
-            <Link href="/eventflow/wishlist" className="hidden sm:flex items-center gap-1 text-sm text-gray-500 hover:text-orange-500 font-medium transition-colors">
+            <Link href="/eventflow/wishlist" className="hidden md:flex items-center gap-1 text-sm text-gray-500 hover:text-blue-600 font-medium transition-colors">
               💡 Wishlist
             </Link>
-            <Link href="/eventflow/reception" className="hidden md:flex items-center gap-1 text-sm text-gray-500 hover:text-gray-900 font-medium transition-colors">
-              ✅ Reception
+            <Link href="/eventflow/organizer/login" className="hidden sm:flex items-center gap-1 text-sm text-gray-600 hover:text-gray-900 font-semibold transition-colors border border-gray-200 px-3 py-1.5 rounded-lg hover:border-gray-300">
+              Sign in
             </Link>
             <Link href="/eventflow/organizer" className="text-sm font-bold px-4 py-2 rounded-xl bg-orange-500 text-white hover:bg-orange-600 transition-all shadow-sm shadow-orange-200">
               Host an event →
@@ -161,16 +162,16 @@ export default function EventsPage() {
       </nav>
 
       {/* ── Hero ─────────────────────────────────────────────────────────── */}
-      <div className="bg-gradient-to-br from-orange-500 via-amber-500 to-yellow-400 text-white">
+      <div className="bg-gradient-to-br from-blue-600 via-indigo-600 to-violet-600 text-white">
         <div className="max-w-6xl mx-auto px-6 pt-16 pb-14 text-center">
           <div className="inline-flex items-center gap-2 bg-white/20 backdrop-blur-sm rounded-full px-4 py-1.5 text-sm font-semibold mb-6">
             <span>✨</span> AI-powered event discovery
           </div>
           <h1 className="text-5xl md:text-6xl font-black tracking-tight mb-4 leading-[1.1]">
-            Discover <span className="text-yellow-100">experiences</span><br />made for you
+            Discover <span className="text-blue-200">experiences</span><br />made for you
           </h1>
-          <p className="text-orange-100 text-lg max-w-xl mx-auto mb-8">
-            Curated events from the world's most thoughtful organizers — conferences, workshops, concerts and more.
+          <p className="text-blue-100 text-lg max-w-xl mx-auto mb-8">
+            Curated events from the world&apos;s most thoughtful organizers — conferences, workshops, concerts and more.
           </p>
 
           {/* Search */}
@@ -178,7 +179,7 @@ export default function EventsPage() {
             <span className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 text-lg">🔍</span>
             <input
               type="search" placeholder="Search events, locations…"
-              className="w-full pl-11 pr-4 py-4 bg-white text-gray-900 rounded-2xl text-sm shadow-xl focus:outline-none focus:ring-2 focus:ring-orange-300 placeholder-gray-400"
+              className="w-full pl-11 pr-4 py-4 bg-white text-gray-900 rounded-2xl text-sm shadow-xl focus:outline-none focus:ring-2 focus:ring-blue-300 placeholder-gray-400"
               value={search} onChange={(e) => handleSearch(e.target.value)}
             />
           </div>
@@ -193,7 +194,7 @@ export default function EventsPage() {
             ].map(s => (
               <div key={s.l} className="text-center">
                 <div className="text-3xl font-black">{s.v}</div>
-                <div className="text-orange-100 text-xs font-medium">{s.l}</div>
+                <div className="text-blue-100 text-xs font-medium">{s.l}</div>
               </div>
             ))}
           </div>
@@ -205,12 +206,12 @@ export default function EventsPage() {
         <div className="max-w-6xl mx-auto px-6 py-3.5">
           <div className="flex flex-wrap gap-2">
             <button onClick={() => handleCat('')}
-              className={`flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-semibold transition-all ${!category ? 'bg-orange-500 text-white shadow-sm' : 'bg-gray-100 text-gray-600 hover:bg-orange-50 hover:text-orange-600'}`}>
+              className={`flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-semibold transition-all ${!category ? 'bg-blue-600 text-white shadow-sm' : 'bg-gray-100 text-gray-600 hover:bg-blue-50 hover:text-blue-600'}`}>
               🌟 All
             </button>
             {CATEGORIES.map((cat) => (
               <button key={cat} onClick={() => handleCat(category === cat ? '' : cat)}
-                className={`flex items-center gap-1 px-4 py-2 rounded-xl text-xs font-semibold transition-all ${category === cat ? 'bg-orange-500 text-white shadow-sm' : 'bg-gray-100 text-gray-600 hover:bg-orange-50 hover:text-orange-600'}`}>
+                className={`flex items-center gap-1 px-4 py-2 rounded-xl text-xs font-semibold transition-all ${category === cat ? 'bg-blue-600 text-white shadow-sm' : 'bg-gray-100 text-gray-600 hover:bg-blue-50 hover:text-blue-600'}`}>
                 {CAT_ICONS[cat]} {cat}
               </button>
             ))}
@@ -226,8 +227,8 @@ export default function EventsPage() {
         </div>
         <div className="grid md:grid-cols-3 gap-5 mb-14">
           {STEPS.map((s, i) => (
-            <div key={s.title} className="relative bg-gradient-to-br from-orange-50 to-amber-50 rounded-2xl p-7 border border-orange-100 text-center">
-              <div className="absolute top-4 right-5 text-5xl font-black text-orange-100 select-none">0{i + 1}</div>
+            <div key={s.title} className="relative bg-gradient-to-br from-blue-50 to-indigo-50 rounded-2xl p-7 border border-blue-100 text-center">
+              <div className="absolute top-4 right-5 text-5xl font-black text-blue-100 select-none">0{i + 1}</div>
               <div className="text-4xl mb-3">{s.icon}</div>
               <h3 className="font-black text-gray-900 text-lg mb-1">{s.title}</h3>
               <p className="text-gray-500 text-sm">{s.desc}</p>
@@ -253,7 +254,7 @@ export default function EventsPage() {
             <p className="text-lg font-bold text-gray-700">No events yet</p>
             <p className="text-sm text-gray-400 mt-1">
               Check back soon or{' '}
-              <Link href="/eventflow/organizer/signup" className="text-orange-500 hover:underline font-medium">create one</Link>
+              <Link href="/eventflow/organizer/signup" className="text-blue-600 hover:underline font-medium">create one</Link>
             </p>
           </div>
         ) : (
@@ -343,7 +344,7 @@ export default function EventsPage() {
         <div className="max-w-6xl mx-auto px-6 py-16 text-center">
           <div className="text-4xl mb-4">🚀</div>
           <h2 className="text-3xl font-black mb-3">Hosting an event?</h2>
-          <p className="text-gray-400 mb-8 max-w-md mx-auto">AI-powered tools, 0% platform fees, custom RSVP forms — everything a modern organizer needs.</p>
+          <p className="text-gray-400 mb-8 max-w-md mx-auto">AI-powered tools, custom RSVP forms, QR check-in — everything a modern organizer needs. Stripe&apos;s standard fee only.</p>
           <div className="flex flex-col sm:flex-row gap-3 justify-center">
             <Link href="/eventflow/organizer"
               className="inline-block bg-orange-500 text-white font-bold px-8 py-4 rounded-xl hover:bg-orange-400 transition-colors shadow-lg shadow-orange-500/30">
@@ -366,9 +367,9 @@ export default function EventsPage() {
             <span>· Where great events begin</span>
           </div>
           <div className="flex items-center gap-5">
-            <Link href="/eventflow/organizer" className="hover:text-orange-500 transition-colors">For Organizers</Link>
-            <Link href="/eventflow/reception" className="hover:text-orange-500 transition-colors">Reception Staff</Link>
-            <Link href="/eventflow/wishlist" className="hover:text-orange-500 transition-colors">Wishlist</Link>
+            <Link href="/eventflow/organizer" className="hover:text-blue-600 transition-colors">For Organizers</Link>
+            <Link href="/eventflow/reception" className="hover:text-blue-600 transition-colors">Reception Staff</Link>
+            <Link href="/eventflow/wishlist" className="hover:text-blue-600 transition-colors">Wishlist</Link>
           </div>
         </div>
       </footer>

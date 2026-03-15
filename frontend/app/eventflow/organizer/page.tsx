@@ -56,7 +56,7 @@ const PLANS = [
     border: 'border-violet-300',
     features: [
       'Unlimited events & RSVPs',
-      '0% platform fee (first $10k/mo)',
+      'Stripe payments (2.9% + $0.30/charge)',
       'All 5 AI Studio tools',
       'Paid ticketing (Stripe)',
       'Custom branding & domain',
@@ -79,16 +79,6 @@ const FEATURES = [
   { icon: '🎨', title: 'Custom Branding', desc: 'Your logo, your colors, your domain. Attendees see your brand everywhere — not ours.', badge: 'Pro', bc: 'bg-violet-100 text-violet-700' },
 ];
 
-const COMPARISON = [
-  { feature: 'Platform fee (paid tickets)', ef: '0% on Pro', eb: '3.7% + $1.79/ticket', ex: '~5% + fees', efWin: true },
-  { feature: 'AI content generation', ef: '5 tools built-in', eb: '❌ None', ex: '❌ None', efWin: true },
-  { feature: 'Free tier', ef: '50 RSVPs/mo', eb: '25 orders/event', ex: '❌ No free tier', efWin: true },
-  { feature: 'Custom RSVP forms', ef: '✅ All plans', eb: '❌ Paid plans only', ex: '✅ Paid only', efWin: true },
-  { feature: 'Asia payment support', ef: '✅ Native HKD/TWD', eb: '⚠️ Limited', ex: '✅ Native', efWin: false },
-  { feature: 'Built-in check-in', ef: '✅ Included', eb: '✅ Separate app', ex: '✅ Included', efWin: false },
-  { feature: 'Contact CRM', ef: '✅ Built-in', eb: '❌ 3rd-party only', ex: '⚠️ Basic', efWin: true },
-  { feature: 'Setup time', ef: '< 3 minutes', eb: '~15 minutes', ex: '~30 minutes', efWin: true },
-];
 
 const HOW_IT_WORKS = [
   { step: '01', icon: '🎨', title: 'Create your event', desc: 'Set up your event page in minutes. Add ticket tiers, custom RSVP fields — or let AI write your description and social posts for you.' },
@@ -113,13 +103,88 @@ const TEAM = [
 
 const BLOGS = [
   { title: '10 AI prompts that will transform your event marketing in 2025', tag: 'AI Tips', date: 'Mar 10', color: 'bg-amber-50 border-amber-100' },
-  { title: 'Why we charge 0% platform fees — and how we still make money', tag: 'Product', date: 'Mar 5', color: 'bg-blue-50 border-blue-100' },
-  { title: 'EventFlow vs Eventbrite: an honest feature-by-feature comparison', tag: 'Compare', date: 'Feb 28', color: 'bg-orange-50 border-orange-100' },
+  { title: 'How paid ticketing with Stripe works on EventFlow', tag: 'Product', date: 'Mar 5', color: 'bg-blue-50 border-blue-100' },
+  { title: 'How we use QR check-in to eliminate queues at the door', tag: 'How-to', date: 'Feb 28', color: 'bg-orange-50 border-orange-100' },
 ];
+
+const FEATURE_DEMOS: Record<string, { steps: { icon: string; label: string }[]; note: string }> = {
+  'AI Event Studio': {
+    steps: [
+      { icon: '📝', label: 'Enter your event name & one sentence description' },
+      { icon: '🤖', label: 'AI generates title, description, social posts & agenda' },
+      { icon: '✏️', label: 'Review and edit the output to your taste' },
+      { icon: '📋', label: 'Copy to your event page — done in under 30 seconds' },
+    ],
+    note: 'Powered by DeepSeek AI. Available on Starter and Pro plans.',
+  },
+  'Custom RSVP Forms': {
+    steps: [
+      { icon: '➕', label: 'Add fields: text, dropdown, checkbox, phone, date…' },
+      { icon: '🏷', label: 'Set labels, placeholders, and required/optional status' },
+      { icon: '📋', label: 'Attendees complete the form at registration' },
+      { icon: '📊', label: 'All responses appear in your contacts list for export' },
+    ],
+    note: 'Unlimited custom fields on all plans. No paid-tier lock.',
+  },
+  'QR Code Check-in': {
+    steps: [
+      { icon: '✅', label: 'Attendee registers → receives QR code by email' },
+      { icon: '📱', label: 'Reception staff opens /eventflow/reception on any phone' },
+      { icon: '📷', label: 'Staff scans attendee QR or searches by name' },
+      { icon: '🟢', label: 'Instant green flash confirms check-in — live count updates' },
+    ],
+    note: 'No hardware or app download needed. Works on any smartphone.',
+  },
+  'Live Analytics': {
+    steps: [
+      { icon: '📈', label: 'Dashboard shows registrations per hour in real time' },
+      { icon: '🎟', label: 'Per-tier breakdown: which tickets are selling fastest' },
+      { icon: '✅', label: 'Live check-in rate updates as doors open on event day' },
+      { icon: '📥', label: 'Export attendee data to CSV after the event' },
+    ],
+    note: 'No extra setup needed — analytics begin the moment you publish.',
+  },
+  'Contact CRM': {
+    steps: [
+      { icon: '👤', label: 'Every RSVP is saved as a contact automatically' },
+      { icon: '🔍', label: 'Search, filter, and segment your contact list' },
+      { icon: '📧', label: 'Re-engage past attendees for your next event' },
+      { icon: '📁', label: 'Export contacts for use in your email platform' },
+    ],
+    note: 'All your attendees in one place across all events.',
+  },
+  'Asia-First Payments': {
+    steps: [
+      { icon: '💳', label: 'Set ticket price in HKD, TWD, or SGD' },
+      { icon: '🔗', label: 'Attendee pays at registration via Stripe Checkout' },
+      { icon: '💸', label: 'Stripe transaction fee: 2.9% + $0.30 per charge' },
+      { icon: '📊', label: 'Revenue appears in your Stripe dashboard in real time' },
+    ],
+    note: "Stripe's standard 2.9% + $0.30 per transaction. No platform surcharge.",
+  },
+  'Smart Reminders': {
+    steps: [
+      { icon: '⏰', label: 'Reminders auto-schedule 7 days, 1 day, and 2 hours before' },
+      { icon: '📧', label: 'Email sent to every registered attendee automatically' },
+      { icon: '📊', label: 'Track opens and clicks in your event analytics' },
+      { icon: '📉', label: 'Up to 40% fewer no-shows compared to no reminders' },
+    ],
+    note: 'Configured once at event creation. Runs fully automatically.',
+  },
+  'Custom Branding': {
+    steps: [
+      { icon: '🏷', label: 'Upload your logo — appears on RSVP page and emails' },
+      { icon: '🎨', label: 'Set your brand color for buttons and accents' },
+      { icon: '🌐', label: 'Connect your own domain (e.g. events.yourcompany.com)' },
+      { icon: '✉️', label: "Attendees see your brand everywhere — not EventFlow's" },
+    ],
+    note: 'Available on the Pro plan.',
+  },
+};
 
 const FAQS = [
   { q: 'Is EventFlow really free?', a: 'Yes. The Free plan requires no credit card. You can host 1 active event and collect up to 50 RSVPs per month at absolutely no cost — forever.' },
-  { q: 'How does the 0% platform fee work?', a: 'On the Pro plan, we charge 0% on your first $10,000 in monthly ticket revenue. After that, just 1.5%. Compare that to Eventbrite\'s 3.7% + $1.79 per ticket — savings add up fast.' },
+  { q: 'What fees do you charge on paid tickets?', a: 'EventFlow charges no platform fee on ticket revenue. You pay only Stripe\'s standard processing fee: 2.9% + $0.30 per transaction. That\'s it — no hidden surcharges, no revenue share.' },
   { q: 'What is AI Studio?', a: 'AI Studio is our built-in AI assistant. It auto-generates event descriptions (SEO-optimized), social media posts, email campaigns, event agendas, and banner image prompts — all in one click. No other platform has this.' },
   { q: 'Can I use my own branding?', a: 'On the Pro plan, you can add your logo, brand colors, and connect a custom domain. Attendees see your brand throughout — on the RSVP page, tickets, and emails.' },
   { q: 'How does QR check-in work?', a: 'Each registered attendee receives a unique QR code by email. On event day, your reception staff opens /eventflow/reception on any smartphone and scans codes — no extra hardware, no app download required.' },
@@ -130,6 +195,7 @@ const FAQS = [
 
 export default function OrganizerMarketingPage() {
   const [openFaq, setOpenFaq] = useState<number | null>(null);
+  const [openDemo, setOpenDemo] = useState<string | null>(null);
 
   return (
     <div className="min-h-screen bg-white text-gray-900 pb-20 md:pb-0">
@@ -166,8 +232,8 @@ export default function OrganizerMarketingPage() {
             Host events that<br /><span className="text-yellow-100">actually convert</span>
           </h1>
           <p className="text-orange-100 text-xl max-w-2xl mx-auto mb-10 leading-relaxed">
-            Create, market, and manage your events with AI-powered tools — at 0% platform fee.
-            Better than Eventbrite. More affordable than EventX.
+            Create, market, and manage your events with AI-powered tools, QR check-in, and native Asia payment support.
+            Stripe&apos;s standard 2.9% + $0.30 per charge — no EventFlow platform surcharge.
           </p>
           <div className="flex flex-col sm:flex-row gap-4 justify-center mb-14">
             <Link href="/eventflow/organizer/signup"
@@ -183,7 +249,7 @@ export default function OrganizerMarketingPage() {
           {/* Hero stats */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 max-w-3xl mx-auto">
             {[
-              { v: '0%', l: 'Platform fee (Pro)' },
+              { v: '2.9%', l: 'Stripe fee (no surcharge)' },
               { v: '5', l: 'AI tools built-in' },
               { v: '3 min', l: 'Event setup time' },
               { v: '40%', l: 'Fewer no-shows' },
@@ -194,18 +260,6 @@ export default function OrganizerMarketingPage() {
               </div>
             ))}
           </div>
-        </div>
-      </div>
-
-      {/* ── vs competitors strip ──────────────────────────────────────────── */}
-      <div className="bg-gray-950 text-white">
-        <div className="max-w-6xl mx-auto px-6 py-4 flex flex-wrap items-center justify-center gap-x-8 gap-y-2 text-sm font-medium">
-          <span className="text-gray-500 text-xs uppercase tracking-wider">Better than:</span>
-          <span className="flex items-center gap-1.5"><span className="text-green-400">✓</span> Eventbrite <span className="text-gray-500 font-normal">— no per-ticket fees</span></span>
-          <span className="text-gray-700 hidden sm:block">·</span>
-          <span className="flex items-center gap-1.5"><span className="text-green-400">✓</span> EventX <span className="text-gray-500 font-normal">— AI tools + free tier</span></span>
-          <span className="text-gray-700 hidden sm:block">·</span>
-          <span className="flex items-center gap-1.5"><span className="text-green-400">✓</span> Meetup <span className="text-gray-500 font-normal">— professional-grade features</span></span>
         </div>
       </div>
 
@@ -235,16 +289,43 @@ export default function OrganizerMarketingPage() {
             <p className="text-gray-500 max-w-lg mx-auto">From event creation to post-event follow-up — all in one platform, no integrations required.</p>
           </div>
           <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-5">
-            {FEATURES.map((f) => (
-              <div key={f.title} className="bg-white rounded-2xl p-6 border border-gray-100 shadow-sm hover:shadow-lg hover:border-orange-200 transition-all group">
-                <div className="text-4xl mb-4 group-hover:scale-110 transition-transform">{f.icon}</div>
-                <div className="flex items-center gap-2 mb-2">
-                  <h3 className="font-bold text-gray-900 text-sm">{f.title}</h3>
-                  {f.badge && <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${f.bc}`}>{f.badge}</span>}
+            {FEATURES.map((f) => {
+              const demo = FEATURE_DEMOS[f.title];
+              const isOpen = openDemo === f.title;
+              return (
+                <div key={f.title} className="bg-white rounded-2xl border border-gray-100 shadow-sm hover:shadow-lg hover:border-orange-200 transition-all group flex flex-col">
+                  <div className="p-6 flex-1">
+                    <div className="text-4xl mb-4 group-hover:scale-110 transition-transform">{f.icon}</div>
+                    <div className="flex items-center gap-2 mb-2">
+                      <h3 className="font-bold text-gray-900 text-sm">{f.title}</h3>
+                      {f.badge && <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${f.bc}`}>{f.badge}</span>}
+                    </div>
+                    <p className="text-xs text-gray-500 leading-relaxed">{f.desc}</p>
+                  </div>
+                  {demo && (
+                    <div className="border-t border-gray-100">
+                      <button
+                        onClick={() => setOpenDemo(isOpen ? null : f.title)}
+                        className="w-full flex items-center justify-between px-4 py-2.5 text-xs font-semibold text-orange-600 hover:bg-orange-50 transition-colors rounded-b-2xl">
+                        <span>How it works</span>
+                        <span className={`transition-transform ${isOpen ? 'rotate-180' : ''}`}>▾</span>
+                      </button>
+                      {isOpen && (
+                        <div className="px-4 pb-4 space-y-2">
+                          {demo.steps.map((s, i) => (
+                            <div key={i} className="flex items-start gap-2">
+                              <span className="text-base flex-shrink-0 leading-tight">{s.icon}</span>
+                              <p className="text-xs text-gray-600 leading-snug">{s.label}</p>
+                            </div>
+                          ))}
+                          <p className="text-[10px] text-gray-400 pt-1 italic">{demo.note}</p>
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
-                <p className="text-xs text-gray-500 leading-relaxed">{f.desc}</p>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
       </div>
@@ -259,8 +340,8 @@ export default function OrganizerMarketingPage() {
               </div>
               <h2 className="text-3xl font-black text-gray-900 mb-4">Your AI marketing team, built right in</h2>
               <p className="text-gray-600 mb-7 leading-relaxed">
-                EventFlow's AI Studio gives you 5 powerful content tools that Eventbrite, EventX, and every other platform
-                simply doesn&apos;t have. Stop spending hours writing — let AI generate it in seconds, then refine to your taste.
+                EventFlow&apos;s AI Studio gives you 5 powerful content tools built right into your organizer dashboard.
+                Stop spending hours writing — let AI generate it in seconds, then refine to your taste.
               </p>
               <div className="space-y-3">
                 {AI_TOOLS.map(t => (
@@ -344,41 +425,6 @@ export default function OrganizerMarketingPage() {
         <p className="text-center text-sm text-gray-400 mt-6">
           All plans include SSL security, 99.9% uptime SLA, and free event pages. Upgrade or cancel anytime.
         </p>
-      </div>
-
-      {/* ── Comparison table ──────────────────────────────────────────────── */}
-      <div className="bg-gray-50 border-y border-gray-100 py-20">
-        <div className="max-w-4xl mx-auto px-6">
-          <div className="text-center mb-12">
-            <h2 className="text-3xl font-black text-gray-900 mb-3">How we compare</h2>
-            <p className="text-gray-500">We&apos;re not afraid to show the numbers. Here&apos;s an honest side-by-side.</p>
-          </div>
-          <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden shadow-sm">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-gray-100">
-                  <th className="text-left py-4 px-6 font-bold text-gray-500 text-xs uppercase tracking-wider bg-gray-50">Feature</th>
-                  <th className="py-4 px-4 text-center bg-orange-50">
-                    <span className="font-black text-orange-600">🎟️ EventFlow</span>
-                  </th>
-                  <th className="py-4 px-4 text-center text-gray-500 font-semibold text-xs">Eventbrite</th>
-                  <th className="py-4 px-4 text-center text-gray-500 font-semibold text-xs">EventX</th>
-                </tr>
-              </thead>
-              <tbody>
-                {COMPARISON.map((row, i) => (
-                  <tr key={row.feature} className={i % 2 === 0 ? 'bg-white' : 'bg-gray-50/50'}>
-                    <td className="py-3.5 px-6 text-gray-700 font-medium">{row.feature}</td>
-                    <td className={`py-3.5 px-4 text-center font-semibold ${row.efWin ? 'text-orange-600' : 'text-gray-700'}`}>{row.ef}</td>
-                    <td className="py-3.5 px-4 text-center text-gray-400">{row.eb}</td>
-                    <td className="py-3.5 px-4 text-center text-gray-400">{row.ex}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-          <p className="text-center text-xs text-gray-400 mt-4">Public pricing as of March 2025. Fees may vary by region and plan.</p>
-        </div>
       </div>
 
       {/* ── Blog ──────────────────────────────────────────────────────────── */}
@@ -469,7 +515,7 @@ export default function OrganizerMarketingPage() {
             Your next event starts<br /><span className="text-orange-400">right here</span>
           </h2>
           <p className="text-gray-400 text-lg mb-10 max-w-xl mx-auto">
-            Join thousands of organizers who chose EventFlow over Eventbrite — and never looked back.
+            Join thousands of organizers who run their events with EventFlow — and keep coming back.
           </p>
           <div className="flex flex-col sm:flex-row gap-4 justify-center mb-6">
             <Link href="/eventflow/organizer/signup"

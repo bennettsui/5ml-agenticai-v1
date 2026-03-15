@@ -48,7 +48,97 @@ const WISHLIST_STATUS_COLORS: Record<string, string> = {
   declined: 'text-slate-500 bg-slate-700',
 };
 
-type Tab = 'overview' | 'organizers' | 'events' | 'notifications' | 'wishlist';
+type Tab = 'overview' | 'organizers' | 'events' | 'notifications' | 'wishlist' | 'flows';
+
+// ─── Flows data (inline for admin panel) ──────────────────────────────────────
+
+interface FlowStep { icon: string; label: string; sub?: string; highlight?: boolean; }
+interface Flow { id: string; title: string; role: string; accent: string; icon: string; steps: FlowStep[]; link?: { href: string; label: string }; }
+
+const FLOWS: Flow[] = [
+  { id: 'organizer', title: 'Organizer Flow', role: 'Event Creator', accent: '#f59e0b', icon: '🏢',
+    link: { href: '/eventflow/organizer', label: 'Open Dashboard' },
+    steps: [
+      { icon: '✍️', label: 'Sign Up', sub: 'Create organizer account' },
+      { icon: '📅', label: 'Create Event', sub: 'Title, date, location, banner', highlight: true },
+      { icon: '🎟️', label: 'Set Tiers', sub: 'Pricing, capacity, colors' },
+      { icon: '🔑', label: 'Set Check-in PIN', sub: 'For kiosk & reception staff' },
+      { icon: '🚀', label: 'Publish', sub: 'Event goes live on /eventflow' },
+      { icon: '📊', label: 'Monitor', sub: 'Real-time registrations & check-ins', highlight: true },
+      { icon: '👥', label: 'CRM', sub: 'Contact list grows with each RSVP' },
+      { icon: '📩', label: 'Notifications', sub: '7d, 1d reminders + thank you auto-sent' },
+    ] },
+  { id: 'participant', title: 'Participant Flow', role: 'Event Attendee', accent: '#3b82f6', icon: '👤',
+    steps: [
+      { icon: '🌐', label: 'Browse Events', sub: 'Public listing at /eventflow' },
+      { icon: '🎫', label: 'Select Event', sub: 'View details, tiers, date, location' },
+      { icon: '📋', label: 'Register', sub: 'Name, email, organization (one form)', highlight: true },
+      { icon: '✅', label: 'Confirmation', sub: 'QR code emailed + shown on screen' },
+      { icon: '📧', label: '7-Day Reminder', sub: 'Email sent automatically' },
+      { icon: '🔔', label: '1-Day Reminder', sub: 'Email + WhatsApp/LINE if opted in' },
+      { icon: '🚪', label: 'Doors Open Alert', sub: 'Day-of notification' },
+      { icon: '🙏', label: 'Post-Event Thanks', sub: 'Thank you email day after', highlight: true },
+    ] },
+  { id: 'checkin', title: 'Kiosk Check-in Flow', role: 'Self-service Kiosk', accent: '#22c55e', icon: '🖥️',
+    link: { href: '/eventflow/checkin', label: 'Open Kiosk' },
+    steps: [
+      { icon: '🔐', label: 'Enter PIN', sub: 'Staff unlocks kiosk with event PIN' },
+      { icon: '📷', label: 'QR Scan', sub: 'Attendee scans their QR code' },
+      { icon: '👁️', label: 'Preview Card', sub: 'Name, tier, status shown' },
+      { icon: '✅', label: 'Confirm Check-in', sub: 'One tap to mark arrived', highlight: true },
+      { icon: '🎉', label: 'Success Screen', sub: 'Welcome message displayed' },
+      { icon: '📊', label: 'Live Counter', sub: 'Real-time count updates', highlight: true },
+    ] },
+  { id: 'reception', title: 'Reception Staff Flow', role: 'RD / Front Desk', accent: '#a855f7', icon: '🎫',
+    link: { href: '/eventflow/reception', label: 'Open Reception' },
+    steps: [
+      { icon: '🔐', label: 'PIN Login', sub: 'Event ID + check-in PIN' },
+      { icon: '📊', label: 'Live Dashboard', sub: 'Real-time check-in progress bar' },
+      { icon: '🔍', label: 'Name Search', sub: 'Find attendee instantly', highlight: true },
+      { icon: '📷', label: 'QR Scan', sub: 'Camera scan from phone/email' },
+      { icon: '👁️', label: 'Confirm Card', sub: 'View attendee details + tier' },
+      { icon: '✅', label: 'One-tap Check-in', sub: 'Mark arrived with single tap', highlight: true },
+      { icon: '🔁', label: 'Next Attendee', sub: 'Instantly ready for next scan' },
+    ] },
+  { id: 'admin', title: 'Super Admin Flow', role: 'ExpLab Staff', accent: '#f59e0b', icon: '⚡',
+    steps: [
+      { icon: '🔑', label: 'Admin Secret', sub: 'x-admin-secret header auth' },
+      { icon: '📈', label: 'Platform Stats', sub: 'All organizers, events, attendees' },
+      { icon: '🏢', label: 'Manage Organizers', sub: 'Set plan: Free / Pro / ExpLab Staff', highlight: true },
+      { icon: '📅', label: 'Manage Events', sub: 'Change status, delete events' },
+      { icon: '💡', label: 'Wishlist Admin', sub: 'Review & curate community requests', highlight: true },
+      { icon: '📩', label: 'Notifications', sub: 'View notification pipeline status' },
+    ] },
+  { id: 'ai-studio', title: 'AI Studio Flow', role: 'Organizer — AI Tools', accent: '#a855f7', icon: '🤖',
+    steps: [
+      { icon: '📅', label: 'Select Event', sub: 'Open event management → AI Studio tab' },
+      { icon: '✍️', label: 'Event Description', sub: 'AI generates SEO-friendly copy', highlight: true },
+      { icon: '📣', label: 'Social Posts', sub: 'LinkedIn, Twitter, Facebook captions' },
+      { icon: '📧', label: 'Email Draft', sub: 'Announcement email for attendees', highlight: true },
+      { icon: '📋', label: 'Agenda Builder', sub: 'Structured schedule from your notes' },
+      { icon: '🎨', label: 'Banner Prompt', sub: 'Midjourney / DALL-E prompt for art' },
+    ] },
+  { id: 'wishlist', title: 'Wishlist Board Flow', role: 'Community Members', accent: '#22c55e', icon: '💡',
+    link: { href: '/eventflow/wishlist', label: 'Open Wishlist' },
+    steps: [
+      { icon: '🌐', label: 'Browse Wishlist', sub: 'Public board at /eventflow/wishlist' },
+      { icon: '➕', label: 'Submit Idea', sub: 'Suggest a feature or integration', highlight: true },
+      { icon: '👍', label: 'Vote on Ideas', sub: 'Upvote community suggestions' },
+      { icon: '🏷️', label: 'Filter by Category', sub: 'Feature, UX, AI, Integration…' },
+      { icon: '📊', label: 'Admin Review', sub: 'Admin curates top-voted ideas', highlight: true },
+      { icon: '🎉', label: 'Ships to Roadmap', sub: 'Planned → Done lifecycle' },
+    ] },
+  { id: 'rsvp-form', title: 'Custom RSVP Form Flow', role: 'Organizer — Form Builder', accent: '#f59e0b', icon: '📋',
+    steps: [
+      { icon: '📅', label: 'Event Settings', sub: 'Open event → RSVP Form tab' },
+      { icon: '🔒', label: 'Core Fields', sub: 'First/Last name, Email always required' },
+      { icon: '📝', label: 'Toggle Optional', sub: 'Make phone, org, title required or not' },
+      { icon: '➕', label: 'Add Custom Fields', sub: 'Text, select, date, checkbox, etc.', highlight: true },
+      { icon: '💾', label: 'Save & Preview', sub: 'Changes live immediately on event page' },
+      { icon: '👤', label: 'Participant Fills', sub: 'Custom fields shown in RSVP form', highlight: true },
+      { icon: '🗃️', label: 'Responses Stored', sub: 'In attendee metadata, exportable' },
+    ] },
+];
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
@@ -193,6 +283,7 @@ export default function AdminPage() {
     { key: 'events',        label: `Events (${stats?.events ?? '…'})` },
     { key: 'notifications', label: 'Notifications' },
     { key: 'wishlist',      label: '💡 Wishlist' },
+    { key: 'flows',         label: '🗺️ Flows' },
   ];
 
   return (
@@ -527,6 +618,67 @@ export default function AdminPage() {
             )}
           </div>
         )}
+        {/* Flows */}
+        {tab === 'flows' && (
+          <div className="space-y-6">
+            <div className="flex items-center justify-between mb-2">
+              <div>
+                <h2 className="font-black text-lg text-white">Platform Flows</h2>
+                <p className="text-slate-500 text-sm mt-0.5">Stakeholder journeys across every part of EventFlow</p>
+              </div>
+              <Link href="/eventflow/flows" target="_blank"
+                className="text-xs text-amber-400 hover:underline">View full page →</Link>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
+              {FLOWS.map((flow) => (
+                <div key={flow.id} className="bg-slate-800/60 border border-white/[0.08] rounded-2xl overflow-hidden">
+                  <div className="px-5 py-4 border-b border-white/[0.06] flex items-center justify-between"
+                    style={{ background: flow.accent + '18' }}>
+                    <div className="flex items-center gap-3">
+                      <span className="text-2xl">{flow.icon}</span>
+                      <div>
+                        <h3 className="font-bold text-white text-sm">{flow.title}</h3>
+                        <p className="text-xs mt-0.5" style={{ color: flow.accent }}>{flow.role}</p>
+                      </div>
+                    </div>
+                    {flow.link && (
+                      <Link href={flow.link.href} target="_blank"
+                        className="text-xs px-2.5 py-1 rounded-lg border transition-colors hover:opacity-80"
+                        style={{ borderColor: flow.accent + '50', color: flow.accent }}>
+                        {flow.link.label}
+                      </Link>
+                    )}
+                  </div>
+                  <div className="p-4">
+                    <ol className="space-y-2.5">
+                      {flow.steps.map((step, i) => (
+                        <li key={i} className={`flex items-start gap-3 rounded-xl px-3 py-2 transition-colors ${
+                          step.highlight ? 'bg-white/[0.05]' : ''
+                        }`}>
+                          <div className="flex items-center gap-1.5 flex-shrink-0 pt-0.5">
+                            <span className="text-slate-600 text-xs font-mono w-4 text-right">{i + 1}.</span>
+                            <span className="text-base leading-none">{step.icon}</span>
+                          </div>
+                          <div>
+                            <div className={`text-sm font-semibold ${step.highlight ? 'text-white' : 'text-slate-200'}`}>
+                              {step.label}
+                              {step.highlight && (
+                                <span className="ml-1.5 text-[10px] font-bold px-1.5 py-0.5 rounded-full"
+                                  style={{ background: flow.accent + '25', color: flow.accent }}>key</span>
+                              )}
+                            </div>
+                            {step.sub && <div className="text-xs text-slate-500 mt-0.5">{step.sub}</div>}
+                          </div>
+                        </li>
+                      ))}
+                    </ol>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
       </div>
     </div>
   );

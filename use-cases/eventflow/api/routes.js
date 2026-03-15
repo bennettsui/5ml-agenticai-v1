@@ -13,6 +13,7 @@ router.use('/notifications',  require('./routes/notifications'));
 router.use('/admin',          require('./routes/admin'));
 router.use('/ai',             require('./routes/ai'));
 router.use('/wishlist',       require('./routes/wishlist'));
+router.use('/participant',    require('./routes/participant'));
 
 // DB init + engine start (called once when the router is first required)
 db.init().catch((err) => console.error('[eventflow] DB init failed:', err.message));
