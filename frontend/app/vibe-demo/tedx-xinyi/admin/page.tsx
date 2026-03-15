@@ -125,6 +125,16 @@ export default function TEDxXinyiAdmin() {
   const [confirmRegen, setConfirmRegen] = useState<string | null>(null);
   const [regenInstructions, setRegenInstructions] = useState('');
 
+  // Generate (nanobanana) progress state
+  const [generateState, setGenerateState] = useState<{
+    visualId: string;
+    phase: string;
+    progress: number;
+    log: Array<{ time: string; msg: string; type: 'info' | 'ok' | 'err' }>;
+    error: { code: number; message: string; hint: string } | null;
+    done: boolean;
+  } | null>(null);
+
   // Edit modal state (for any slot or media entry)
   const [editSlot, setEditSlot] = useState<ImageSlot | null>(null);
   const [imagePickerOpen, setImagePickerOpen] = useState(false);
@@ -855,23 +865,134 @@ export default function TEDxXinyiAdmin() {
 
   // Generate via nanobanana (Gemini) — for VISUALS with predefined prompts
   async function handleGenerate(visualId: string) {
-    setActionLoading(visualId);
+    const ts = () => new Date().toLocaleTimeString('en-US', { hour12: false });
+
+    const appendLog = (msg: string, type: 'info' | 'ok' | 'err' = 'info') =>
+      setGenerateState(prev =>
+        prev ? { ...prev, log: [...prev.log, { time: ts(), msg, type }] } : prev,
+      );
+
+    setGenerateState({
+      visualId,
+      phase: 'Connecting…',
+      progress: 5,
+      log: [{ time: ts(), msg: `Starting generation for visual: ${visualId}`, type: 'info' }],
+      error: null,
+      done: false,
+    });
+
+    // Simulated phase progression while the API call is in-flight
+    const t1 = setTimeout(() => {
+      setGenerateState(prev => prev ? { ...prev, phase: 'Sending prompt to Gemini…', progress: 15 } : prev);
+      appendLog('Connected. Sending prompt to Gemini API…');
+    }, 400);
+
+    const t2 = setTimeout(() => {
+      setGenerateState(prev => prev ? { ...prev, phase: 'Generating image…', progress: 30 } : prev);
+      appendLog('Prompt accepted. Waiting for image (this may take 20–60 s)…');
+    }, 1800);
+
+    // Slow progress creep so the bar keeps moving
+    let simulatedProgress = 30;
+    const progressInterval = setInterval(() => {
+      simulatedProgress = Math.min(simulatedProgress + 1.5, 85);
+      setGenerateState(prev =>
+        prev && !prev.done ? { ...prev, progress: simulatedProgress } : prev,
+      );
+    }, 2000);
+
     try {
       const res = await fetch(`${API_BASE}/api/tedx-xinyi/generate`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ id: visualId }),
       });
+
+      clearTimeout(t1);
+      clearTimeout(t2);
+      clearInterval(progressInterval);
+
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
-      showToast(`Generated ${visualId} → CDN: ${data.publicUrl || 'local only'}`);
-      setEditSlot(null);
+
+      if (!res.ok) {
+        const errorHints: Record<number, string> = {
+          503: 'The GEMINI_API_KEY environment variable is not configured on the server. Ask the administrator to add it.',
+          400: `Visual ID "${visualId}" was not found in the server VISUALS list.${data.available ? ` Available IDs: ${data.available.slice(0, 6).join(', ')}` : ''}`,
+          500: 'Gemini image generation failed. The model may be temporarily unavailable, or the API key quota may be exhausted.',
+          401: 'The Gemini API key is invalid or unauthorised.',
+          429: 'Gemini API rate limit hit. Wait a moment and try again.',
+        };
+
+        setGenerateState(prev =>
+          prev
+            ? {
+                ...prev,
+                phase: 'Failed',
+                progress: 100,
+                log: [
+                  ...prev.log,
+                  { time: ts(), msg: `Server responded with ${res.status}: ${data.error || 'unknown error'}`, type: 'err' },
+                ],
+                error: {
+                  code: res.status,
+                  message: data.error || `HTTP ${res.status}`,
+                  hint: errorHints[res.status] ?? `Server returned status ${res.status}. Check the server logs for details.`,
+                },
+                done: true,
+              }
+            : prev,
+        );
+        return;
+      }
+
+      // Success
+      setGenerateState(prev =>
+        prev
+          ? {
+              ...prev,
+              phase: 'Complete',
+              progress: 100,
+              log: [
+                ...prev.log,
+                { time: ts(), msg: `Image generated — ${(data.size / 1024).toFixed(0)} KB`, type: 'ok' },
+                {
+                  time: ts(),
+                  msg: data.publicUrl
+                    ? `Uploaded to CDN: ${data.publicUrl}`
+                    : 'Saved locally (CDN upload skipped — mmdbfiles may be unavailable)',
+                  type: data.publicUrl ? 'ok' : 'info',
+                },
+              ],
+              done: true,
+            }
+          : prev,
+      );
+
       await loadMedia();
       if (slotsLoaded) await loadSlots();
+      // Keep modal open so user can see the result; they can close manually
     } catch (err) {
-      showToast(`Generate failed: ${err instanceof Error ? err.message : 'Unknown'}`, 'err');
-    } finally {
-      setActionLoading(null);
+      clearTimeout(t1);
+      clearTimeout(t2);
+      clearInterval(progressInterval);
+
+      const msg = err instanceof Error ? err.message : String(err);
+      setGenerateState(prev =>
+        prev
+          ? {
+              ...prev,
+              phase: 'Failed',
+              progress: 100,
+              log: [...prev.log, { time: ts(), msg: `Network error: ${msg}`, type: 'err' }],
+              error: {
+                code: 0,
+                message: msg,
+                hint: 'Could not reach the server. Check your network connection and verify the server is running.',
+              },
+              done: true,
+            }
+          : prev,
+      );
     }
   }
 
@@ -1225,55 +1346,124 @@ export default function TEDxXinyiAdmin() {
               {/* Actions — always shown */}
               {(() => {
                 const effectiveKey = editSlot.metaKey || (editSlot.isLocal ? editSlot.src.replace('/tedx-xinyi/', '') : null);
+                const visualId = effectiveKey ? effectiveKey.replace(/\.(jpg|jpeg|png|webp|gif)$/i, '') : null;
                 const isLoading = actionLoading === effectiveKey;
+                const isGenerating = generateState !== null && generateState.visualId === visualId && !generateState.done;
                 return (
-                  <div className="flex flex-wrap gap-2 pt-2">
-                    {/* Push to CDN — any slot with a local file */}
-                    {effectiveKey && editSlot.localExists && (
-                      <button
-                        onClick={() => pushToCdn(effectiveKey)}
-                        disabled={isLoading}
-                        className="px-4 py-2 text-xs font-bold bg-green-600/20 hover:bg-green-600/30 text-green-300 rounded-lg transition-colors disabled:opacity-40"
-                      >
-                        {isLoading ? 'Uploading\u2026' : editSlot.cdnUrl ? 'Repush to CDN' : 'Push to CDN'}
-                      </button>
+                  <>
+                    <div className="flex flex-wrap gap-2 pt-2">
+                      {/* Push to CDN — any slot with a local file */}
+                      {effectiveKey && editSlot.localExists && (
+                        <button
+                          onClick={() => pushToCdn(effectiveKey)}
+                          disabled={isLoading}
+                          className="px-4 py-2 text-xs font-bold bg-green-600/20 hover:bg-green-600/30 text-green-300 rounded-lg transition-colors disabled:opacity-40"
+                        >
+                          {isLoading ? 'Uploading\u2026' : editSlot.cdnUrl ? 'Repush to CDN' : 'Push to CDN'}
+                        </button>
+                      )}
+                      {effectiveKey && (
+                        <button
+                          onClick={() => triggerUpload(effectiveKey)}
+                          disabled={isLoading}
+                          className="px-4 py-2 text-xs font-bold bg-blue-600/20 hover:bg-blue-600/30 text-blue-300 rounded-lg transition-colors disabled:opacity-40"
+                        >
+                          {isLoading ? 'Uploading\u2026' : 'Upload Replacement'}
+                        </button>
+                      )}
+                      {effectiveKey && (
+                        <button
+                          onClick={() => setImagePickerOpen(!imagePickerOpen)}
+                          className="px-4 py-2 text-xs font-bold bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-300 rounded-lg transition-colors"
+                        >
+                          {imagePickerOpen ? 'Close Picker' : 'Pick from Library'}
+                        </button>
+                      )}
+                      {effectiveKey && editSlot.type !== 'speaker' && (
+                        <button
+                          onClick={() => { setGenerateState(null); handleGenerate(visualId!); }}
+                          disabled={isGenerating}
+                          className="px-4 py-2 text-xs font-bold bg-amber-600/20 hover:bg-amber-600/30 text-amber-300 rounded-lg transition-colors disabled:opacity-40"
+                          title="Generate fresh via Gemini nanobanana using pre-defined prompt"
+                        >
+                          {isGenerating ? 'Generating…' : '✦ Generate (nanobanana)'}
+                        </button>
+                      )}
+                      {effectiveKey && (
+                        <button
+                          onClick={() => { setConfirmRegen(effectiveKey); }}
+                          className="px-4 py-2 text-xs font-bold bg-purple-600/20 hover:bg-purple-600/30 text-purple-300 rounded-lg transition-colors"
+                        >
+                          AI Regenerate
+                        </button>
+                      )}
+                    </div>
+
+                    {/* Generation progress panel */}
+                    {generateState && generateState.visualId === visualId && (
+                      <div className="mt-3 bg-neutral-900 border border-neutral-700/50 rounded-xl p-4 space-y-3">
+                        {/* Header row */}
+                        <div className="flex items-center justify-between">
+                          <span className={`text-xs font-bold ${generateState.error ? 'text-red-400' : generateState.done ? 'text-green-400' : 'text-amber-400'}`}>
+                            {generateState.done
+                              ? generateState.error
+                                ? '✗ Generation failed'
+                                : '✓ Generation complete'
+                              : `⟳ ${generateState.phase}`}
+                          </span>
+                          {generateState.done && (
+                            <button
+                              onClick={() => setGenerateState(null)}
+                              className="text-neutral-600 hover:text-neutral-400 text-xs transition-colors"
+                            >
+                              Dismiss
+                            </button>
+                          )}
+                        </div>
+
+                        {/* Progress bar */}
+                        <div className="h-1.5 bg-neutral-800 rounded-full overflow-hidden">
+                          <div
+                            className={`h-full rounded-full transition-all duration-700 ${
+                              generateState.error
+                                ? 'bg-red-500'
+                                : generateState.done
+                                  ? 'bg-green-500'
+                                  : 'bg-amber-500'
+                            }`}
+                            style={{ width: `${generateState.progress}%` }}
+                          />
+                        </div>
+
+                        {/* Log lines */}
+                        <div className="space-y-0.5 max-h-28 overflow-y-auto font-mono text-[10px] leading-relaxed">
+                          {generateState.log.map((entry, i) => (
+                            <div
+                              key={i}
+                              className={`flex gap-2 ${entry.type === 'err' ? 'text-red-400' : entry.type === 'ok' ? 'text-green-400' : 'text-neutral-500'}`}
+                            >
+                              <span className="text-neutral-700 shrink-0 select-none">{entry.time}</span>
+                              <span className="break-all">{entry.msg}</span>
+                            </div>
+                          ))}
+                        </div>
+
+                        {/* Error details */}
+                        {generateState.error && (
+                          <div className="bg-red-950/40 border border-red-800/40 rounded-lg p-3 space-y-2">
+                            <div className="flex items-center gap-2">
+                              <span className="text-[10px] font-bold uppercase tracking-wider text-red-600">Error Code</span>
+                              <span className="text-xs font-mono font-bold text-red-300">
+                                {generateState.error.code === 0 ? 'NETWORK_ERROR' : `HTTP ${generateState.error.code}`}
+                              </span>
+                            </div>
+                            <p className="text-xs font-mono text-red-300 break-all">{generateState.error.message}</p>
+                            <p className="text-xs text-neutral-400 leading-relaxed">{generateState.error.hint}</p>
+                          </div>
+                        )}
+                      </div>
                     )}
-                    {effectiveKey && (
-                      <button
-                        onClick={() => triggerUpload(effectiveKey)}
-                        disabled={isLoading}
-                        className="px-4 py-2 text-xs font-bold bg-blue-600/20 hover:bg-blue-600/30 text-blue-300 rounded-lg transition-colors disabled:opacity-40"
-                      >
-                        {isLoading ? 'Uploading\u2026' : 'Upload Replacement'}
-                      </button>
-                    )}
-                    {effectiveKey && (
-                      <button
-                        onClick={() => setImagePickerOpen(!imagePickerOpen)}
-                        className="px-4 py-2 text-xs font-bold bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-300 rounded-lg transition-colors"
-                      >
-                        {imagePickerOpen ? 'Close Picker' : 'Pick from Library'}
-                      </button>
-                    )}
-                    {effectiveKey && editSlot.type !== 'speaker' && (
-                      <button
-                        onClick={() => handleGenerate(effectiveKey.replace(/\.(jpg|jpeg|png|webp|gif)$/i, ''))}
-                        disabled={isLoading}
-                        className="px-4 py-2 text-xs font-bold bg-amber-600/20 hover:bg-amber-600/30 text-amber-300 rounded-lg transition-colors disabled:opacity-40"
-                        title="Generate fresh via Gemini nanobanana using pre-defined prompt"
-                      >
-                        {isLoading ? 'Generating…' : '✦ Generate (nanobanana)'}
-                      </button>
-                    )}
-                    {effectiveKey && (
-                      <button
-                        onClick={() => { setConfirmRegen(effectiveKey); }}
-                        className="px-4 py-2 text-xs font-bold bg-purple-600/20 hover:bg-purple-600/30 text-purple-300 rounded-lg transition-colors"
-                      >
-                        AI Regenerate
-                      </button>
-                    )}
-                  </div>
+                  </>
                 );
               })()}
 
